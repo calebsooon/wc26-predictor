@@ -1,36 +1,161 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# World Cup 2026 Predictor
 
-## Getting Started
+A full-stack prediction game for FIFA World Cup 2026. Players submit scoreline predictions before each match kicks off, earn points based on accuracy, and compete on a live leaderboard.
 
-First, run the development server:
+---
+
+## Tech stack
+
+- **Next.js 14** (App Router, TypeScript)
+- **Tailwind CSS**
+- **Supabase** (Postgres, Auth, Row Level Security, Realtime)
+- **Vercel** (hosting)
+
+---
+
+## Local development
+
+### 1. Clone the repo
+
+```bash
+git clone <your-repo-url>
+cd 03_wc_predictor
+npm install
+```
+
+### 2. Set environment variables
+
+Create `.env.local` in the project root:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
+```
+
+Find these in your Supabase dashboard under **Project Settings → API**.
+
+### 3. Apply database migrations
+
+Install the Supabase CLI if you haven't already:
+
+```bash
+brew install supabase/tap/supabase
+```
+
+Log in and link your project:
+
+```bash
+supabase login --token <your-access-token>   # token from supabase.com/dashboard/account/tokens
+supabase link --project-ref <your-project-ref>
+```
+
+Push the schema and seed data:
+
+```bash
+supabase db push
+```
+
+This runs two migrations in order:
+1. `20260609000000_initial_schema.sql` — creates all tables, RLS policies, and the `is_admin()` helper
+2. `20260609000001_seed_matches.sql` — inserts 7 rounds and 111 matches (72 group stage + 39 knockout)
+
+### 4. Start the dev server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Granting admin access
 
-## Learn More
+After logging in for the first time (via magic link), your profile row is auto-created. To grant admin access:
 
-To learn more about Next.js, take a look at the following resources:
+1. Go to your [Supabase dashboard](https://supabase.com/dashboard) → your project → **Table Editor** → `profiles`
+2. Find the row for your user (matched by `username` or `id`)
+3. Set `is_admin` to `true`
+4. Save
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The **Admin** link will appear in the nav on your next page load. The admin page (`/admin`) lets you enter real match scores, which automatically locks the match and calculates points for all predictions.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## Deployment on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 1. Push to GitHub
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+git remote add origin <your-github-repo-url>
+git push -u origin main
+```
+
+### 2. Import into Vercel
+
+1. Go to [vercel.com](https://vercel.com) → **Add New Project**
+2. Import your GitHub repository
+3. Vercel will auto-detect Next.js — no build settings need changing (`vercel.json` handles it)
+
+### 3. Add environment variables in Vercel
+
+In the Vercel project dashboard → **Settings → Environment Variables**, add:
+
+| Name | Value |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://<your-project-ref>.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | your anon key from Supabase |
+
+Set these for **Production**, **Preview**, and **Development** environments.
+
+### 4. Set the auth redirect URL in Supabase
+
+Magic links redirect to your deployed URL after click. Add it in Supabase:
+
+1. **Authentication → URL Configuration → Redirect URLs**
+2. Add: `https://<your-vercel-domain>/auth/callback`
+
+### 5. Deploy
+
+Vercel deploys automatically on every push to `main`. You can also trigger a manual deploy from the dashboard.
+
+---
+
+## Project structure
+
+```
+app/
+  login/          Magic link login page
+  auth/callback/  Post-login redirect handler (creates profile row)
+  predictions/    Main predictions page (grouped by round, real-time lock)
+  leaderboard/    Live leaderboard with round filter and Realtime updates
+  admin/          Admin panel to enter real scores and trigger scoring
+  api/
+    score-match/  POST endpoint that calculates and writes points_awarded
+
+components/
+  Navbar.tsx      Persistent nav bar (auth-aware, admin link, logout)
+
+lib/
+  supabase-browser.ts    createClient() for Client Components
+  supabase-server.ts     createServerSupabaseClient() for Server Components / Route Handlers
+  supabase-middleware.ts createMiddlewareSupabaseClient() for middleware
+
+supabase/
+  migrations/     SQL migration files (schema + seed)
+
+middleware.ts     Route protection — unauthenticated → /login
+```
+
+---
+
+## Scoring system
+
+| Points | Condition |
+|---|---|
+| **3** | Exact scoreline predicted |
+| **2** | Correct goal difference (e.g. predicted 2-0, result 3-1) |
+| **1** | Correct outcome (win / draw / loss) only |
+| **0** | Everything else |
+
+Scores are calculated server-side by `POST /api/score-match` when an admin saves a result.
