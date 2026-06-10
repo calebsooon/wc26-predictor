@@ -37,3 +37,7 @@ supabase/.temp/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# git bundles / patch archives (used for branch transfers, not source)
+*.bundle
+*-patches.zip

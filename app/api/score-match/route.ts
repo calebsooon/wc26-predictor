@@ -1,114 +1,62 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-
-// ─── Scoring ─────────────────────────────────────────────────────────────────
-//
-// Strict hierarchy — each tier is checked only if the tier above didn't match:
-//   3 pts  exact scoreline
-//   2 pts  goal difference matches (e.g. 2-0 vs 3-1 → both +2)
-//   1 pt   correct outcome (W/D/L) but wrong difference
-//   0 pts  everything else
-//
-// Correctly handles 0-0 vs 1-1: both have goal diff = 0, so that's 2 pts.
-
-function score(ph: number, pa: number, rh: number, ra: number): number {
-  if (ph === rh && pa === ra) return 3
-  if (ph - pa === rh - ra) return 2
-  if (Math.sign(ph - pa) === Math.sign(rh - ra)) return 1
-  return 0
-}
-
-// ─── Route ───────────────────────────────────────────────────────────────────
+import { requireAdmin } from '@/lib/require-admin'
+import { scorePrediction, type PredictionInput } from '@/lib/scoring'
 
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient()
+  const denied = await requireAdmin(supabase)
+  if (denied) return denied
 
-  // Auth check
-  const { data: { user }, error: authErr } = await supabase.auth.getUser()
-  if (authErr || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  // Admin check
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile?.is_admin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-
-  // Parse body
   let match_id: string | undefined
-  try {
-    const body = await request.json()
-    match_id = body.match_id
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
-  }
+  try { match_id = (await request.json()).match_id } catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }) }
+  if (!match_id || typeof match_id !== 'string') return NextResponse.json({ error: 'match_id is required' }, { status: 400 })
 
-  if (!match_id || typeof match_id !== 'string') {
-    return NextResponse.json({ error: 'match_id is required' }, { status: 400 })
-  }
-
-  // Fetch the match
   const { data: match, error: matchErr } = await supabase
     .from('matches')
-    .select('id, real_home_score, real_away_score')
+    .select('id, home_team, away_team, real_home_score, real_away_score, first_goal_team, first_goal_player_id')
     .eq('id', match_id)
     .single()
+  if (matchErr || !match) return NextResponse.json({ error: 'Match not found' }, { status: 404 })
 
-  if (matchErr || !match) {
-    return NextResponse.json({ error: 'Match not found' }, { status: 404 })
+  const m = match as unknown as {
+    home_team: string; away_team: string
+    real_home_score: number | null; real_away_score: number | null
+    first_goal_team: string | null; first_goal_player_id: number | null
+  }
+  if (m.real_home_score === null || m.real_away_score === null) {
+    return NextResponse.json({ error: 'Match has no real scores yet' }, { status: 422 })
   }
 
-  if (match.real_home_score === null || match.real_away_score === null) {
-    return NextResponse.json(
-      { error: 'Match has no real scores yet' },
-      { status: 422 }
-    )
+  const result = {
+    home_team: m.home_team, away_team: m.away_team,
+    real_home_score: m.real_home_score, real_away_score: m.real_away_score,
+    first_goal_team: m.first_goal_team, first_goal_player_id: m.first_goal_player_id,
   }
 
-  const rh = match.real_home_score
-  const ra = match.real_away_score
-
-  // Fetch all predictions for this match
   const { data: predictions, error: predsErr } = await supabase
     .from('predictions')
-    .select('id, pred_home, pred_away')
+    .select('id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id')
     .eq('match_id', match_id)
+  if (predsErr) return NextResponse.json({ error: predsErr.message }, { status: 500 })
+  if (!predictions || predictions.length === 0) return NextResponse.json({ match_id, scored: 0 })
 
-  if (predsErr) {
-    return NextResponse.json({ error: predsErr.message }, { status: 500 })
-  }
+  const updates = predictions.map((p) => {
+    const b = scorePrediction(p as unknown as PredictionInput, result)
+    return {
+      id: (p as { id: string }).id,
+      match_id,
+      pred_home: (p as { pred_home: number }).pred_home,
+      pred_away: (p as { pred_away: number }).pred_away,
+      points_awarded: b.total,
+      pts_outcome: b.outcome, pts_exact: b.exact, pts_goal_diff: b.goalDiff,
+      pts_total_goals: b.totalGoals, pts_btts: b.btts, pts_first_team: b.firstTeam,
+      pts_first_scorer: b.firstScorer,
+    }
+  })
 
-  if (!predictions || predictions.length === 0) {
-    return NextResponse.json({ match_id, scored: 0 })
-  }
+  const { error: upsertErr } = await supabase.from('predictions').upsert(updates, { onConflict: 'id' })
+  if (upsertErr) return NextResponse.json({ error: upsertErr.message }, { status: 500 })
 
-  // Calculate and upsert points for each prediction
-  const updates = predictions.map((p) => ({
-    id: p.id,
-    match_id,
-    pred_home: p.pred_home,
-    pred_away: p.pred_away,
-    points_awarded: score(p.pred_home, p.pred_away, rh, ra),
-  }))
-
-  const { error: upsertErr } = await supabase
-    .from('predictions')
-    .upsert(updates, { onConflict: 'id' })
-
-  if (upsertErr) {
-    return NextResponse.json({ error: upsertErr.message }, { status: 500 })
-  }
-
-  const summary = updates.reduce<Record<number, number>>(
-    (acc, u) => ({ ...acc, [u.points_awarded]: (acc[u.points_awarded] ?? 0) + 1 }),
-    {}
-  )
-
-  return NextResponse.json({ match_id, scored: updates.length, breakdown: summary })
+  return NextResponse.json({ match_id, scored: updates.length })
 }
