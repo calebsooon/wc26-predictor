@@ -19,6 +19,7 @@ interface Match {
   group_name: string | null
   first_goal_team: string | null
   first_goal_player_id: number | null
+  match_winner: string | null
   rounds: { name: string } | null
 }
 
@@ -32,6 +33,7 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
   const [a, setA] = useState<number | null>(m.real_away_score)
   const [fgt, setFgt] = useState<string | null>(m.first_goal_team)
   const [scorerId, setScorerId] = useState<number | null>(m.first_goal_player_id)
+  const [matchWinner, setMatchWinner] = useState<string | null>(m.match_winner)
   const [players, setPlayers] = useState<Player[]>([])
   const [scorerOpen, setScorerOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -39,10 +41,12 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
   const [msg, setMsg] = useState<string | null>(null)
 
   const hasScore = m.real_home_score !== null && m.real_away_score !== null
+  const isKnockout = !m.group_name
 
   async function expand() {
-    setOpen((o) => !o)
-    if (players.length === 0) {
+    const opening = !open
+    setOpen(opening)
+    if (opening && players.length === 0) {
       const { data } = await supabase.from('players').select('id, name, team_name').in('team_name', [home.playerKey, away.playerKey])
       setPlayers((data ?? []).map((p) => ({
         id: (p as { id: number }).id, name: (p as { name: string }).name,
@@ -57,12 +61,13 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
     const { error } = await supabase.from('matches').update({
       real_home_score: h, real_away_score: a, is_locked: true,
       first_goal_team: fgt, first_goal_player_id: scorerId,
+      ...(isKnockout ? { match_winner: matchWinner } : {}),
     }).eq('id', m.id)
     if (error) { setMsg(error.message); setSaving(false); return }
     const res = await fetch('/api/score-match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ match_id: m.id }) })
     setSaving(false)
     if (!res.ok) { setMsg((await res.json().catch(() => ({}))).error ?? 'Scoring failed'); return }
-    onSaved({ ...m, real_home_score: h, real_away_score: a, is_locked: true, first_goal_team: fgt, first_goal_player_id: scorerId })
+    onSaved({ ...m, real_home_score: h, real_away_score: a, is_locked: true, first_goal_team: fgt, first_goal_player_id: scorerId, match_winner: matchWinner })
     setMsg('Saved ✓')
   }
 
@@ -125,6 +130,26 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
               </div>
             )}
           </div>
+
+          {isKnockout && (
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-texts">
+                Match winner <span className="normal-case font-normal text-texts/60">(set only if draw → penalties)</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2 mt-1.5">
+                {[{ k: m.home_team, t: home }, { k: m.away_team, t: away }].map((o) => (
+                  <button
+                    key={o.k}
+                    onClick={() => setMatchWinner(matchWinner === o.k ? null : o.k)}
+                    className={`h-10 rounded-lg border text-sm font-bold flex items-center justify-center gap-1.5 transition-all
+                      ${matchWinner === o.k ? 'border-gold bg-gold/10 text-gold' : 'border-border bg-surface text-texts'}`}
+                  >
+                    <span>{o.t.flag}</span>{o.t.code}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -196,7 +221,7 @@ export default function AdminPage() {
       if (!profile?.is_admin) { router.replace('/dashboard'); return }
       const { data } = await supabase
         .from('matches')
-        .select('id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, first_goal_team, first_goal_player_id, rounds(name)')
+        .select('id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, first_goal_team, first_goal_player_id, match_winner, rounds(name)')
         .order('match_date')
       setMatches((data ?? []) as unknown as Match[])
       setLoading(false)

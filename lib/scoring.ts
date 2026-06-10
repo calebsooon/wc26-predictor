@@ -92,7 +92,8 @@ export function scorePrediction(pred: PredictionInput, m: MatchResult): ScoreBre
   if (ph + pa === rh + ra) z.totalGoals = POINTS.totalGoals
   if ((ph > 0 && pa > 0) === (rh > 0 && ra > 0)) z.btts = POINTS.btts
 
-  if (pred.pred_first_goal_team && m.first_goal_team && pred.pred_first_goal_team === m.first_goal_team) {
+  // m.first_goal_team=null means admin hasn't set it yet; 'NONE' means confirmed no goal
+  if (pred.pred_first_goal_team && m.first_goal_team != null && pred.pred_first_goal_team === m.first_goal_team) {
     z.firstTeam = POINTS.firstTeam
   }
   if (pred.pred_first_scorer_id != null && m.first_goal_player_id != null && pred.pred_first_scorer_id === m.first_goal_player_id) {

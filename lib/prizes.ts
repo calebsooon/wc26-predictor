@@ -115,7 +115,11 @@ export function computePrizeSnapshot(params: {
 
   const rangeMin = settledNet + remainingGWs * (-15) + (isOverallSettled ? projectedOverallPrize : -40)
   const rangeMax = settledNet + remainingGWs * 15 + (isOverallSettled ? projectedOverallPrize : 40)
-  const projectedTotal = settledNet + liveGWPrize + (isOverallSettled ? projectedOverallPrize : projectedOverallPrize)
+
+  // Projected = settled + live GW at current rank + future unstarted GWs at current rank + overall at current rank
+  const futureGWCount = liveGWNumber != null ? Math.max(0, remainingGWs - 1) : remainingGWs
+  const futureGWPrize = overallRank != null ? gwPrize(overallRank) * futureGWCount : 0
+  const projectedTotal = settledNet + liveGWPrize + futureGWPrize + projectedOverallPrize
 
   return {
     settledNet, completedGWs, liveGWNumber, liveGWRank, liveGWPrize,

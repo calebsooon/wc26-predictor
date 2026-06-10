@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireAdmin } from '@/lib/require-admin'
 import { scoreGroupPrediction } from '@/lib/scoring'
 
 const GROUPS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
@@ -37,11 +38,8 @@ function buildActualOrder(matches: GroupMatch[], group: string): string[] {
 
 export async function POST(req: Request) {
   const supabase = createServerSupabaseClient()
-  const { data: { user }, error: authErr } = await supabase.auth.getUser()
-  if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single()
-  if (!profile?.is_admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const denied = await requireAdmin(supabase)
+  if (denied) return denied
 
   let group_name: string | undefined
   try { group_name = (await req.json()).group_name } catch {}

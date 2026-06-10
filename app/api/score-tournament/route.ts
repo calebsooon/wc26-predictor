@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireAdmin } from '@/lib/require-admin'
 import { TOURNAMENT_POINTS } from '@/lib/scoring'
 
 const ROUND_IDS = {
@@ -8,17 +9,16 @@ const ROUND_IDS = {
   FIN: '00000000-0000-0000-0000-000000000007',
 }
 
+const PLACEHOLDER = 'TBC'
+
 export async function POST() {
   const supabase = createServerSupabaseClient()
-  const { data: { user }, error: authErr } = await supabase.auth.getUser()
-  if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single()
-  if (!profile?.is_admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const denied = await requireAdmin(supabase)
+  if (denied) return denied
 
   const { data: matches, error: mErr } = await supabase
     .from('matches')
-    .select('home_team, away_team, real_home_score, real_away_score, round_id')
+    .select('home_team, away_team, real_home_score, real_away_score, match_winner, round_id')
     .in('round_id', Object.values(ROUND_IDS))
   if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 })
 
@@ -27,18 +27,34 @@ export async function POST() {
   const actualSemis = new Set<string>()
   const actualQuarters = new Set<string>()
 
-  for (const m of (matches ?? []) as { home_team: string; away_team: string; real_home_score: number | null; real_away_score: number | null; round_id: string }[]) {
-    if (m.round_id === ROUND_IDS.QF) {
-      actualQuarters.add(m.home_team)
-      actualQuarters.add(m.away_team)
+  for (const m of (matches ?? []) as {
+    home_team: string; away_team: string
+    real_home_score: number | null; real_away_score: number | null
+    match_winner: string | null; round_id: string
+  }[]) {
+    const home = m.home_team, away = m.away_team
+
+    // Skip fixtures that still have placeholder teams (not yet confirmed)
+    const hasRealTeams = home !== PLACEHOLDER && away !== PLACEHOLDER && !!home && !!away
+
+    if (m.round_id === ROUND_IDS.QF && hasRealTeams) {
+      actualQuarters.add(home)
+      actualQuarters.add(away)
     }
-    if (m.round_id === ROUND_IDS.SF) {
-      actualSemis.add(m.home_team)
-      actualSemis.add(m.away_team)
+
+    if (m.round_id === ROUND_IDS.SF && hasRealTeams) {
+      actualSemis.add(home)
+      actualSemis.add(away)
     }
-    if (m.round_id === ROUND_IDS.FIN && m.real_home_score != null && m.real_away_score != null) {
-      champion = m.real_home_score > m.real_away_score ? m.home_team : m.away_team
-      runner_up = m.real_home_score > m.real_away_score ? m.away_team : m.home_team
+
+    if (m.round_id === ROUND_IDS.FIN && hasRealTeams && m.real_home_score != null && m.real_away_score != null) {
+      const rh = m.real_home_score, ra = m.real_away_score
+      // Use match_winner if admin set it (penalty shootout winner), otherwise derive from score
+      const winner = m.match_winner ?? (rh > ra ? home : ra > rh ? away : null)
+      if (winner) {
+        champion = winner
+        runner_up = winner === home ? away : home
+      }
     }
   }
 
@@ -65,10 +81,7 @@ export async function POST() {
   if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 })
 
   return NextResponse.json({
-    updated: updates.length,
-    champion,
-    runner_up,
-    semi_count: actualSemis.size,
-    quarter_count: actualQuarters.size,
+    updated: updates.length, champion, runner_up,
+    semi_count: actualSemis.size, quarter_count: actualQuarters.size,
   })
 }

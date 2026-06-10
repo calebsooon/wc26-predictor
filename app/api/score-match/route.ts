@@ -1,15 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireAdmin } from '@/lib/require-admin'
 import { scorePrediction, type PredictionInput } from '@/lib/scoring'
 
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient()
-
-  const { data: { user }, error: authErr } = await supabase.auth.getUser()
-  if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single()
-  if (!profile?.is_admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const denied = await requireAdmin(supabase)
+  if (denied) return denied
 
   let match_id: string | undefined
   try { match_id = (await request.json()).match_id } catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }) }

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { PageHeader, Tabs, Card, Skeleton, EmptyState, TrophyIcon, Avatar } from '@/components/ui'
 import { LeaderboardTable, type LBRow } from '@/components/football'
-import { GW_NAMES, GW_SHORT, GW_PRIZES, OVERALL_PRIZES } from '@/lib/prizes'
+import { GW_NAMES, GW_SHORT, GW_PRIZES, OVERALL_PRIZES, formatPrize, prizeTone } from '@/lib/prizes'
 
 interface PredRow {
   user_id: string
@@ -31,15 +31,12 @@ export default function LeaderboardPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
+      const [{ data: { user } }, , { data: snaps }] = await Promise.all([
+        supabase.auth.getUser(),
+        fetchRows(),
+        supabase.from('rank_snapshots').select('user_id, rank, snapshot_at').order('snapshot_at', { ascending: false }).limit(200),
+      ])
       setUserId(user?.id ?? null)
-      await fetchRows()
-
-      const { data: snaps } = await supabase
-        .from('rank_snapshots')
-        .select('user_id, rank, snapshot_at')
-        .order('snapshot_at', { ascending: false })
-        .limit(200)
       if (snaps && snaps.length > 0) {
         const latest = (snaps[0] as SnapRow).snapshot_at
         const map = new Map<string, number>()
@@ -48,7 +45,6 @@ export default function LeaderboardPage() {
         }
         setPrevRanks(map)
       }
-
       setLoading(false)
     }
     load()
@@ -127,8 +123,9 @@ export default function LeaderboardPage() {
                 const place = idx === 1 ? 1 : idx === 0 ? 2 : 3
                 const color = place === 1 ? 'rgb(var(--gold))' : place === 2 ? '#94A3B8' : '#D9A066'
                 const prizeAmt = (tab === 'all' ? OVERALL_PRIZES : GW_PRIZES)[Math.min(place - 1, 6)]
-                const prizeLabel = prizeAmt > 0 ? `+$${prizeAmt}` : prizeAmt < 0 ? `-$${Math.abs(prizeAmt)}` : '$0'
-                const prizeColor = prizeAmt > 0 ? 'rgb(var(--success))' : prizeAmt < 0 ? 'rgb(var(--error))' : 'rgb(var(--texts))'
+                const prizeLabel = formatPrize(prizeAmt)
+                const tone = prizeTone(prizeAmt)
+                const prizeColor = tone === 'green' ? 'rgb(var(--success))' : tone === 'red' ? 'rgb(var(--error))' : 'rgb(var(--texts))'
                 return (
                   <Card key={p.id} className={`p-4 text-center ${place === 1 ? 'sm:-mt-3' : ''} ${p.you ? 'border-blue/40' : ''}`}>
                     <div className="text-xs font-black mb-2" style={{ color }}>{place === 1 ? '🥇' : place === 2 ? '🥈' : '🥉'}</div>

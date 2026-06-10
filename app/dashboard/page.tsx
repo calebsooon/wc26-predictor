@@ -50,7 +50,7 @@ export default function DashboardPage() {
 
       const { data: myData } = await supabase
         .from('predictions')
-        .select('match_id, pred_home, pred_away, points_awarded')
+        .select('match_id, pred_home, pred_away, points_awarded, pts_exact, pred_first_goal_team, pred_first_scorer_id')
         .eq('user_id', user.id)
       const map: Record<string, MyPred> = {}
       for (const p of myData ?? []) map[(p as { match_id: string }).match_id] = p as unknown as MyPred
@@ -94,7 +94,7 @@ export default function DashboardPage() {
     return i >= 0 ? i + 1 : null
   }, [lb, userId])
   const myPts = lb.find((r) => r.id === userId)?.pts ?? 0
-  const exactCount = useMemo(() => Object.values(preds).filter((p) => p.points_awarded != null && p.points_awarded >= 6).length, [preds])
+  const exactCount = useMemo(() => Object.values(preds).filter((p) => (p.pts_exact ?? 0) > 0).length, [preds])
 
   const upcoming = useMemo(() => matches
     .filter((m) => m.real_home_score === null && new Date(m.match_date) > new Date())
@@ -127,7 +127,12 @@ export default function DashboardPage() {
     const updated: MyPred = { ...cur, pred_home: side === 'h' ? val : cur.pred_home, pred_away: side === 'a' ? val : cur.pred_away }
     setPreds((p) => ({ ...p, [matchId]: updated }))
     await supabase.from('predictions').upsert(
-      { user_id: userId, match_id: matchId, pred_home: updated.pred_home, pred_away: updated.pred_away },
+      {
+        user_id: userId, match_id: matchId,
+        pred_home: updated.pred_home, pred_away: updated.pred_away,
+        pred_first_goal_team: updated.pred_first_goal_team ?? null,
+        pred_first_scorer_id: updated.pred_first_scorer_id ?? null,
+      },
       { onConflict: 'user_id,match_id' },
     )
   }

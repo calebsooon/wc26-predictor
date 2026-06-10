@@ -1,17 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireAdmin } from '@/lib/require-admin'
 import { scorePrediction, type PredictionInput, type MatchResult } from '@/lib/scoring'
 
 export async function POST() {
   const supabase = createServerSupabaseClient()
+  const denied = await requireAdmin(supabase)
+  if (denied) return denied
 
-  const { data: { user }, error: authErr } = await supabase.auth.getUser()
-  if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single()
-  if (!profile?.is_admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
-  // Fetch all matches that have real scores
   const { data: matches, error: matchErr } = await supabase
     .from('matches')
     .select('id, home_team, away_team, real_home_score, real_away_score, first_goal_team, first_goal_player_id')
@@ -20,7 +16,6 @@ export async function POST() {
   if (matchErr) return NextResponse.json({ error: matchErr.message }, { status: 500 })
   if (!matches || matches.length === 0) return NextResponse.json({ rescored: 0 })
 
-  // Fetch all predictions for those matches in one query
   const matchIds = (matches as { id: string }[]).map((m) => m.id)
   const { data: predictions, error: predsErr } = await supabase
     .from('predictions')
@@ -29,7 +24,6 @@ export async function POST() {
   if (predsErr) return NextResponse.json({ error: predsErr.message }, { status: 500 })
   if (!predictions || predictions.length === 0) return NextResponse.json({ rescored: 0 })
 
-  // Build a lookup: match_id → result
   const matchMap = new Map<string, MatchResult>()
   for (const m of matches as unknown as (MatchResult & { id: string })[]) {
     matchMap.set(m.id, m)
@@ -40,10 +34,8 @@ export async function POST() {
     if (!result) return null
     const b = scorePrediction(p, result)
     return {
-      id: p.id,
-      match_id: p.match_id,
-      pred_home: p.pred_home,
-      pred_away: p.pred_away,
+      id: p.id, match_id: p.match_id,
+      pred_home: p.pred_home, pred_away: p.pred_away,
       points_awarded: b.total,
       pts_outcome: b.outcome, pts_exact: b.exact, pts_goal_diff: b.goalDiff,
       pts_total_goals: b.totalGoals, pts_btts: b.btts, pts_first_team: b.firstTeam,
@@ -51,7 +43,6 @@ export async function POST() {
     }
   }).filter(Boolean)
 
-  // Upsert in batches of 500 to avoid payload limits
   const BATCH = 500
   let total = 0
   for (let i = 0; i < updates.length; i += BATCH) {
