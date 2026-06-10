@@ -15,6 +15,7 @@ interface PredRow {
   matches: { gw_number: number | null } | null
 }
 interface SnapRow { user_id: string; rank: number; snapshot_at: string }
+interface ProfileRow { id: string; username: string | null; avatar_url: string | null }
 
 const GW_TABS = [
   { key: 'all', label: 'Overall' },
@@ -24,6 +25,7 @@ const GW_TABS = [
 export default function LeaderboardPage() {
   const supabase = createClient()
   const [rows, setRows] = useState<PredRow[]>([])
+  const [allProfiles, setAllProfiles] = useState<ProfileRow[]>([])
   const [prevRanks, setPrevRanks] = useState<Map<string, number>>(new Map())
   const [userId, setUserId] = useState<string | null>(null)
   const [tab, setTab] = useState('all')
@@ -31,12 +33,14 @@ export default function LeaderboardPage() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: { user } }, , { data: snaps }] = await Promise.all([
+      const [{ data: { user } }, , { data: snaps }, { data: profiles }] = await Promise.all([
         supabase.auth.getUser(),
         fetchRows(),
         supabase.from('rank_snapshots').select('user_id, rank, snapshot_at').order('snapshot_at', { ascending: false }).limit(200),
+        supabase.from('profiles').select('id, username, avatar_url'),
       ])
       setUserId(user?.id ?? null)
+      setAllProfiles((profiles ?? []) as ProfileRow[])
       if (snaps && snaps.length > 0) {
         const latest = (snaps[0] as SnapRow).snapshot_at
         const map = new Map<string, number>()
@@ -66,6 +70,15 @@ export default function LeaderboardPage() {
     const filtered = gwNum == null ? rows : rows.filter((r) => r.matches?.gw_number === gwNum)
 
     const agg = new Map<string, LBRow & { scored: number; correct: number; outcomeWins: number }>()
+
+    // Seed every registered player at 0 so they show even before scoring starts
+    for (const p of allProfiles) {
+      agg.set(p.id, {
+        id: p.id, name: p.username ?? '?', avatar: p.avatar_url,
+        pts: 0, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 0, you: p.id === userId,
+      })
+    }
+
     for (const r of filtered) {
       const cur = agg.get(r.user_id) ?? {
         id: r.user_id, name: r.profiles?.username ?? '?', avatar: r.profiles?.avatar_url,
@@ -91,7 +104,7 @@ export default function LeaderboardPage() {
       const prize = prizes[Math.min(currentIdx, 6)]
       return { ...r, move, prize }
     })
-  }, [rows, tab, userId, prevRanks])
+  }, [rows, tab, userId, prevRanks, allProfiles])
 
   const podium = board.slice(0, 3)
   const hasSnapshots = prevRanks.size > 0
@@ -114,7 +127,7 @@ export default function LeaderboardPage() {
       </div>
 
       {board.length === 0 ? (
-        <EmptyState icon={<TrophyIcon size={22} />} title="No scored predictions yet" desc="The table fills in as results come in." />
+        <EmptyState icon={<TrophyIcon size={22} />} title="No players yet" desc="Players will appear here once they sign up." />
       ) : (
         <>
           {podium.length >= 3 && (

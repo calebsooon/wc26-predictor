@@ -56,16 +56,21 @@ export default function DashboardPage() {
       for (const p of myData ?? []) map[(p as { match_id: string }).match_id] = p as unknown as MyPred
       setPreds(map)
 
-      // All scored predictions for leaderboard + prize calc
-      const { data: scored } = await supabase
-        .from('predictions')
-        .select('user_id, points_awarded, pts_outcome, profiles(username, avatar_url), matches(gw_number)')
-        .not('points_awarded', 'is', null)
+      // All profiles + scored predictions in parallel for leaderboard + prize calc
+      const [{ data: scored }, { data: profiles }] = await Promise.all([
+        supabase.from('predictions')
+          .select('user_id, points_awarded, pts_outcome, profiles(username, avatar_url), matches(gw_number)')
+          .not('points_awarded', 'is', null),
+        supabase.from('profiles').select('id, username, avatar_url'),
+      ])
       const allScored = (scored ?? []) as unknown as ScoredPredRow[]
       setScoredPreds(allScored)
 
-      // Leaderboard aggregation (overall)
+      // Leaderboard aggregation — seed all profiles at 0 so everyone shows up
       const agg = new Map<string, LBRow>()
+      for (const p of (profiles ?? []) as { id: string; username: string | null; avatar_url: string | null }[]) {
+        agg.set(p.id, { id: p.id, name: p.username ?? '?', avatar: p.avatar_url, pts: 0, you: p.id === user.id })
+      }
       for (const row of allScored) {
         const cur = agg.get(row.user_id) ?? { id: row.user_id, name: row.profiles?.username ?? '?', avatar: row.profiles?.avatar_url, pts: 0, you: row.user_id === user.id }
         cur.pts += row.points_awarded
@@ -141,7 +146,7 @@ export default function DashboardPage() {
     return (
       <div className="space-y-5">
         <Skeleton className="h-9 w-48" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
         <Skeleton className="h-40 rounded-xl" />
       </div>
     )
@@ -173,7 +178,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard label="My Rank" value={myRank ? `#${myRank}` : '–'} sub={`of ${lb.length || 1} players`} accent="gold" />
         <StatCard label="Total Points" value={myPts} accent="green" />
         <StatCard label="Exact Scores" value={exactCount} accent="blue" />
@@ -185,7 +190,7 @@ export default function DashboardPage() {
         <PrizeCard prize={prize} />
       )}
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-[1fr_260px] lg:grid-cols-3 gap-5 lg:gap-6">
         <div className="lg:col-span-2 space-y-4">
           <SectionHeader
             title="Next to predict"
@@ -285,13 +290,13 @@ function PrizeCard({ prize }: { prize: ReturnType<typeof computePrizeSnapshot> }
         </div>
 
         <div className="text-center">
-          <p className="text-xl font-extrabold tabular-nums text-textp">
-            <span className="text-error">{rangeMinLabel}</span>
-            <span className="text-texts text-sm font-bold mx-0.5">→</span>
-            <span className="text-success">{rangeMaxLabel}</span>
-          </p>
+          <div className="flex items-center justify-center gap-0.5 flex-wrap">
+            <span className="text-base font-extrabold tabular-nums text-error">{rangeMinLabel}</span>
+            <span className="text-texts text-xs font-bold px-0.5">→</span>
+            <span className="text-base font-extrabold tabular-nums text-success">{rangeMaxLabel}</span>
+          </div>
           <p className="text-[10px] font-bold uppercase tracking-wider text-texts mt-0.5">Range</p>
-          <p className="text-[10px] text-texts">best to worst case</p>
+          <p className="text-[10px] text-texts">worst → best</p>
         </div>
       </div>
 

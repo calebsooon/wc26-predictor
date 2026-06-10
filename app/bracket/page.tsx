@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam, TEAMS } from '@/lib/teams'
 import MatchModal, { type ModalMatch } from '@/components/MatchModal'
@@ -327,7 +328,7 @@ function TournamentPicksTab({ userId, r32Locked }: { userId: string | null; r32L
   )
 }
 
-export default function BracketPage() {
+function BracketPageInner() {
   const supabase = createClient()
   const searchParams = useSearchParams()
   const [matches, setMatches] = useState<Match[]>([])
@@ -398,5 +399,13 @@ export default function BracketPage() {
 
       {selected && <MatchModal match={selected} onClose={() => setSelected(null)} />}
     </div>
+  )
+}
+
+export default function BracketPage() {
+  return (
+    <Suspense fallback={<div className="space-y-5"><Skeleton className="h-9 w-44" /><Skeleton className="h-12 w-full" /><Skeleton className="h-96 rounded-xl" /></div>}>
+      <BracketPageInner />
+    </Suspense>
   )
 }
