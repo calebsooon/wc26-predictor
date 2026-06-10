@@ -81,11 +81,15 @@ async function main() {
     }
 
     const rows = team.squad.map((p) => ({
+      id: p.id,
       name: p.name,
       position: p.position ?? null,
+      nationality: p.nationality ?? null,
+      team_id: team.id,
       team_name: team.name,
       jersey_number: p.shirtNumber ?? null,
       photo_url: null as string | null,
+      last_updated: new Date().toISOString(),
     }))
 
     if (rows.length === 0) {
@@ -93,7 +97,7 @@ async function main() {
       continue
     }
 
-    const { error } = await supabase.from('players').upsert(rows, { onConflict: 'name,team_name', ignoreDuplicates: false })
+    const { error } = await supabase.from('players').upsert(rows, { onConflict: 'id' })
     if (error) {
       console.error(`  ${team.name}: ERROR —`, error.message)
     } else {
