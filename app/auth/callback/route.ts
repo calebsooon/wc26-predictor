@@ -18,5 +18,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.redirect(`${origin}/predictions`)
+  return NextResponse.redirect(`${origin}/dashboard`)
 }

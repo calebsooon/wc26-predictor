@@ -1,6 +1,8 @@
-# World Cup 2026 Predictor
+# Bracket XI — World Cup 2026 Predictor
 
-A full-stack prediction game for FIFA World Cup 2026. Players submit scoreline predictions before each match kicks off, earn points based on accuracy, and compete on a live leaderboard.
+A full-stack prediction game for FIFA World Cup 2026. Players submit scoreline predictions before each match kicks off, earn points across multiple categories, and compete on a live leaderboard.
+
+The UI uses the **"Dark Stadium Analytics"** design system (Archivo / Space Grotesk type, token-driven colours) and supports **light and dark mode** via the toggle in the header (defaults to your system preference).
 
 ---
 
@@ -55,9 +57,12 @@ Push the schema and seed data:
 supabase db push
 ```
 
-This runs two migrations in order:
+This runs the migrations in order, including:
 1. `20260609000000_initial_schema.sql` — creates all tables, RLS policies, and the `is_admin()` helper
 2. `20260609000001_seed_matches.sql` — inserts 7 rounds and 111 matches (72 group stage + 39 knockout)
+3. `20260610000000_design_upgrade.sql` — adds multi-category scoring inputs (first-goal team, first scorer, knockout advance pick), the per-category points breakdown columns, and the `group_predictions` table for the group-order predictor
+
+> **Note:** the design upgrade migration must be applied before the new scoring, match-detail picks, group predictor, and profile analytics will work.
 
 ### 4. Start the dev server
 
@@ -153,9 +158,13 @@ middleware.ts     Route protection — unauthenticated → /login
 
 | Points | Condition |
 |---|---|
-| **3** | Exact scoreline predicted |
-| **2** | Correct goal difference (e.g. predicted 2-0, result 3-1) |
-| **1** | Correct outcome (win / draw / loss) only |
-| **0** | Everything else |
+| **+3** | Correct outcome (win / draw / loss) |
+| **+5** | Exact scoreline |
+| **+2** | Correct goal difference |
+| **+1** | Correct total goals |
+| **+1** | Both-teams-to-score called correctly |
+| **+2** | Correct first-goal team |
+| **+6** | Correct first scorer |
+| **+4** | Correct knockout advance pick (knockout matches only) |
 
-Scores are calculated server-side by `POST /api/score-match` when an admin saves a result.
+Categories stack — an exact scoreline also earns outcome, goal-difference, total-goals and BTTS points. Scores are calculated server-side by `POST /api/score-match` (using `lib/scoring.ts`) when an admin saves a result, and the per-category breakdown is stored on each prediction for the profile analytics.

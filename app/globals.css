@@ -2,26 +2,90 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * BRACKET XI tokens as space-separated RGB channels.
+ * :root = light mode · .dark = dark mode ("Dark Stadium Analytics").
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg:       248 250 252;  /* #F8FAFC */
+  --surface:  255 255 255;  /* #FFFFFF */
+  --card:     255 255 255;  /* #FFFFFF */
+  --border:   226 232 240;  /* #E2E8F0 */
+  --primary:    5 150 105;  /* #059669 — deeper green for contrast on light */
+  --gold:     180 121  31;  /* #B4791F */
+  --blue:       2 132 199;  /* #0284C7 */
+  --textp:     15  23  42;  /* #0F172A */
+  --texts:    100 116 139;  /* #64748B */
+  --error:    220  38  38;  /* #DC2626 */
+  --success:   22 163  74;  /* #16A34A */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --bg:         7  17  31;  /* #07111F */
+  --surface:   16  27  45;  /* #101B2D */
+  --card:      21  34  56;  /* #152238 */
+  --border:    38  53  79;  /* #26354F */
+  --primary:    0 230 118;  /* #00E676 */
+  --gold:     245 197  66;  /* #F5C542 */
+  --blue:      56 189 248;  /* #38BDF8 */
+  --textp:    248 250 252;  /* #F8FAFC */
+  --texts:    148 163 184;  /* #94A3B8 */
+  --error:    239  68  68;  /* #EF4444 */
+  --success:   34 197  94;  /* #22C55E */
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: rgb(var(--bg));
+  color: rgb(var(--textp));
+  font-family: var(--font-archivo), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  font-variant-numeric: tabular-nums;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-space-grotesk), var(--font-archivo), sans-serif;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .h-13 {
+    height: 3.25rem;
+  }
+  .h-18 {
+    height: 4.5rem;
+  }
+}
+
+/* Custom scrollbar (token-aware) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: rgb(var(--bg));
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--border));
+  border-radius: 8px;
+  border: 2px solid rgb(var(--bg));
+}
+select option {
+  background: rgb(var(--card));
+  color: rgb(var(--textp));
 }

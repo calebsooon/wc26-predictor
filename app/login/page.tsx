@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
+import { Logo, Button } from '@/components/ui'
 
 type Mode = 'signin' | 'signup'
 
@@ -10,11 +12,11 @@ export default function LoginPage() {
   const supabase = createClient()
   const router   = useRouter()
 
-  const [mode, setMode]       = useState<Mode>('signin')
-  const [email, setEmail]     = useState('')
+  const [mode, setMode]         = useState<Mode>('signin')
+  const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError]     = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [error, setError]       = useState<string | null>(null)
+  const [loading, setLoading]   = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -24,8 +26,6 @@ export default function LoginPage() {
     if (mode === 'signup') {
       const { data, error } = await supabase.auth.signUp({ email, password })
       if (error) { setError(error.message); setLoading(false); return }
-
-      // Auto-create profile row (same as auth callback does for magic link)
       if (data.user) {
         const username = email.split('@')[0]
         await supabase
@@ -37,88 +37,65 @@ export default function LoginPage() {
       if (error) { setError(error.message); setLoading(false); return }
     }
 
-    router.push('/predictions')
+    router.push('/dashboard')
     router.refresh()
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+    <main className="min-h-screen flex items-center justify-center bg-bg px-4">
+      <div className="w-full max-w-sm">
+        <Link href="/" className="flex items-center gap-2.5 justify-center mb-8">
+          <Logo />
+          <span className="font-extrabold tracking-tight text-lg">BRACKET XI</span>
+        </Link>
 
-        {/* Header */}
-        <div className="flex items-center gap-2 mb-6">
-          <span className="text-2xl">⚽</span>
-          <div>
-            <p className="font-extrabold text-gray-900 text-sm leading-tight tracking-tight">WORLD CUP 2026</p>
-            <p className="text-[10px] text-gray-400 uppercase tracking-widest">Predictor</p>
+        <div className="bg-card rounded-2xl border border-border p-7">
+          {/* Mode toggle */}
+          <div className="flex rounded-lg bg-surface border border-border p-1 mb-6">
+            {(['signin', 'signup'] as Mode[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => { setMode(m); setError(null) }}
+                className={`flex-1 py-1.5 text-sm font-bold rounded-md transition-colors ${mode === m ? 'bg-primary text-[#04210F]' : 'text-texts hover:text-textp'}`}
+              >
+                {m === 'signin' ? 'Sign in' : 'Sign up'}
+              </button>
+            ))}
           </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-xs font-bold uppercase tracking-wider text-texts mb-1.5">Email</label>
+              <input
+                id="email" type="email" required value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-textp placeholder:text-texts focus:outline-none focus:border-primary"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-xs font-bold uppercase tracking-wider text-texts mb-1.5">Password</label>
+              <input
+                id="password" type="password" required minLength={6} value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-textp placeholder:text-texts focus:outline-none focus:border-primary"
+              />
+            </div>
+
+            {error && <p className="text-sm text-error bg-error/10 border border-error/20 rounded-lg px-3 py-2">{error}</p>}
+
+            <Button type="submit" variant="primary" size="lg" className="w-full" disabled={loading}>
+              {loading
+                ? (mode === 'signin' ? 'Signing in…' : 'Creating account…')
+                : (mode === 'signin' ? 'Sign in' : 'Create account')}
+            </Button>
+          </form>
         </div>
 
-        {/* Mode toggle */}
-        <div className="flex rounded-lg bg-gray-100 p-1 mb-6">
-          {(['signin', 'signup'] as Mode[]).map(m => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => { setMode(m); setError(null) }}
-              className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                mode === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-900 hover:text-black'
-              }`}
-            >
-              {m === 'signin' ? 'Sign in' : 'Sign up'}
-            </button>
-          ))}
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white placeholder-gray-400
-                         focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white placeholder-gray-400
-                         focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-            />
-          </div>
-
-          {error && (
-            <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-black text-white py-2.5 text-sm font-semibold
-                       hover:bg-gray-800 disabled:opacity-50 transition-colors"
-          >
-            {loading
-              ? (mode === 'signin' ? 'Signing in…' : 'Creating account…')
-              : (mode === 'signin' ? 'Sign in' : 'Create account')}
-          </button>
-        </form>
+        <p className="text-center text-xs text-texts mt-6">Predict every match. Prove every take.</p>
       </div>
     </main>
   )
