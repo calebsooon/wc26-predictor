@@ -6,7 +6,7 @@
    All colours are token-driven so they flip light/dark automatically.
    ============================================================ */
 
-import { useEffect, useState, type ReactNode, type ButtonHTMLAttributes } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type ButtonHTMLAttributes } from 'react'
 import { getTeam } from '@/lib/teams'
 
 /* ---------- Flag + Team name ---------- */
@@ -200,9 +200,37 @@ export function ChipRow({ chips, value, onChange }: { chips: Chip[]; value: stri
 export function ScoreStepper({
   value, onChange, disabled = false, color = 'rgb(var(--primary))', compact = false,
 }: { value: number | null | undefined; onChange: (v: number) => void; disabled?: boolean; color?: string; compact?: boolean }) {
-  const set = (v: number) => !disabled && onChange(Math.max(0, Math.min(20, v)))
+  const [draft, setDraft] = useState(value == null ? '' : String(value))
+  const skipSync = useRef(false)
+
+  useEffect(() => {
+    if (skipSync.current) { skipSync.current = false; return }
+    setDraft(value == null ? '' : String(value))
+  }, [value])
+
+  const set = (v: number) => {
+    if (disabled) return
+    const clamped = Math.max(0, Math.min(20, v))
+    skipSync.current = true
+    setDraft(String(clamped))
+    onChange(clamped)
+  }
+
+  function handleInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const raw = e.target.value.replace(/[^0-9]/g, '').slice(0, 2)
+    setDraft(raw)
+    if (raw === '') return
+    const n = parseInt(raw, 10)
+    if (!isNaN(n)) { skipSync.current = true; onChange(Math.max(0, Math.min(20, n))) }
+  }
+
+  function handleBlur() {
+    if (draft === '') setDraft(value == null ? '' : String(value))
+  }
+
   const btn = compact ? 'w-7 h-7 text-base rounded-md' : 'w-9 h-9 text-xl rounded-lg'
-  const disp = compact ? 'w-9 h-9 text-lg rounded-lg border' : 'w-12 h-12 text-2xl rounded-xl border-2'
+  const disp = compact ? 'w-9 h-9 text-lg rounded-lg' : 'w-12 h-12 text-2xl rounded-xl'
+  const border = compact ? 'border' : 'border-2'
   const gap = compact ? 'gap-1' : 'gap-2'
   return (
     <div className={`flex items-center ${gap}`}>
@@ -213,16 +241,23 @@ export function ScoreStepper({
       >
         −
       </button>
-      <div
-        className={`${disp} grid place-items-center font-extrabold tabular-nums`}
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={2}
+        value={draft}
+        onChange={handleInput}
+        onBlur={handleBlur}
+        disabled={disabled}
+        placeholder="–"
+        className={`${disp} ${border} text-center font-extrabold tabular-nums bg-transparent focus:outline-none disabled:pointer-events-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
         style={{
           color: value == null ? 'rgb(var(--texts))' : color,
           borderColor: value == null ? 'rgb(var(--border))' : color,
           background: value == null ? 'transparent' : 'rgb(var(--surface))',
         }}
-      >
-        {value == null ? '–' : value}
-      </div>
+      />
       <button
         onClick={() => set((value ?? 0) + 1)}
         disabled={disabled}
