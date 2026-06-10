@@ -16,6 +16,7 @@ interface Match {
 }
 
 interface TeamRow { team: string; p: number; w: number; d: number; l: number; gf: number; ga: number; gd: number; pts: number }
+interface GroupPredRow { group_name: string; ranked_codes: string[]; points_awarded: number | null }
 
 const GROUPS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
 
@@ -45,7 +46,7 @@ export default function GroupsPage() {
   const [mode, setMode] = useState('standings')
   const [userId, setUserId] = useState<string | null>(null)
   const [order, setOrder] = useState<string[]>([])
-  const [savedOrder, setSavedOrder] = useState<Record<string, string[]>>({})
+  const [savedPreds, setSavedPreds] = useState<Record<string, GroupPredRow>>({})
   const [savingMsg, setSavingMsg] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -60,10 +61,13 @@ export default function GroupsPage() {
         .order('match_date')
       if (data) setMatches(data as Match[])
       if (user) {
-        const { data: gp } = await supabase.from('group_predictions').select('group_name, ranked_codes').eq('user_id', user.id)
-        const map: Record<string, string[]> = {}
-        for (const r of gp ?? []) map[(r as { group_name: string }).group_name] = (r as { ranked_codes: string[] }).ranked_codes
-        setSavedOrder(map)
+        const { data: gp } = await supabase
+          .from('group_predictions')
+          .select('group_name, ranked_codes, points_awarded')
+          .eq('user_id', user.id)
+        const map: Record<string, GroupPredRow> = {}
+        for (const r of (gp ?? []) as GroupPredRow[]) map[r.group_name] = r
+        setSavedPreds(map)
       }
       setLoading(false)
     }
@@ -78,14 +82,18 @@ export default function GroupsPage() {
     return Array.from(set)
   }, [matches, group])
 
-  // initialise predictor order when group/mode changes
+  const groupComplete = useMemo(() => {
+    const gMatches = matches.filter((m) => m.group_name === group)
+    return gMatches.length > 0 && gMatches.every((m) => m.real_home_score !== null)
+  }, [matches, group])
+
   useEffect(() => {
     if (mode !== 'predict') return
-    const saved = savedOrder[group]
-    const base = saved && saved.length ? saved : (table.length ? table.map((t) => t.team) : teamsInGroup)
+    const saved = savedPreds[group]
+    const base = saved?.ranked_codes?.length ? saved.ranked_codes : (table.length ? table.map((t) => t.team) : teamsInGroup)
     setOrder(base)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [group, mode, savedOrder, matches])
+  }, [group, mode, savedPreds, matches])
 
   function move(i: number, dir: -1 | 1) {
     setOrder((o) => {
@@ -104,24 +112,29 @@ export default function GroupsPage() {
       { onConflict: 'user_id,group_name' },
     )
     setSavingMsg(error ? error.message : 'Saved ✓')
-    if (!error) setSavedOrder((s) => ({ ...s, [group]: order }))
+    if (!error) setSavedPreds((s) => ({ ...s, [group]: { group_name: group, ranked_codes: order, points_awarded: s[group]?.points_awarded ?? null } }))
     setTimeout(() => setSavingMsg(null), 2500)
   }
 
   if (loading) return <div className="space-y-5"><Skeleton className="h-9 w-40" /><Skeleton className="h-12 w-full" /><Skeleton className="h-72 rounded-xl" /></div>
 
+  const currentPred = savedPreds[group]
+  const ptsAwarded = currentPred?.points_awarded ?? null
+
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="World Cup 2026" title="Groups" sub="Live standings and your predicted finishing order." />
 
-      {/* group selector — single accent */}
       <div className="flex flex-wrap gap-2">
         {GROUPS.map((g) => {
           const active = g === group
+          const pred = savedPreds[g]
+          const hasPts = pred?.points_awarded != null
           return (
             <button key={g} onClick={() => setGroup(g)}
-              className={`w-10 h-10 rounded-lg text-sm font-bold transition-all border ${active ? 'bg-primary/12 border-primary text-primary' : 'bg-card border-border text-texts hover:text-textp'}`}>
+              className={`w-10 h-10 rounded-lg text-sm font-bold transition-all border relative ${active ? 'bg-primary/12 border-primary text-primary' : 'bg-card border-border text-texts hover:text-textp'}`}>
               {g}
+              {hasPts && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-primary" />}
             </button>
           )
         })}
@@ -172,16 +185,29 @@ export default function GroupsPage() {
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm text-texts">Reorder how you think Group {group} finishes.</p>
-            {savingMsg && <Pill tone={savingMsg.includes('✓') ? 'green' : 'default'}>{savingMsg}</Pill>}
+            <div className="flex items-center gap-2">
+              {ptsAwarded !== null && (
+                <Pill tone={ptsAwarded > 0 ? 'green' : 'default'}>
+                  +{ptsAwarded} pts
+                </Pill>
+              )}
+              {ptsAwarded === null && groupComplete && (
+                <Pill tone="default">Awaiting scoring</Pill>
+              )}
+              {savingMsg && <Pill tone={savingMsg.includes('✓') ? 'green' : 'default'}>{savingMsg}</Pill>}
+            </div>
           </div>
           <div className="space-y-2">
             {order.map((code, i) => {
               const t = getTeam(code)
+              const saved = currentPred?.ranked_codes?.[i]
+              const correct = groupComplete && saved === table[i]?.team
               return (
-                <div key={code} className={`flex items-center gap-3 p-2.5 rounded-lg border ${i < 2 ? 'border-primary/30 bg-primary/[0.06]' : 'border-border bg-surface'}`}>
+                <div key={code} className={`flex items-center gap-3 p-2.5 rounded-lg border ${i < 2 ? 'border-primary/30 bg-primary/[0.06]' : 'border-border bg-surface'} ${correct ? 'border-green-500/40 bg-green-500/[0.05]' : ''}`}>
                   <span className="w-6 text-center text-sm font-extrabold tabular-nums" style={{ color: i < 2 ? 'rgb(var(--primary))' : 'rgb(var(--texts))' }}>{i + 1}</span>
                   <span className="text-lg">{t.flag}</span>
                   <span className="font-bold text-sm flex-1 truncate">{t.name}</span>
+                  {correct && <span className="text-xs font-bold text-primary">✓</span>}
                   <div className="flex gap-1">
                     <button onClick={() => move(i, -1)} disabled={i === 0} className="w-8 h-8 grid place-items-center rounded-md border border-border text-texts hover:text-textp disabled:opacity-30">↑</button>
                     <button onClick={() => move(i, 1)} disabled={i === order.length - 1} className="w-8 h-8 grid place-items-center rounded-md border border-border text-texts hover:text-textp disabled:opacity-30">↓</button>
@@ -190,7 +216,10 @@ export default function GroupsPage() {
               )
             })}
           </div>
-          <Button className="w-full mt-4" onClick={savePrediction} disabled={!userId || order.length === 0}>Save prediction</Button>
+          <div className="flex items-center justify-between mt-4 gap-2">
+            <p className="text-[11px] text-texts">+2 pts per team in correct position · max 8 pts per group</p>
+            <Button onClick={savePrediction} disabled={!userId || order.length === 0}>Save</Button>
+          </div>
         </Card>
       )}
     </div>

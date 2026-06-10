@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
 import {
-  PageHeader, Card, Button, Pill, ScoreStepper, ChipRow, Skeleton, ChevDown, SearchIcon,
+  PageHeader, Card, Button, Pill, ScoreStepper, ChipRow, Skeleton, ChevDown, SearchIcon, SectionHeader,
 } from '@/components/ui'
 
 interface Match {
@@ -137,6 +137,50 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
   )
 }
 
+function AdminActions() {
+  const [busy, setBusy] = useState<string | null>(null)
+  const [msgs, setMsgs] = useState<Record<string, string>>({})
+
+  async function call(key: string, url: string, body?: object) {
+    setBusy(key); setMsgs((m) => ({ ...m, [key]: '' }))
+    try {
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
+      const json = await res.json().catch(() => ({}))
+      setMsgs((m) => ({ ...m, [key]: res.ok ? JSON.stringify(json) : (json.error ?? 'Error') }))
+    } catch (e) {
+      setMsgs((m) => ({ ...m, [key]: String(e) }))
+    }
+    setBusy(null)
+  }
+
+  const actions = [
+    { key: 'snapshot', label: 'Snapshot leaderboard', sub: 'Records current rank positions for movement arrows', url: '/api/snapshot-ranks' },
+    { key: 'groups', label: 'Score group predictions', sub: 'Awards points for correct group order picks (all complete groups)', url: '/api/score-groups' },
+    { key: 'tournament', label: 'Score tournament picks', sub: 'Awards points for champion / finalist / semi / quarter picks', url: '/api/score-tournament' },
+    { key: 'rescore', label: 'Rescore all matches', sub: 'Recalculates every prediction for all scored matches (use after rule changes)', url: '/api/rescore-all' },
+  ]
+
+  return (
+    <Card className="p-4">
+      <SectionHeader title="Tournament actions" sub="Run these after results are in." />
+      <div className="space-y-3 mt-3">
+        {actions.map((a) => (
+          <div key={a.key} className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-textp truncate">{a.label}</p>
+              <p className="text-[11px] text-texts truncate">{a.sub}</p>
+              {msgs[a.key] && <p className="text-[11px] text-primary mt-0.5 font-mono truncate">{msgs[a.key]}</p>}
+            </div>
+            <Button size="sm" variant="outline" onClick={() => call(a.key, a.url)} disabled={busy === a.key} className="shrink-0">
+              {busy === a.key ? '…' : 'Run'}
+            </Button>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
 export default function AdminPage() {
   const supabase = createClient()
   const router = useRouter()
@@ -171,6 +215,7 @@ export default function AdminPage() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Admin" title="Enter results" sub="Saving a result locks the match and recalculates points." />
+      <AdminActions />
       <ChipRow chips={[{ key: 'pending', label: 'Pending' }, { key: 'done', label: 'Scored' }, { key: 'all', label: 'All' }]} value={filter} onChange={setFilter} />
       <div className="space-y-2.5">
         {filtered.map((m) => (

@@ -153,6 +153,7 @@ export interface LBRow {
   acc?: number
   exact?: number
   move?: number
+  prize?: number
   you?: boolean
 }
 
@@ -162,9 +163,15 @@ function MoveArrow({ move }: { move?: number }) {
   return <span className={`text-xs font-bold tabular-nums ${up ? 'text-success' : 'text-error'}`}>{up ? '▲' : '▼'}{Math.abs(move)}</span>
 }
 
+function PrizeTag({ amount }: { amount: number }) {
+  const label = amount > 0 ? `+$${amount}` : amount < 0 ? `-$${Math.abs(amount)}` : '$0'
+  const cls = amount > 0 ? 'text-success' : amount < 0 ? 'text-error' : 'text-texts'
+  return <span className={`text-[11px] font-extrabold tabular-nums ${cls}`}>{label}</span>
+}
+
 export function LeaderboardTable({
-  players, metricLabel = 'PTS', onRow, dense = false, showMove = true, showMeta = true,
-}: { players: LBRow[]; metricLabel?: string; onRow?: (p: LBRow) => void; dense?: boolean; showMove?: boolean; showMeta?: boolean }) {
+  players, metricLabel = 'PTS', onRow, dense = false, showMove = true, showMeta = true, showPrize = false,
+}: { players: LBRow[]; metricLabel?: string; onRow?: (p: LBRow) => void; dense?: boolean; showMove?: boolean; showMeta?: boolean; showPrize?: boolean }) {
   return (
     <div className="divide-y divide-border/50">
       {players.map((p, i) => {
@@ -190,6 +197,12 @@ export function LeaderboardTable({
               )}
             </div>
             {showMove && <div className="w-8 text-center shrink-0"><MoveArrow move={p.move} /></div>}
+            {showPrize && p.prize != null && (
+              <div className="text-right shrink-0 w-12">
+                <PrizeTag amount={p.prize} />
+                <div className="text-[9px] text-texts font-bold tracking-wider">PRIZE</div>
+              </div>
+            )}
             <div className="text-right shrink-0 w-14">
               <div className={`font-extrabold tabular-nums ${isFirst ? 'text-gold' : 'text-textp'}`}>{p.pts}</div>
               <div className="text-[9px] text-texts font-bold tracking-wider">{metricLabel}</div>

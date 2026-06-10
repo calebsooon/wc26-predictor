@@ -4,15 +4,22 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import {
-  PageHeader, Card, StatCard, Button, Avatar, ProgressBar, Skeleton, Pill, SectionHeader,
+  PageHeader, Card, StatCard, Button, Avatar, ProgressBar, Skeleton, Pill, SectionHeader, EmptyState, TrophyIcon,
 } from '@/components/ui'
+import { getTeam } from '@/lib/teams'
+import { TOURNAMENT_POINTS } from '@/lib/scoring'
 
 interface Profile { id: string; username: string; avatar_url: string | null; is_admin: boolean }
+interface TournamentPred {
+  champion: string | null; runner_up: string | null; semi: string[]; quarter: string[]
+  pts_champion: number | null; pts_runner_up: number | null; pts_semi: number | null; pts_quarter: number | null
+}
+interface GroupPred { group_name: string; ranked_codes: string[]; points_awarded: number | null }
 interface ScoredPred {
   points_awarded: number
   pts_outcome: number | null; pts_exact: number | null; pts_goal_diff: number | null
   pts_total_goals: number | null; pts_btts: number | null; pts_first_team: number | null
-  pts_first_scorer: number | null; pts_knockout: number | null
+  pts_first_scorer: number | null
 }
 
 const CATEGORIES = [
@@ -23,7 +30,6 @@ const CATEGORIES = [
   { key: 'pts_btts', label: 'Both scored' },
   { key: 'pts_first_team', label: 'First goal' },
   { key: 'pts_first_scorer', label: 'First scorer' },
-  { key: 'pts_knockout', label: 'Knockout' },
 ] as const
 
 export default function ProfilePage() {
@@ -37,6 +43,8 @@ export default function ProfilePage() {
   const [totalPlayers, setTotalPlayers] = useState(0)
   const [username, setUsername] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [tournamentPred, setTournamentPred] = useState<TournamentPred | null>(null)
+  const [groupPreds, setGroupPreds] = useState<GroupPred[]>([])
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
@@ -51,9 +59,15 @@ export default function ProfilePage() {
 
       const { data: mine } = await supabase
         .from('predictions')
-        .select('points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer, pts_knockout')
+        .select('points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer')
         .eq('user_id', user.id).not('points_awarded', 'is', null)
       setPreds((mine ?? []) as unknown as ScoredPred[])
+
+      const { data: tp } = await supabase.from('tournament_predictions').select('*').eq('user_id', user.id).maybeSingle()
+      if (tp) setTournamentPred(tp as unknown as TournamentPred)
+
+      const { data: gp } = await supabase.from('group_predictions').select('group_name, ranked_codes, points_awarded').eq('user_id', user.id).order('group_name')
+      if (gp) setGroupPreds(gp as GroupPred[])
 
       const { data: all } = await supabase.from('predictions').select('user_id, points_awarded').not('points_awarded', 'is', null)
       const agg = new Map<string, number>()
@@ -78,7 +92,7 @@ export default function ProfilePage() {
       const earned = preds.filter((p) => (p[c.key] ?? 0) > 0).length
       return { ...c, pct: scored ? Math.round((earned / scored) * 100) : 0, earned }
     })
-    const ranked = [...cats].filter((c) => c.key !== 'pts_knockout').sort((a, b) => b.pct - a.pct)
+    const ranked = [...cats].sort((a, b) => b.pct - a.pct)
     return { scored, totalPts, exact, acc, cats, best: ranked[0], worst: ranked[ranked.length - 1] }
   }, [preds])
 
@@ -87,7 +101,7 @@ export default function ProfilePage() {
     return [
       { id: 'sniper', name: 'Scoreline Sniper', icon: '🎯', earned: stats.exact >= 5, hint: '5 exact scores' },
       { id: 'boot', name: 'Golden Boot Guru', icon: '⚽', earned: c('pts_first_scorer') >= 3, hint: '3 first scorers' },
-      { id: 'brain', name: 'Bracket Brain', icon: '🧠', earned: c('pts_knockout') >= 4, hint: '4 knockout calls' },
+      { id: 'prophet', name: 'First Blood Prophet', icon: '🩸', earned: c('pts_first_team') >= 10, hint: '10 first-goal team calls' },
       { id: 'genius', name: 'Group Stage Genius', icon: '📊', earned: stats.totalPts >= 100, hint: '100 points' },
       { id: 'merchant', name: 'Upset Merchant', icon: '💣', earned: stats.scored >= 20 && stats.acc >= 60, hint: '60% over 20 picks' },
       { id: 'fraud', name: 'Fraud Watch', icon: '🤡', earned: stats.scored >= 10 && stats.acc < 30, hint: 'Sub-30% accuracy' },
@@ -182,6 +196,86 @@ export default function ProfilePage() {
           ))}
         </div>
       </Card>
+
+      {/* tournament picks */}
+      <Card className="p-5">
+        <SectionHeader title="Tournament picks" sub="Your pre-knockout champion and finalist selections." />
+        {!tournamentPred || (!tournamentPred.champion && !tournamentPred.runner_up && !tournamentPred.semi?.length && !tournamentPred.quarter?.length) ? (
+          <EmptyState icon={<TrophyIcon size={20} />} title="No tournament picks" desc="Go to Bracket → My Tournament Picks to make your selections." />
+        ) : (
+          <div className="space-y-3 mt-3">
+            {[
+              { label: '🏆 Champion', value: tournamentPred.champion, pts: tournamentPred.pts_champion, max: TOURNAMENT_POINTS.champion },
+              { label: '🥈 Runner-Up', value: tournamentPred.runner_up, pts: tournamentPred.pts_runner_up, max: TOURNAMENT_POINTS.runner_up },
+            ].map((row) => row.value && (
+              <div key={row.label} className="flex items-center justify-between p-2.5 rounded-lg bg-surface border border-border">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-lg">{getTeam(row.value).flag}</span>
+                  <div>
+                    <p className="text-[11px] text-texts font-bold uppercase tracking-wider">{row.label}</p>
+                    <p className="text-sm font-bold text-textp">{getTeam(row.value).name}</p>
+                  </div>
+                </div>
+                {row.pts !== null ? (
+                  <Pill tone={row.pts > 0 ? 'green' : 'red'}>+{row.pts}</Pill>
+                ) : (
+                  <span className="text-xs text-texts">+{row.max} possible</span>
+                )}
+              </div>
+            ))}
+            {tournamentPred.semi?.length > 0 && (
+              <div className="p-2.5 rounded-lg bg-surface border border-border">
+                <p className="text-[11px] text-texts font-bold uppercase tracking-wider mb-2">🏅 Semi-Finalists</p>
+                <div className="flex flex-wrap gap-2">
+                  {tournamentPred.semi.map((code) => (
+                    <div key={code} className="flex items-center gap-1.5 text-sm font-semibold">
+                      <span>{getTeam(code).flag}</span><span>{getTeam(code).name}</span>
+                    </div>
+                  ))}
+                </div>
+                {tournamentPred.pts_semi !== null && <Pill tone={tournamentPred.pts_semi > 0 ? 'green' : 'red'} className="mt-2">+{tournamentPred.pts_semi}</Pill>}
+              </div>
+            )}
+            {tournamentPred.quarter?.length > 0 && (
+              <div className="p-2.5 rounded-lg bg-surface border border-border">
+                <p className="text-[11px] text-texts font-bold uppercase tracking-wider mb-2">🎖 Quarter-Finalists</p>
+                <div className="flex flex-wrap gap-2">
+                  {tournamentPred.quarter.map((code) => (
+                    <div key={code} className="flex items-center gap-1.5 text-sm font-semibold">
+                      <span>{getTeam(code).flag}</span><span>{getTeam(code).name}</span>
+                    </div>
+                  ))}
+                </div>
+                {tournamentPred.pts_quarter !== null && <Pill tone={tournamentPred.pts_quarter > 0 ? 'green' : 'red'} className="mt-2">+{tournamentPred.pts_quarter}</Pill>}
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+
+      {/* group predictions */}
+      {groupPreds.length > 0 && (
+        <Card className="p-5">
+          <SectionHeader title="Group predictions" sub="+2 pts per team in exact finishing position." />
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-3">
+            {groupPreds.map((gp) => (
+              <div key={gp.group_name} className={`p-2.5 rounded-lg border text-center ${gp.points_awarded != null ? (gp.points_awarded > 0 ? 'border-primary/30 bg-primary/[0.05]' : 'border-border bg-surface') : 'border-border bg-surface'}`}>
+                <p className="text-xs font-extrabold text-texts mb-1">Group {gp.group_name}</p>
+                <div className="flex justify-center gap-0.5 mb-1.5">
+                  {(gp.ranked_codes ?? []).slice(0, 4).map((code) => (
+                    <span key={code} className="text-sm">{getTeam(code).flag}</span>
+                  ))}
+                </div>
+                {gp.points_awarded !== null ? (
+                  <span className={`text-xs font-extrabold tabular-nums ${gp.points_awarded > 0 ? 'text-primary' : 'text-texts'}`}>+{gp.points_awarded}</span>
+                ) : (
+                  <span className="text-[10px] text-texts">pending</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* settings */}
       <Card className="p-5">
