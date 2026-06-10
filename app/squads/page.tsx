@@ -2,14 +2,17 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { TEAMS, getTeam, type TeamInfo } from '@/lib/teams'
+import {
+  TEAMS, getTeam, type TeamInfo,
+  normalisePosition, POSITION_ORDER, POSITION_BADGE, POSITION_ABBR,
+} from '@/lib/teams'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Player {
   id: number
   name: string
-  position: string | null
+  position: string | null        // raw from DB: 'Goalkeeper','Defence','Midfield','Offence'
   jersey_number: number | null
   nationality: string | null
   team_name: string
@@ -17,22 +20,6 @@ interface Player {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const POSITION_ORDER: Record<string, number> = {
-  Goalkeeper: 0, Defender: 1, Midfielder: 2, Forward: 3,
-}
-
-const POSITION_ABBR: Record<string, string> = {
-  Goalkeeper: 'GK', Defender: 'DEF', Midfielder: 'MID', Forward: 'FWD',
-}
-
-const POSITION_BADGE: Record<string, string> = {
-  Goalkeeper: 'bg-yellow-100 text-yellow-800',
-  Defender:   'bg-blue-100   text-blue-800',
-  Midfielder: 'bg-green-100  text-green-800',
-  Forward:    'bg-red-100    text-red-800',
-}
-
-// All 48 teams ordered by code alphabetically, then grouped A-L for display
 const ALL_TEAMS: TeamInfo[] = Object.values(TEAMS).sort((a, b) =>
   a.name.localeCompare(b.name)
 )
@@ -41,7 +28,9 @@ const ALL_TEAMS: TeamInfo[] = Object.values(TEAMS).sort((a, b) =>
 
 function sortPlayers(players: Player[]) {
   return [...players].sort((a, b) => {
-    const po = (POSITION_ORDER[a.position ?? ''] ?? 9) - (POSITION_ORDER[b.position ?? ''] ?? 9)
+    const pa = normalisePosition(a.position)
+    const pb = normalisePosition(b.position)
+    const po = (POSITION_ORDER[pa] ?? 9) - (POSITION_ORDER[pb] ?? 9)
     if (po !== 0) return po
     return (a.jersey_number ?? 99) - (b.jersey_number ?? 99)
   })
@@ -50,14 +39,15 @@ function sortPlayers(players: Player[]) {
 // ─── Squad Detail Panel ───────────────────────────────────────────────────────
 
 function SquadDetail({ team, players }: { team: TeamInfo; players: Player[] }) {
-  const sorted = sortPlayers(players)
+  const sorted = sortPlayers(players.filter(p => normalisePosition(p.position) !== 'Coach'))
+
   const grouped: Record<string, Player[]> = {}
   for (const p of sorted) {
-    const pos = p.position ?? 'Unknown'
+    const pos = normalisePosition(p.position)
     if (!grouped[pos]) grouped[pos] = []
     grouped[pos].push(p)
   }
-  const posOrder = ['Goalkeeper', 'Defender', 'Midfielder', 'Forward', 'Unknown']
+  const posOrder = ['Goalkeeper', 'Defender', 'Midfielder', 'Forward']
 
   return (
     <div>
@@ -66,21 +56,21 @@ function SquadDetail({ team, players }: { team: TeamInfo; players: Player[] }) {
         <span className="text-5xl leading-none">{team.flag}</span>
         <div>
           <h2 className="text-xl font-extrabold text-gray-900">{team.fullName}</h2>
-          <p className="text-sm text-gray-400">{players.length} players registered</p>
+          <p className="text-sm text-gray-400">{sorted.length} players</p>
         </div>
       </div>
 
-      {players.length === 0 ? (
-        <p className="text-sm text-gray-400 italic">No squad data available for this team.</p>
+      {sorted.length === 0 ? (
+        <p className="text-sm text-gray-400 italic">No squad data available.</p>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {posOrder.filter(pos => grouped[pos]).map(pos => (
             <div key={pos}>
               <div className="flex items-center gap-2 mb-2">
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${POSITION_BADGE[pos] ?? 'bg-gray-100 text-gray-600'}`}>
                   {POSITION_ABBR[pos] ?? pos}
                 </span>
-                <span className="text-xs text-gray-400">{grouped[pos].length} players</span>
+                <span className="text-xs text-gray-400">{grouped[pos].length}</span>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 {grouped[pos].map((p, idx) => (
@@ -111,26 +101,30 @@ function SquadDetail({ team, players }: { team: TeamInfo; players: Player[] }) {
 export default function SquadsPage() {
   const supabase = createClient()
 
-  const [allPlayers,   setAllPlayers]   = useState<Player[]>([])
-  const [loading,      setLoading]      = useState(true)
-  const [selected,     setSelected]     = useState<string | null>(null)   // team code
-  const [search,       setSearch]       = useState('')
+  const [allPlayers, setAllPlayers] = useState<Player[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [selected,   setSelected]   = useState<string | null>(null)
+  const [search,     setSearch]     = useState('')
+  // On mobile, show detail panel as overlay when a team is selected
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
-    supabase
-      .from('players')
-      .select('id, name, position, jersey_number, nationality, team_name')
-      .then(({ data }) => {
-        setAllPlayers((data ?? []) as Player[])
-        setLoading(false)
-      })
+    // Fetch all players in two batches (Supabase 1000-row default limit)
+    async function load() {
+      const [a, b] = await Promise.all([
+        supabase.from('players').select('id, name, position, jersey_number, nationality, team_name').range(0, 999),
+        supabase.from('players').select('id, name, position, jersey_number, nationality, team_name').range(1000, 1999),
+      ])
+      setAllPlayers([...(a.data ?? []), ...(b.data ?? [])] as Player[])
+      setLoading(false)
+    }
+    load()
   }, [])
 
   // Build a map: teamCode → players[]
   const playersByCode = useMemo(() => {
     const map: Record<string, Player[]> = {}
     for (const p of allPlayers) {
-      // Find team by playerKey
       const team = Object.values(TEAMS).find(t => t.playerKey === p.team_name)
       if (team) {
         if (!map[team.code]) map[team.code] = []
@@ -155,6 +149,7 @@ export default function SquadsPage() {
 
   function openTeam(code: string) {
     setSelected(code)
+    setMobileOpen(true)
   }
 
   if (loading) {
@@ -169,15 +164,15 @@ export default function SquadsPage() {
     <main className="min-h-screen bg-gray-50">
       <div className="max-w-5xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-extrabold text-gray-900 mb-1">Squads</h1>
-        <p className="text-sm text-gray-400 mb-6">48 nations · {allPlayers.length} players registered</p>
+        <p className="text-sm text-gray-400 mb-6">48 nations · {allPlayers.length} players</p>
 
         <div className="flex flex-col lg:flex-row gap-6">
 
-          {/* Team list (left panel) */}
+          {/* ── Team list (left) ── */}
           <div className="lg:w-64 shrink-0">
             {/* Search */}
             <div className="relative mb-3">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
               </svg>
               <input
@@ -195,7 +190,7 @@ export default function SquadsPage() {
                 <p className="text-sm text-gray-400 text-center py-8">No teams found</p>
               ) : (
                 filteredTeams.map((team, idx) => {
-                  const count = playersByCode[team.code]?.length ?? 0
+                  const count = playersByCode[team.code]?.filter(p => normalisePosition(p.position) !== 'Coach').length ?? 0
                   const isSelected = selected === team.code
                   return (
                     <button
@@ -203,13 +198,13 @@ export default function SquadsPage() {
                       onClick={() => openTeam(team.code)}
                       className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors
                         ${idx < filteredTeams.length - 1 ? 'border-b border-gray-100' : ''}
-                        ${isSelected ? 'bg-black text-white' : 'hover:bg-gray-50'}`}
+                        ${isSelected ? 'bg-black' : 'hover:bg-gray-50'}`}
                     >
                       <span className="text-xl leading-none shrink-0">{team.flag}</span>
                       <span className={`text-sm font-medium flex-1 truncate ${isSelected ? 'text-white' : 'text-gray-900'}`}>
                         {team.name}
                       </span>
-                      <span className={`text-xs ${isSelected ? 'text-white/50' : 'text-gray-400'}`}>
+                      <span className={`text-xs tabular-nums shrink-0 ${isSelected ? 'text-white/50' : 'text-gray-400'}`}>
                         {count > 0 ? count : '–'}
                       </span>
                     </button>
@@ -219,8 +214,8 @@ export default function SquadsPage() {
             </div>
           </div>
 
-          {/* Squad detail (right panel) */}
-          <div className="flex-1 min-w-0">
+          {/* ── Squad detail — desktop (right) ── */}
+          <div className="hidden lg:block flex-1 min-w-0">
             {selectedTeam ? (
               <SquadDetail team={selectedTeam} players={selectedPlayers} />
             ) : (
@@ -233,6 +228,36 @@ export default function SquadsPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Mobile slide-up panel ── */}
+      {mobileOpen && selectedTeam && (
+        <div
+          className="lg:hidden fixed inset-0 z-50 flex items-end bg-black/50"
+          onClick={() => setMobileOpen(false)}
+        >
+          <div
+            className="w-full bg-white rounded-t-3xl max-h-[85vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Handle + close */}
+            <div className="flex items-center justify-between px-5 pt-4 pb-2 shrink-0">
+              <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto absolute left-1/2 -translate-x-1/2 top-3" />
+              <div /> {/* spacer */}
+              <button
+                onClick={() => setMobileOpen(false)}
+                className="text-gray-400 hover:text-gray-700 transition-colors p-1"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 pb-8">
+              <SquadDetail team={selectedTeam} players={selectedPlayers} />
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

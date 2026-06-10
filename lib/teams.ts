@@ -85,3 +85,36 @@ export function teamName(code: string): string {
 export function teamFullName(code: string): string {
   return getTeam(code).fullName
 }
+
+// football-data.org uses 'Defence'/'Midfield'/'Offence' — normalise to display labels
+export function normalisePosition(raw: string | null): string {
+  if (!raw) return 'Unknown'
+  switch (raw) {
+    case 'Goalkeeper': return 'Goalkeeper'
+    case 'Defence':    return 'Defender'
+    case 'Midfield':   return 'Midfielder'
+    case 'Offence':    return 'Forward'
+    case 'Coach':      return 'Coach'
+    default:           return raw
+  }
+}
+
+export const POSITION_ORDER: Record<string, number> = {
+  Goalkeeper: 0,
+  Defender:   1,
+  Midfielder: 2,
+  Forward:    3,
+  Coach:      99,
+  Unknown:    98,
+}
+
+export const POSITION_BADGE: Record<string, string> = {
+  Goalkeeper: 'bg-yellow-100 text-yellow-800',
+  Defender:   'bg-blue-100   text-blue-800',
+  Midfielder: 'bg-green-100  text-green-800',
+  Forward:    'bg-red-100    text-red-800',
+}
+
+export const POSITION_ABBR: Record<string, string> = {
+  Goalkeeper: 'GK', Defender: 'DEF', Midfielder: 'MID', Forward: 'FWD', Coach: 'COACH',
+}

@@ -2,7 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { getTeam } from '@/lib/teams'
+import {
+  getTeam,
+  normalisePosition, POSITION_ORDER, POSITION_BADGE, POSITION_ABBR,
+} from '@/lib/teams'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,28 +29,25 @@ interface Player {
   nationality: string | null
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const POSITION_ORDER: Record<string, number> = {
-  Goalkeeper: 0,
-  Defender:   1,
-  Midfielder: 2,
-  Forward:    3,
+interface LineupPlayer {
+  player_id: number
+  is_starting: boolean
+  shirt_number: number | null
+  position_label: string | null
+  sort_order: number
+  players: { name: string; position: string | null }
 }
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function sortPlayers(players: Player[]) {
   return [...players].sort((a, b) => {
-    const po = (POSITION_ORDER[a.position ?? ''] ?? 9) - (POSITION_ORDER[b.position ?? ''] ?? 9)
+    const pa = normalisePosition(a.position)
+    const pb = normalisePosition(b.position)
+    const po = (POSITION_ORDER[pa] ?? 9) - (POSITION_ORDER[pb] ?? 9)
     if (po !== 0) return po
     return (a.jersey_number ?? 99) - (b.jersey_number ?? 99)
   })
-}
-
-const POSITION_BADGE: Record<string, string> = {
-  Goalkeeper: 'bg-yellow-100 text-yellow-800',
-  Defender:   'bg-blue-100 text-blue-800',
-  Midfielder: 'bg-green-100 text-green-800',
-  Forward:    'bg-red-100 text-red-800',
 }
 
 function fmtDate(iso: string) {
@@ -60,21 +60,36 @@ function fmtDate(iso: string) {
 
 // ─── Squad Panel ─────────────────────────────────────────────────────────────
 
-function SquadPanel({ code }: { code: string }) {
+function SquadPanel({ code, matchId }: { code: string; matchId: string }) {
   const supabase = createClient()
   const team     = getTeam(code)
-  const [players, setPlayers] = useState<Player[] | null>(null)
+
+  const [squad,   setSquad]   = useState<Player[] | null>(null)
+  const [lineup,  setLineup]  = useState<LineupPlayer[] | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (code === 'TBC') { setPlayers([]); return }
-    supabase
-      .from('players')
-      .select('id, name, position, jersey_number, nationality')
-      .eq('team_name', team.playerKey)
-      .then(({ data }) => setPlayers(data ? sortPlayers(data as Player[]) : []))
-  }, [code])
+    if (code === 'TBC') { setSquad([]); setLineup([]); setLoading(false); return }
 
-  if (!players) {
+    Promise.all([
+      supabase
+        .from('players')
+        .select('id, name, position, jersey_number, nationality')
+        .eq('team_name', team.playerKey),
+      supabase
+        .from('lineups')
+        .select('player_id, is_starting, shirt_number, position_label, sort_order, players(name, position)')
+        .eq('match_id', matchId)
+        .eq('team_code', code)
+        .order('sort_order'),
+    ]).then(([squadRes, lineupRes]) => {
+      setSquad(squadRes.data ? sortPlayers(squadRes.data as Player[]) : [])
+      setLineup((lineupRes.data ?? []) as unknown as LineupPlayer[])
+      setLoading(false)
+    })
+  }, [code, matchId])
+
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-24">
         <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
@@ -82,48 +97,110 @@ function SquadPanel({ code }: { code: string }) {
     )
   }
 
+  const hasLineup = lineup && lineup.length > 0
+  const starters  = lineup?.filter(l => l.is_starting)  ?? []
+  const subs      = lineup?.filter(l => !l.is_starting) ?? []
+
+  // Full squad grouped by normalised position
+  const players = squad ?? []
+  const filtered = players.filter(p => normalisePosition(p.position) !== 'Coach')
   const grouped: Record<string, Player[]> = {}
-  for (const p of players) {
-    const pos = p.position ?? 'Unknown'
+  for (const p of filtered) {
+    const pos = normalisePosition(p.position)
     if (!grouped[pos]) grouped[pos] = []
     grouped[pos].push(p)
   }
-
-  const posOrder = ['Goalkeeper', 'Defender', 'Midfielder', 'Forward', 'Unknown']
+  const posOrder = ['Goalkeeper', 'Defender', 'Midfielder', 'Forward']
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-4">
         <span className="text-2xl leading-none">{team.flag}</span>
         <div>
           <p className="font-bold text-gray-900 leading-tight">{team.fullName}</p>
-          <p className="text-xs text-gray-400">{players.length} players</p>
+          <p className="text-xs text-gray-400">{filtered.length} players in squad</p>
         </div>
       </div>
 
-      {players.length === 0 ? (
-        <p className="text-sm text-gray-400 italic">No squad data available.</p>
-      ) : (
-        <div className="space-y-3">
-          {posOrder.filter(pos => grouped[pos]).map(pos => (
-            <div key={pos}>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1.5">{pos}s</p>
+      {hasLineup ? (
+        // ── Confirmed lineup ──────────────────────────────────────────────
+        <div className="space-y-4">
+          {starters.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Starting XI</p>
               <div className="space-y-1">
-                {grouped[pos].map(p => (
-                  <div key={p.id} className="flex items-center gap-2">
+                {starters.map(l => (
+                  <div key={l.player_id} className="flex items-center gap-2">
                     <span className="w-6 text-center text-xs font-mono text-gray-400 shrink-0">
-                      {p.jersey_number ?? '–'}
+                      {l.shirt_number ?? '–'}
                     </span>
-                    <span className="text-sm text-gray-900 flex-1">{p.name}</span>
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${POSITION_BADGE[pos] ?? 'bg-gray-100 text-gray-600'}`}>
-                      {pos === 'Goalkeeper' ? 'GK' : pos === 'Defender' ? 'DEF' : pos === 'Midfielder' ? 'MID' : pos === 'Forward' ? 'FWD' : pos}
+                    <span className="text-sm text-gray-900 flex-1">
+                      {(l.players as unknown as { name: string })?.name ?? '—'}
                     </span>
+                    {l.position_label && (
+                      <span className="text-[10px] font-bold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
+                        {l.position_label}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
-          ))}
+          )}
+          {subs.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Substitutes</p>
+              <div className="space-y-1">
+                {subs.map(l => (
+                  <div key={l.player_id} className="flex items-center gap-2 opacity-70">
+                    <span className="w-6 text-center text-xs font-mono text-gray-400 shrink-0">
+                      {l.shirt_number ?? '–'}
+                    </span>
+                    <span className="text-sm text-gray-700 flex-1">
+                      {(l.players as unknown as { name: string })?.name ?? '—'}
+                    </span>
+                    {l.position_label && (
+                      <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
+                        {l.position_label}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
+      ) : (
+        // ── Full registered squad ─────────────────────────────────────────
+        <>
+          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-4">
+            Lineup not confirmed yet — showing full registered squad
+          </p>
+          {filtered.length === 0 ? (
+            <p className="text-sm text-gray-400 italic">No squad data available.</p>
+          ) : (
+            <div className="space-y-3">
+              {posOrder.filter(pos => grouped[pos]).map(pos => (
+                <div key={pos}>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1.5">{pos}s</p>
+                  <div className="space-y-1">
+                    {grouped[pos].map(p => (
+                      <div key={p.id} className="flex items-center gap-2">
+                        <span className="w-6 text-center text-xs font-mono text-gray-400 shrink-0">
+                          {p.jersey_number ?? '–'}
+                        </span>
+                        <span className="text-sm text-gray-900 flex-1">{p.name}</span>
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${POSITION_BADGE[pos] ?? 'bg-gray-100 text-gray-600'}`}>
+                          {POSITION_ABBR[pos] ?? pos}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   )
@@ -242,7 +319,10 @@ export default function MatchModal({ match, onClose }: MatchModalProps) {
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-4">
-              <SquadPanel code={tab === 'home' ? match.home_team : match.away_team} />
+              <SquadPanel
+                code={tab === 'home' ? match.home_team : match.away_team}
+                matchId={match.id}
+              />
             </div>
           </>
         )}
