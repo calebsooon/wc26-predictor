@@ -123,9 +123,9 @@ export function NextPredictCard({
           <span className="text-xs font-bold text-textp group-hover:text-primary transition-colors">{home.code}</span>
         </button>
         <div className="flex items-center gap-1.5 shrink-0">
-          <ScoreStepper value={pred.h} onChange={(v) => onChange('h', v)} />
+          <ScoreStepper value={pred.h} onChange={(v) => onChange('h', v)} compact />
           <span className="text-texts font-bold px-0.5">:</span>
-          <ScoreStepper value={pred.a} onChange={(v) => onChange('a', v)} />
+          <ScoreStepper value={pred.a} onChange={(v) => onChange('a', v)} compact />
         </div>
         <button onClick={onOpen} className="flex flex-col items-center gap-1.5 flex-1 group">
           <span className="text-[34px] leading-none">{away.flag}</span>

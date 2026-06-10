@@ -223,7 +223,7 @@ function TournamentPicksTab({ userId, r32Locked }: { userId: string | null; r32L
         <SectionHeader
           title="Tournament Picks"
           sub={r32Locked ? 'Knockout has started — picks are locked.' : 'Pick the teams that go furthest. Locked when Round of 32 kicks off.'}
-          action={scored ? <Pill tone="green">+{totalEarned} pts</Pill> : undefined}
+          action={<div className="flex items-center gap-2">{scored && <Pill tone="gold">+{totalEarned} pts</Pill>}<Pill tone="default">For fun · no effect on standings</Pill></div>}
         />
 
         <div className="space-y-5 mt-4">
@@ -307,7 +307,7 @@ function TournamentPicksTab({ userId, r32Locked }: { userId: string | null; r32L
 
         <div className="mt-4 pt-4 border-t border-border/60">
           <p className="text-[11px] text-texts leading-relaxed">
-            Max possible: Champion {TOURNAMENT_POINTS.champion} + Runner-up {TOURNAMENT_POINTS.runner_up} + 2× Semi {TOURNAMENT_POINTS.semi * 2} + 4× Quarter {TOURNAMENT_POINTS.quarter * 4} = <span className="font-bold text-textp">{TOURNAMENT_POINTS.champion + TOURNAMENT_POINTS.runner_up + TOURNAMENT_POINTS.semi * 2 + TOURNAMENT_POINTS.quarter * 4} pts</span>
+            Max possible: Champion {TOURNAMENT_POINTS.champion} + Runner-up {TOURNAMENT_POINTS.runner_up} + 2× Semi {TOURNAMENT_POINTS.semi * 2} + 4× Quarter {TOURNAMENT_POINTS.quarter * 4} = <span className="font-bold text-textp">{TOURNAMENT_POINTS.champion + TOURNAMENT_POINTS.runner_up + TOURNAMENT_POINTS.semi * 2 + TOURNAMENT_POINTS.quarter * 4} pts</span> · <span className="font-bold">for fun only — does not affect standings or prizes</span>
           </p>
         </div>
       </Card>

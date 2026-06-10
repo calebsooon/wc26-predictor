@@ -186,8 +186,9 @@ export default function GroupsPage() {
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm text-texts">Reorder how you think Group {group} finishes.</p>
             <div className="flex items-center gap-2">
+              <Pill tone="default">For fun</Pill>
               {ptsAwarded !== null && (
-                <Pill tone={ptsAwarded > 0 ? 'green' : 'default'}>
+                <Pill tone={ptsAwarded > 0 ? 'gold' : 'default'}>
                   +{ptsAwarded} pts
                 </Pill>
               )}
@@ -217,7 +218,7 @@ export default function GroupsPage() {
             })}
           </div>
           <div className="flex items-center justify-between mt-4 gap-2">
-            <p className="text-[11px] text-texts">+2 pts per team in correct position · max 8 pts per group</p>
+            <p className="text-[11px] text-texts">+2 pts per team in correct position · max 8 pts per group · <span className="font-bold">for fun only — does not affect standings or prizes</span></p>
             <Button onClick={savePrediction} disabled={!userId || order.length === 0}>Save</Button>
           </div>
         </Card>

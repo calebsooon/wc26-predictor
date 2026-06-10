@@ -190,7 +190,7 @@ export default function DashboardPage() {
         <PrizeCard prize={prize} />
       )}
 
-      <div className="grid md:grid-cols-[1fr_260px] lg:grid-cols-3 gap-5 lg:gap-6">
+      <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           <SectionHeader
             title="Next to predict"

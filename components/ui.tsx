@@ -198,20 +198,23 @@ export function ChipRow({ chips, value, onChange }: { chips: Chip[]; value: stri
 
 /* ---------- ScoreStepper ---------- */
 export function ScoreStepper({
-  value, onChange, disabled = false, color = 'rgb(var(--primary))',
-}: { value: number | null | undefined; onChange: (v: number) => void; disabled?: boolean; color?: string }) {
+  value, onChange, disabled = false, color = 'rgb(var(--primary))', compact = false,
+}: { value: number | null | undefined; onChange: (v: number) => void; disabled?: boolean; color?: string; compact?: boolean }) {
   const set = (v: number) => !disabled && onChange(Math.max(0, Math.min(20, v)))
+  const btn = compact ? 'w-7 h-7 text-base rounded-md' : 'w-9 h-9 text-xl rounded-lg'
+  const disp = compact ? 'w-9 h-9 text-lg rounded-lg border' : 'w-12 h-12 text-2xl rounded-xl border-2'
+  const gap = compact ? 'gap-1' : 'gap-2'
   return (
-    <div className="flex items-center gap-2">
+    <div className={`flex items-center ${gap}`}>
       <button
         onClick={() => set((value ?? 0) - 1)}
         disabled={disabled || (value ?? 0) <= 0}
-        className="w-9 h-9 grid place-items-center rounded-lg border border-border bg-surface text-texts text-xl font-bold hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:pointer-events-none transition-colors"
+        className={`${btn} grid place-items-center border border-border bg-surface text-texts font-bold hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:pointer-events-none transition-colors`}
       >
         −
       </button>
       <div
-        className="w-12 h-12 grid place-items-center rounded-xl border-2 text-2xl font-extrabold tabular-nums"
+        className={`${disp} grid place-items-center font-extrabold tabular-nums`}
         style={{
           color: value == null ? 'rgb(var(--texts))' : color,
           borderColor: value == null ? 'rgb(var(--border))' : color,
@@ -223,7 +226,7 @@ export function ScoreStepper({
       <button
         onClick={() => set((value ?? 0) + 1)}
         disabled={disabled}
-        className="w-9 h-9 grid place-items-center rounded-lg border border-border bg-surface text-texts text-xl font-bold hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:pointer-events-none transition-colors"
+        className={`${btn} grid place-items-center border border-border bg-surface text-texts font-bold hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:pointer-events-none transition-colors`}
       >
         +
       </button>

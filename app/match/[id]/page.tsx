@@ -171,6 +171,23 @@ export default function MatchDetailPage() {
             </div>
           </div>
 
+          {/* auto-derived scoring categories preview */}
+          {h != null && a != null && (
+            <div className="grid grid-cols-3 gap-2 mt-4">
+              {[
+                { label: 'Total goals', value: String(h + a), sub: `+${POINTS.totalGoals} if match = ${h + a}` },
+                { label: 'Both score', value: h > 0 && a > 0 ? 'Yes' : 'No', sub: `+${POINTS.btts} if correct` },
+                { label: 'Goal diff', value: h === a ? '0' : h > a ? `+${h - a}` : `−${a - h}`, sub: `+${POINTS.goalDiff} if correct` },
+              ].map((s) => (
+                <div key={s.label} className="text-center py-2.5 rounded-xl bg-surface border border-border/60">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-texts">{s.label}</p>
+                  <p className="text-base font-extrabold tabular-nums text-textp mt-0.5">{s.value}</p>
+                  <p className="text-[9px] text-texts mt-0.5">{s.sub}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* first goal team */}
           <div className="mt-5">
             <label className="text-xs font-bold uppercase tracking-wider text-texts">First goal <span className="text-primary normal-case">+{POINTS.firstTeam}</span></label>

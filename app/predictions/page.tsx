@@ -66,11 +66,12 @@ export default function FixturesPage() {
     { key: 'knockout', label: 'Knockout' },
   ]
 
-  const todayStr = new Date().toDateString()
+  const sgtDate = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(d)
+  const todaySGT = sgtDate(new Date())
   const filtered = useMemo(() => matches.filter((m) => {
     const ui = toUIMatch(m, preds[m.id])
     switch (filter) {
-      case 'today': return new Date(m.match_date).toDateString() === todayStr
+      case 'today': return sgtDate(new Date(m.match_date)) === todaySGT
       case 'missing': return ui.status === 'missing'
       case 'locked': return ui.status === 'locked'
       case 'finished': return ui.status === 'scored'
@@ -78,12 +79,12 @@ export default function FixturesPage() {
       case 'knockout': return ui.knockout
       default: return true
     }
-  }), [matches, preds, filter, todayStr])
+  }), [matches, preds, filter, todaySGT])
 
   const byDate = useMemo(() => {
     const g: Record<string, DBMatch[]> = {}
     for (const m of filtered) {
-      const key = new Date(m.match_date).toISOString().slice(0, 10)
+      const key = sgtDate(new Date(m.match_date))
       ;(g[key] ||= []).push(m)
     }
     return g
@@ -122,8 +123,9 @@ export default function FixturesPage() {
 }
 
 function fmtDate(d: string) {
-  const date = new Date(d + 'T00:00:00')
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-  const label = new Intl.DateTimeFormat('en-SG', { weekday: 'short', day: 'numeric', month: 'short' }).format(date)
-  return date.getTime() === today.getTime() ? `Today · ${label}` : label
+  // d is a YYYY-MM-DD date in SGT — parse as midnight SGT
+  const date = new Date(d + 'T00:00:00+08:00')
+  const todaySGT = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(new Date())
+  const label = new Intl.DateTimeFormat('en-SG', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Singapore' }).format(date)
+  return d === todaySGT ? `Today · ${label}` : label
 }
