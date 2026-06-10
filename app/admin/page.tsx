@@ -57,9 +57,9 @@ export default function AdminPage() {
         .order('match_date')
 
       if (data) {
-        setMatches(data as Match[])
+        setMatches(data as unknown as Match[])
         const init: Record<string, RowState> = {}
-        for (const m of data as Match[]) {
+        for (const m of data as unknown as Match[]) {
           init[m.id] = {
             home: m.real_home_score !== null ? String(m.real_home_score) : '',
             away: m.real_away_score !== null ? String(m.real_away_score) : '',

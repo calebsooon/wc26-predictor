@@ -165,7 +165,7 @@ function MatchCard({
       {/* Other users' predictions (only after lock) */}
       {locked && others.length > 0 && (
         <div className="mt-3 pt-3 border-t border-gray-100">
-          <p className="text-xs font-medium text-gray-400 mb-1.5">Others' predictions</p>
+          <p className="text-xs font-medium text-gray-400 mb-1.5">Others&apos; predictions</p>
           <div className="flex flex-wrap gap-1.5">
             {others.map((o) => {
               const op =
@@ -297,7 +297,7 @@ export default function PredictionsPage() {
 
           if (otherData) {
             const map: Record<string, OtherPred[]> = {}
-            for (const p of otherData as any[]) {
+            for (const p of otherData as unknown as { match_id: string; pred_home: number; pred_away: number; profiles: { username: string } | null }[]) {
               if (!map[p.match_id]) map[p.match_id] = []
               map[p.match_id].push({
                 username: p.profiles?.username ?? '?',

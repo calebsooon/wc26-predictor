@@ -39,7 +39,7 @@ function buildLeaderboard(predictions: ScoredPrediction[]): UserRow[] {
     row.byRound[p.round_id] = (row.byRound[p.round_id] ?? 0) + p.points_awarded
   }
 
-  return [...map.values()].sort((a, b) => b.total - a.total)
+  return Array.from(map.values()).sort((a, b) => b.total - a.total)
 }
 
 function rankBadge(rank: number) {
@@ -87,11 +87,11 @@ export default function LeaderboardPage() {
 
     if (data) {
       setPredictions(
-        (data as any[]).map(p => ({
+        (data as unknown as { user_id: string; points_awarded: number; profiles: { username: string } | null; matches: { round_id: string } | null }[]).map(p => ({
           user_id: p.user_id,
           username: p.profiles?.username ?? '?',
-          points_awarded: p.points_awarded as number,
-          round_id: p.matches?.round_id as string,
+          points_awarded: p.points_awarded,
+          round_id: p.matches?.round_id ?? '',
         }))
       )
     }
