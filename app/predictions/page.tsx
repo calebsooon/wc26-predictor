@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { Countdown } from '@/components/Countdown'
+import MatchModal, { type ModalMatch } from '@/components/MatchModal'
+import { teamFlag, teamName } from '@/lib/teams'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -112,13 +114,14 @@ function ScoreInput({
 }
 
 function MatchCard({
-  match, pred, others, locked, onChange,
+  match, pred, others, locked, onChange, onDetails,
 }: {
   match: Match
   pred: PredState | undefined
   others: OtherPred[]
   locked: boolean
   onChange: (id: string, field: 'pred_home' | 'pred_away', val: string) => void
+  onDetails: (m: Match) => void
 }) {
   const hasResult = match.real_home_score !== null && match.real_away_score !== null
   const hasPred   = pred && pred.pred_home !== '' && pred.pred_away !== ''
@@ -154,17 +157,33 @@ function MatchCard({
 
         {/* Teams + inputs */}
         <div className="flex items-center gap-2">
-          <span className={`flex-1 text-right text-sm font-semibold truncate ${locked ? 'text-gray-400' : 'text-gray-900'}`}>
-            {match.home_team}
-          </span>
-          <div className="flex items-center gap-1.5">
+          {/* Home team */}
+          <button
+            onClick={() => onDetails(match)}
+            className="flex-1 flex items-center justify-end gap-1.5 min-w-0 hover:opacity-70 transition-opacity"
+          >
+            <span className={`text-sm font-semibold truncate ${locked ? 'text-gray-400' : 'text-gray-900'}`}>
+              {teamName(match.home_team)}
+            </span>
+            <span className="text-base leading-none shrink-0">{teamFlag(match.home_team)}</span>
+          </button>
+
+          <div className="flex items-center gap-1.5 shrink-0">
             <ScoreInput value={pred?.pred_home ?? ''} disabled={locked} onChange={v => onChange(match.id, 'pred_home', v)} />
             <span className="text-gray-200 font-light text-xs select-none">—</span>
             <ScoreInput value={pred?.pred_away ?? ''} disabled={locked} onChange={v => onChange(match.id, 'pred_away', v)} />
           </div>
-          <span className={`flex-1 text-left text-sm font-semibold truncate ${locked ? 'text-gray-400' : 'text-gray-900'}`}>
-            {match.away_team}
-          </span>
+
+          {/* Away team */}
+          <button
+            onClick={() => onDetails(match)}
+            className="flex-1 flex items-center justify-start gap-1.5 min-w-0 hover:opacity-70 transition-opacity"
+          >
+            <span className="text-base leading-none shrink-0">{teamFlag(match.away_team)}</span>
+            <span className={`text-sm font-semibold truncate ${locked ? 'text-gray-400' : 'text-gray-900'}`}>
+              {teamName(match.away_team)}
+            </span>
+          </button>
         </div>
 
         {/* Real result */}
@@ -211,7 +230,8 @@ export default function PredictionsPage() {
   const [preds, setPreds]     = useState<Record<string, PredState>>({})
   const [others, setOthers]   = useState<Record<string, OtherPred[]>>({})
   const [userId, setUserId]   = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading]     = useState(true)
+  const [modalMatch, setModalMatch] = useState<ModalMatch | null>(null)
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   useEffect(() => {
@@ -298,6 +318,7 @@ export default function PredictionsPage() {
   }
 
   return (
+    <>
     <main className="max-w-2xl mx-auto px-4 py-8 space-y-10">
       <h1 className="text-2xl font-bold text-gray-900">My Predictions</h1>
 
@@ -343,6 +364,7 @@ export default function PredictionsPage() {
                         others={others[match.id] ?? []}
                         locked={matchIsLocked(match)}
                         onChange={handleChange}
+                        onDetails={m => setModalMatch(m as unknown as ModalMatch)}
                       />
                     ))}
                   </div>
@@ -353,5 +375,10 @@ export default function PredictionsPage() {
         )
       })}
     </main>
+
+    {modalMatch && (
+      <MatchModal match={modalMatch} onClose={() => setModalMatch(null)} />
+    )}
+  </>
   )
 }

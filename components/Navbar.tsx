@@ -49,6 +49,8 @@ export default function Navbar() {
     { href: '/predictions', label: 'Predictions' },
     { href: '/leaderboard', label: 'Leaderboard' },
     { href: '/groups',      label: 'Groups' },
+    { href: '/bracket',     label: 'Bracket' },
+    { href: '/squads',      label: 'Squads' },
     ...(profile.is_admin ? [{ href: '/admin', label: 'Admin' }] : []),
   ]
 
@@ -90,8 +92,13 @@ export default function Navbar() {
           </div>
 
           {/* Right: username + logout */}
-          <div className="hidden sm:flex items-center gap-3">
-            <span className="text-xs text-white/40 font-medium">{profile.username}</span>
+          <div className="hidden sm:flex items-center gap-2">
+            <Link
+              href="/profile"
+              className="text-xs text-white/40 font-medium hover:text-white transition-colors px-2 py-1.5 rounded-md hover:bg-white/5"
+            >
+              {profile.username}
+            </Link>
             <button
               onClick={logout}
               className="text-xs font-medium px-3 py-1.5 rounded-md border border-white/10 text-white/60 hover:text-white hover:border-white/30 transition-colors"
@@ -130,7 +137,9 @@ export default function Navbar() {
             </Link>
           ))}
           <div className="pt-2 border-t border-white/10 flex items-center justify-between">
-            <span className="text-xs text-white/40">{profile.username}</span>
+            <Link href="/profile" onClick={() => setMenuOpen(false)} className="text-xs text-white/40 hover:text-white transition-colors">
+              {profile.username}
+            </Link>
             <button onClick={logout} className="text-xs font-medium px-3 py-1.5 rounded-md border border-white/10 text-white/60 hover:text-white transition-colors">
               Log out
             </button>

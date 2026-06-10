@@ -2,15 +2,19 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { teamFlag, teamName } from '@/lib/teams'
+import MatchModal, { type ModalMatch } from '@/components/MatchModal'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface Match {
   id: string
+  match_date: string
   home_team: string
   away_team: string
   real_home_score: number | null
   real_away_score: number | null
+  is_locked: boolean
   group_name: string
   gameweek: number
 }
@@ -80,12 +84,13 @@ export default function GroupsPage() {
   const [matches, setMatches]       = useState<Match[]>([])
   const [selectedGroup, setSelected] = useState<string>('A')
   const [loading, setLoading]       = useState(true)
+  const [modalMatch, setModalMatch]  = useState<ModalMatch | null>(null)
 
   useEffect(() => {
     async function load() {
       const { data } = await supabase
         .from('matches')
-        .select('id, home_team, away_team, real_home_score, real_away_score, group_name, gameweek')
+        .select('id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, gameweek')
         .not('group_name', 'is', null)
         .order('match_date')
 
@@ -123,6 +128,7 @@ export default function GroupsPage() {
   }
 
   return (
+    <>
     <main className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Group Tables</h1>
 
@@ -181,7 +187,8 @@ export default function GroupsPage() {
                       {qualify && (
                         <div className="w-1 h-4 rounded-full" style={{ background: color }} />
                       )}
-                      {row.team}
+                      <span className="text-base leading-none">{teamFlag(row.team)}</span>
+                      <span>{teamName(row.team)}</span>
                     </div>
                   </td>
                   <td className="py-2.5 px-2 text-center text-gray-600">{row.p}</td>
@@ -214,13 +221,23 @@ export default function GroupsPage() {
               {items.map(m => {
                 const played = m.real_home_score !== null && m.real_away_score !== null
                 return (
-                  <div key={m.id} className="bg-white rounded-lg border border-gray-100 px-4 py-2.5 flex items-center justify-center gap-4">
-                    <span className="flex-1 text-right text-sm font-semibold text-gray-700">{m.home_team}</span>
-                    <span className="text-sm font-bold text-gray-400 w-12 text-center tabular-nums">
-                      {played ? `${m.real_home_score} – ${m.real_away_score}` : 'vs'}
+                  <button
+                    key={m.id}
+                    onClick={() => setModalMatch(m as unknown as ModalMatch)}
+                    className="w-full bg-white rounded-lg border border-gray-100 px-4 py-2.5 flex items-center justify-center gap-3 hover:border-gray-300 hover:shadow-sm transition-all"
+                  >
+                    <span className="flex-1 flex items-center justify-end gap-1.5">
+                      <span className="text-sm font-semibold text-gray-700 truncate">{teamName(m.home_team)}</span>
+                      <span className="text-base leading-none shrink-0">{teamFlag(m.home_team)}</span>
                     </span>
-                    <span className="flex-1 text-left text-sm font-semibold text-gray-700">{m.away_team}</span>
-                  </div>
+                    <span className="text-sm font-bold text-gray-400 w-12 text-center tabular-nums shrink-0">
+                      {played ? `${m.real_home_score}–${m.real_away_score}` : 'vs'}
+                    </span>
+                    <span className="flex-1 flex items-center justify-start gap-1.5">
+                      <span className="text-base leading-none shrink-0">{teamFlag(m.away_team)}</span>
+                      <span className="text-sm font-semibold text-gray-700 truncate">{teamName(m.away_team)}</span>
+                    </span>
+                  </button>
                 )
               })}
             </div>
@@ -228,5 +245,10 @@ export default function GroupsPage() {
         ))}
       </div>
     </main>
+
+    {modalMatch && (
+      <MatchModal match={modalMatch} onClose={() => setModalMatch(null)} />
+    )}
+    </>
   )
 }
