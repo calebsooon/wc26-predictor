@@ -1,13 +1,19 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
+
+type Mode = 'signin' | 'signup'
 
 export default function LoginPage() {
   const supabase = createClient()
-  const [email, setEmail] = useState('')
-  const [sent, setSent] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const router   = useRouter()
+
+  const [mode, setMode]       = useState<Mode>('signin')
+  const [email, setEmail]     = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError]     = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
@@ -15,69 +21,104 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${location.origin}/auth/callback`,
-      },
-    })
+    if (mode === 'signup') {
+      const { data, error } = await supabase.auth.signUp({ email, password })
+      if (error) { setError(error.message); setLoading(false); return }
 
-    if (error) {
-      setError(error.message)
+      // Auto-create profile row (same as auth callback does for magic link)
+      if (data.user) {
+        const username = email.split('@')[0]
+        await supabase
+          .from('profiles')
+          .upsert({ id: data.user.id, username }, { onConflict: 'id', ignoreDuplicates: true })
+      }
     } else {
-      setSent(true)
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) { setError(error.message); setLoading(false); return }
     }
-    setLoading(false)
+
+    router.push('/predictions')
+    router.refresh()
   }
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Sign in</h1>
-        <p className="text-sm text-gray-500 mb-6">
-          We&apos;ll send a magic link to your email.
-        </p>
 
-        {sent ? (
-          <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-sm text-green-800">
-            Check your inbox — a magic link is on its way to{' '}
-            <span className="font-medium">{email}</span>.
+        {/* Header */}
+        <div className="flex items-center gap-2 mb-6">
+          <span className="text-2xl">⚽</span>
+          <div>
+            <p className="font-extrabold text-gray-900 text-sm leading-tight tracking-tight">WORLD CUP 2026</p>
+            <p className="text-[10px] text-gray-400 uppercase tracking-widest">Predictor</p>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Email address
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
-                           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
+        </div>
 
-            {error && (
-              <p className="text-sm text-red-600">{error}</p>
-            )}
-
+        {/* Mode toggle */}
+        <div className="flex rounded-lg bg-gray-100 p-1 mb-6">
+          {(['signin', 'signup'] as Mode[]).map(m => (
             <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-lg bg-blue-600 text-white py-2 text-sm font-medium
-                         hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              key={m}
+              type="button"
+              onClick={() => { setMode(m); setError(null) }}
+              className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                mode === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
             >
-              {loading ? 'Sending…' : 'Send magic link'}
+              {m === 'signin' ? 'Sign in' : 'Sign up'}
             </button>
-          </form>
-        )}
+          ))}
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                         focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              minLength={6}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm
+                         focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+            />
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-lg bg-black text-white py-2.5 text-sm font-semibold
+                       hover:bg-gray-800 disabled:opacity-50 transition-colors"
+          >
+            {loading
+              ? (mode === 'signin' ? 'Signing in…' : 'Creating account…')
+              : (mode === 'signin' ? 'Sign in' : 'Create account')}
+          </button>
+        </form>
       </div>
     </main>
   )
