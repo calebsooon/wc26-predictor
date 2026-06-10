@@ -113,14 +113,17 @@ export default function ProfilePage() {
     setUploading(true); setMsg(null)
     const ext = file.name.split('.').pop()
     const path = `${profile.id}/avatar.${ext}`
-    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
-    if (upErr) { setMsg({ type: 'err', text: upErr.message }); setUploading(false); return }
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type })
+    if (upErr) { setMsg({ type: 'err', text: `Upload failed: ${upErr.message}` }); setUploading(false); return }
     const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
     const busted = `${publicUrl}?t=${Date.now()}`
     const { error } = await supabase.from('profiles').update({ avatar_url: busted }).eq('id', profile.id)
-    if (error) setMsg({ type: 'err', text: error.message })
-    else { setAvatarUrl(busted); setMsg({ type: 'ok', text: 'Avatar updated!' }) }
+    if (error) { setMsg({ type: 'err', text: `DB update failed: ${error.message}` }); setUploading(false); return }
+    setAvatarUrl(busted)
+    setMsg({ type: 'ok', text: 'Avatar updated! Refreshing…' })
     setUploading(false)
+    // Refresh so AppShell refetches the new avatar_url for the sidebar / mobile header
+    setTimeout(() => router.refresh(), 800)
   }
 
   async function saveUsername() {

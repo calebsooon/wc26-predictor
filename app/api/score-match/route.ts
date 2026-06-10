@@ -36,7 +36,7 @@ export async function POST(request: Request) {
 
   const { data: predictions, error: predsErr } = await supabase
     .from('predictions')
-    .select('id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id')
+    .select('id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff')
     .eq('match_id', match_id)
   if (predsErr) return NextResponse.json({ error: predsErr.message }, { status: 500 })
   if (!predictions || predictions.length === 0) return NextResponse.json({ match_id, scored: 0 })

@@ -135,10 +135,13 @@ export function NextPredictCard({
 
       <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-border/60">
         <span className="text-[11px] text-texts font-medium">{fmtTime(m.kickoff)}</span>
-        <span className="text-[11px] flex items-center gap-1 font-semibold">
-          <LockIcon size={11} className="text-gold" />
-          <Countdown kickoff={m.kickoff} className="text-[11px]" />
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] flex items-center gap-1 font-semibold">
+            <LockIcon size={11} className="text-gold" />
+            <Countdown kickoff={m.kickoff} className="text-[11px]" />
+          </span>
+          <button onClick={onOpen} className="text-[11px] font-bold text-primary hover:underline">View →</button>
+        </div>
       </div>
     </Card>
   )

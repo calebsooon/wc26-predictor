@@ -63,6 +63,8 @@ export interface PredictionInput {
   pred_away: number
   pred_first_goal_team?: string | null
   pred_first_scorer_id?: number | null
+  pred_total_goals?: number | null
+  pred_goal_diff?: number | null
 }
 
 export interface MatchResult {
@@ -85,11 +87,14 @@ export function scorePrediction(pred: PredictionInput, m: MatchResult): ScoreBre
   if (rh == null || ra == null) return z
 
   const ph = pred.pred_home, pa = pred.pred_away
+  // Independent overrides let users hedge — null means derive from score
+  const predGD = pred.pred_goal_diff ?? (ph - pa)
+  const predTG = pred.pred_total_goals ?? (ph + pa)
 
   if (sign(ph - pa) === sign(rh - ra)) z.outcome = POINTS.outcome
   if (ph === rh && pa === ra) z.exact = POINTS.exact
-  if (ph - pa === rh - ra) z.goalDiff = POINTS.goalDiff
-  if (ph + pa === rh + ra) z.totalGoals = POINTS.totalGoals
+  if (predGD === rh - ra) z.goalDiff = POINTS.goalDiff
+  if (predTG === rh + ra) z.totalGoals = POINTS.totalGoals
   if ((ph > 0 && pa > 0) === (rh > 0 && ra > 0)) z.btts = POINTS.btts
 
   // m.first_goal_team=null means admin hasn't set it yet; 'NONE' means confirmed no goal

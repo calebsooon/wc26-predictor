@@ -19,7 +19,7 @@ export async function POST() {
   const matchIds = (matches as { id: string }[]).map((m) => m.id)
   const { data: predictions, error: predsErr } = await supabase
     .from('predictions')
-    .select('id, match_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id')
+    .select('id, match_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff')
     .in('match_id', matchIds)
   if (predsErr) return NextResponse.json({ error: predsErr.message }, { status: 500 })
   if (!predictions || predictions.length === 0) return NextResponse.json({ rescored: 0 })

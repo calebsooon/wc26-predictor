@@ -23,14 +23,16 @@ export function Flag({ code, size = 26 }: { code: string; size?: number }) {
 export function Avatar({
   name, src, size = 36, ring = false, you = false,
 }: { name: string; src?: string | null; size?: number; ring?: boolean; you?: boolean }) {
+  const [imgError, setImgError] = useState(false)
   const color = you ? 'rgb(var(--blue))' : 'rgb(var(--primary))'
-  if (src) {
+  if (src && !imgError) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={src} alt={name}
         className="rounded-full object-cover shrink-0"
         style={{ width: size, height: size, border: ring ? `2px solid ${color}` : undefined }}
+        onError={() => setImgError(true)}
       />
     )
   }
@@ -199,9 +201,14 @@ export function ChipRow({ chips, value, onChange }: { chips: Chip[]; value: stri
 /* ---------- ScoreStepper ---------- */
 export function ScoreStepper({
   value, onChange, disabled = false, color = 'rgb(var(--primary))', compact = false,
-}: { value: number | null | undefined; onChange: (v: number) => void; disabled?: boolean; color?: string; compact?: boolean }) {
+  min = 0, max = 20,
+}: {
+  value: number | null | undefined; onChange: (v: number) => void
+  disabled?: boolean; color?: string; compact?: boolean; min?: number; max?: number
+}) {
   const [draft, setDraft] = useState(value == null ? '' : String(value))
   const skipSync = useRef(false)
+  const allowNeg = min < 0
 
   useEffect(() => {
     if (skipSync.current) { skipSync.current = false; return }
@@ -210,42 +217,51 @@ export function ScoreStepper({
 
   const set = (v: number) => {
     if (disabled) return
-    const clamped = Math.max(0, Math.min(20, v))
+    const clamped = Math.max(min, Math.min(max, v))
     skipSync.current = true
     setDraft(String(clamped))
     onChange(clamped)
   }
 
   function handleInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const raw = e.target.value.replace(/[^0-9]/g, '').slice(0, 2)
+    let raw = e.target.value
+    if (allowNeg) {
+      raw = raw.replace(/[^0-9-]/g, '')
+      // keep at most one leading minus
+      const neg = raw.startsWith('-')
+      raw = (neg ? '-' : '') + raw.replace(/-/g, '')
+      raw = raw.slice(0, 4) // "-20" = 3 chars max
+    } else {
+      raw = raw.replace(/[^0-9]/g, '').slice(0, 2)
+    }
     setDraft(raw)
-    if (raw === '') return
+    if (raw === '' || raw === '-') return
     const n = parseInt(raw, 10)
-    if (!isNaN(n)) { skipSync.current = true; onChange(Math.max(0, Math.min(20, n))) }
+    if (!isNaN(n)) { skipSync.current = true; onChange(Math.max(min, Math.min(max, n))) }
   }
 
   function handleBlur() {
-    if (draft === '') setDraft(value == null ? '' : String(value))
+    if (draft === '' || draft === '-') setDraft(value == null ? '' : String(value))
   }
 
   const btn = compact ? 'w-7 h-7 text-base rounded-md' : 'w-9 h-9 text-xl rounded-lg'
-  const disp = compact ? 'w-9 h-9 text-lg rounded-lg' : 'w-12 h-12 text-2xl rounded-xl'
+  const disp = compact ? 'w-10 h-8 text-base rounded-lg' : 'w-12 h-12 text-2xl rounded-xl'
   const border = compact ? 'border' : 'border-2'
   const gap = compact ? 'gap-1' : 'gap-2'
   return (
     <div className={`flex items-center ${gap}`}>
       <button
         onClick={() => set((value ?? 0) - 1)}
-        disabled={disabled || (value ?? 0) <= 0}
+        disabled={disabled || (value ?? 0) <= min}
         className={`${btn} grid place-items-center border border-border bg-surface text-texts font-bold hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:pointer-events-none transition-colors`}
       >
         −
       </button>
       <input
         type="text"
-        inputMode="numeric"
-        pattern="[0-9]*"
-        maxLength={2}
+        inputMode={allowNeg ? 'text' : 'numeric'}
+        pattern={allowNeg ? '[\\-0-9]*' : '[0-9]*'}
+        maxLength={allowNeg ? 4 : 2}
         value={draft}
         onChange={handleInput}
         onBlur={handleBlur}
@@ -260,7 +276,7 @@ export function ScoreStepper({
       />
       <button
         onClick={() => set((value ?? 0) + 1)}
-        disabled={disabled}
+        disabled={disabled || (value ?? 0) >= max}
         className={`${btn} grid place-items-center border border-border bg-surface text-texts font-bold hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:pointer-events-none transition-colors`}
       >
         +
