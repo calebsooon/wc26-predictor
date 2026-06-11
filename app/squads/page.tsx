@@ -60,14 +60,20 @@ export default function SquadsPage() {
   const [search, setSearch] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
 
+  const [error, setError] = useState<string | null>(null)
+
   useEffect(() => {
     async function load() {
-      const [a, b] = await Promise.all([
-        supabase.from('players').select('id, name, position, jersey_number, nationality, team_name').range(0, 999),
-        supabase.from('players').select('id, name, position, jersey_number, nationality, team_name').range(1000, 1999),
-      ])
-      setAllPlayers([...(a.data ?? []), ...(b.data ?? [])] as Player[])
-      setLoading(false)
+      try {
+        // WC2026 has 48 teams × ~26 players = ~1248 players; range(0,1499) covers all safely
+        const { data, error: e } = await supabase.from('players').select('id, name, position, jersey_number, nationality, team_name').range(0, 1499)
+        if (e) throw e
+        setAllPlayers((data ?? []) as Player[])
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load squads')
+      } finally {
+        setLoading(false)
+      }
     }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,6 +98,12 @@ export default function SquadsPage() {
   const selectedPlayers = selected ? (playersByCode[selected] ?? []) : []
 
   if (loading) return <div className="space-y-5"><Skeleton className="h-9 w-40" /><Skeleton className="h-96 rounded-xl" /></div>
+  if (error) return (
+    <div className="space-y-5">
+      <PageHeader eyebrow="48 nations" title="Squads" />
+      <EmptyState icon={<UsersIcon size={22} />} title="Couldn't load squads" desc={error} />
+    </div>
+  )
 
   return (
     <div className="space-y-5">

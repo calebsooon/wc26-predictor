@@ -14,6 +14,7 @@ import { type DBMatch } from '@/lib/match-ui'
 import { POINTS, weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights, type MatchBreakdown } from '@/lib/scoring'
 import { getActiveLeague } from '@/lib/league'
 import { PlayerCardPicker, type PlayerForPicker } from '@/components/PlayerCardPicker'
+import { fmtDateTime } from '@/lib/date-format'
 
 interface OtherPred extends MatchBreakdown {
   user_id: string
@@ -72,15 +73,10 @@ export default function MatchDetailPage() {
         .select('id, name, team_name, jersey_number, position')
         .in('team_name', [home.playerKey, away.playerKey])
         .order('jersey_number', { ascending: true, nullsFirst: false })
+      type PlRow = { id: number; name: string; team_name: string; jersey_number: number | null; position: string | null }
       setPlayers((pl ?? []).map((p) => {
-        const code = (p as { team_name: string }).team_name === home.playerKey ? dbm.home_team : dbm.away_team
-        return {
-          id: (p as { id: number }).id,
-          name: (p as { name: string }).name,
-          team_code: code,
-          jersey_number: (p as { jersey_number: number | null }).jersey_number,
-          position: (p as { position: string | null }).position ?? null,
-        }
+        const { id, name, team_name, jersey_number, position } = p as PlRow
+        return { id, name, jersey_number, position: position ?? null, team_code: team_name === home.playerKey ? dbm.home_team : dbm.away_team }
       }))
 
       const { data: mine } = await supabase
@@ -103,19 +99,18 @@ export default function MatchDetailPage() {
 
       const { league, weights: w, memberIds } = await getActiveLeague(supabase, user.id)
       setWeights(w)
-      const reveal = league?.reveal_predictions === true
-      setRevealPredictions(reveal)
+      setRevealPredictions(league?.reveal_predictions === true)
 
-      const kickedOff = dbm.is_locked || new Date(dbm.match_date) <= new Date()
-      if (kickedOff || reveal) {
-        let q = supabase
-          .from('predictions')
-          .select('user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, profiles(username, avatar_url)')
-          .eq('match_id', id)
-        if (memberIds.length) q = q.in('user_id', memberIds)
-        const { data: o } = await q
-        setOthers((o ?? []) as unknown as OtherPred[])
-      }
+      // Always fetch others — the display gate (locked || reveal) controls visibility.
+      // Fetching once at load avoids the stale-closure bug where kickedOff was false
+      // at load time but the match kicks off while the user is on the page.
+      let q = supabase
+        .from('predictions')
+        .select('user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, profiles(username, avatar_url)')
+        .eq('match_id', id)
+      if (memberIds.length) q = q.in('user_id', memberIds)
+      const { data: o } = await q
+      setOthers((o ?? []) as unknown as OtherPred[])
       setLoading(false)
     }
     load()
@@ -362,6 +357,3 @@ export default function MatchDetailPage() {
   )
 }
 
-function fmtDateTime(iso: string) {
-  return new Intl.DateTimeFormat('en-SG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore', hour12: false }).format(new Date(iso))
-}

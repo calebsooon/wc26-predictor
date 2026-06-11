@@ -57,15 +57,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setProfile(null); setLeaguesReady(false); return }
-      const [{ data }, leagues] = await Promise.all([
-        supabase.from('profiles').select('username, avatar_url, is_admin, active_league_id').eq('id', user.id).single(),
-        getMyLeagues(supabase, user.id),
-      ])
-      if (data) setProfile(data as Profile)
-      setMyLeagues(leagues)
-      setLeaguesReady(true)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { setProfile(null); setLeaguesReady(false); return }
+        const [{ data }, leagues] = await Promise.all([
+          supabase.from('profiles').select('username, avatar_url, is_admin, active_league_id').eq('id', user.id).single(),
+          getMyLeagues(supabase, user.id),
+        ])
+        if (data) setProfile(data as Profile)
+        setMyLeagues(leagues)
+        setLeaguesReady(true)
+      } catch {
+        // Shell failure is non-fatal — nav still renders, pages handle their own auth
+        setLeaguesReady(true)
+      }
     }
     load()
     const { data: listener } = supabase.auth.onAuthStateChange((event) => {

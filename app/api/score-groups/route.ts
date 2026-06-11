@@ -69,20 +69,18 @@ export async function POST(req: Request) {
       .select('user_id, ranked_codes')
       .eq('group_name', g)
 
-    let groupUpdated = 0
-    for (const pred of preds ?? []) {
-      const pts = scoreGroupPrediction(
-        (pred as { ranked_codes: string[] }).ranked_codes,
-        actual,
-      )
-      await supabase.from('group_predictions')
-        .update({ points_awarded: pts })
-        .eq('user_id', (pred as { user_id: string }).user_id)
-        .eq('group_name', g)
-      groupUpdated++
+    const updates = (preds ?? []).map((pred) => ({
+      user_id: (pred as { user_id: string }).user_id,
+      group_name: g,
+      ranked_codes: (pred as { ranked_codes: string[] }).ranked_codes,
+      points_awarded: scoreGroupPrediction((pred as { ranked_codes: string[] }).ranked_codes, actual),
+    }))
+    if (updates.length > 0) {
+      const { error: upErr } = await supabase.from('group_predictions').upsert(updates, { onConflict: 'user_id,group_name' })
+      if (upErr) { results[g] = { skipped: upErr.message, updated: 0 }; continue }
     }
-    predictionsUpdated += groupUpdated
-    results[g] = { updated: groupUpdated }
+    predictionsUpdated += updates.length
+    results[g] = { updated: updates.length }
   }
 
   return NextResponse.json({ groups: results, predictions_updated: predictionsUpdated })

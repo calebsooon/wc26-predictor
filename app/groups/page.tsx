@@ -49,27 +49,35 @@ export default function GroupsPage() {
   const [savedPreds, setSavedPreds] = useState<Record<string, GroupPredRow>>({})
   const [savingMsg, setSavingMsg] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUserId(user?.id ?? null)
-      const { data } = await supabase
-        .from('matches')
-        .select('id, home_team, away_team, real_home_score, real_away_score, group_name, gameweek')
-        .not('group_name', 'is', null)
-        .order('match_date')
-      if (data) setMatches(data as Match[])
-      if (user) {
-        const { data: gp } = await supabase
-          .from('group_predictions')
-          .select('group_name, ranked_codes, points_awarded')
-          .eq('user_id', user.id)
-        const map: Record<string, GroupPredRow> = {}
-        for (const r of (gp ?? []) as GroupPredRow[]) map[r.group_name] = r
-        setSavedPreds(map)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        setUserId(user?.id ?? null)
+        const { data, error: matchErr } = await supabase
+          .from('matches')
+          .select('id, home_team, away_team, real_home_score, real_away_score, group_name, gameweek')
+          .not('group_name', 'is', null)
+          .order('match_date')
+        if (matchErr) throw matchErr
+        if (data) setMatches(data as Match[])
+        if (user) {
+          const { data: gp, error: gpErr } = await supabase
+            .from('group_predictions')
+            .select('group_name, ranked_codes, points_awarded')
+            .eq('user_id', user.id)
+          if (gpErr) throw gpErr
+          const map: Record<string, GroupPredRow> = {}
+          for (const r of (gp ?? []) as GroupPredRow[]) map[r.group_name] = r
+          setSavedPreds(map)
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load groups')
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -107,16 +115,26 @@ export default function GroupsPage() {
   async function savePrediction() {
     if (!userId || order.length === 0) return
     setSavingMsg('Saving…')
-    const { error } = await supabase.from('group_predictions').upsert(
-      { user_id: userId, group_name: group, ranked_codes: order, updated_at: new Date().toISOString() },
-      { onConflict: 'user_id,group_name' },
-    )
-    setSavingMsg(error ? error.message : 'Saved ✓')
-    if (!error) setSavedPreds((s) => ({ ...s, [group]: { group_name: group, ranked_codes: order, points_awarded: s[group]?.points_awarded ?? null } }))
+    try {
+      const { error } = await supabase.from('group_predictions').upsert(
+        { user_id: userId, group_name: group, ranked_codes: order, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id,group_name' },
+      )
+      setSavingMsg(error ? error.message : 'Saved ✓')
+      if (!error) setSavedPreds((s) => ({ ...s, [group]: { group_name: group, ranked_codes: order, points_awarded: s[group]?.points_awarded ?? null } }))
+    } catch (e) {
+      setSavingMsg(e instanceof Error ? e.message : 'Save failed')
+    }
     setTimeout(() => setSavingMsg(null), 2500)
   }
 
   if (loading) return <div className="space-y-5"><Skeleton className="h-9 w-40" /><Skeleton className="h-12 w-full" /><Skeleton className="h-72 rounded-xl" /></div>
+  if (error) return (
+    <div className="space-y-5">
+      <PageHeader eyebrow="World Cup 2026" title="Groups" />
+      <div className="py-12 text-center"><p className="text-sm text-texts">{error}</p></div>
+    </div>
+  )
 
   const currentPred = savedPreds[group]
   const ptsAwarded = currentPred?.points_awarded ?? null
@@ -186,7 +204,6 @@ export default function GroupsPage() {
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm text-texts">Reorder how you think Group {group} finishes.</p>
             <div className="flex items-center gap-2">
-              <Pill tone="default">For fun</Pill>
               {ptsAwarded !== null && (
                 <Pill tone={ptsAwarded > 0 ? 'gold' : 'default'}>
                   +{ptsAwarded} pts
@@ -218,7 +235,7 @@ export default function GroupsPage() {
             })}
           </div>
           <div className="flex items-center justify-between mt-4 gap-2">
-            <p className="text-[11px] text-texts">+2 pts per team in correct position · max 8 pts per group · <span className="font-bold">for fun only — does not affect standings or prizes</span></p>
+            <p className="text-[11px] text-texts">+2 pts per team in correct finishing position · max 8 pts per group · scored once the group completes</p>
             <Button onClick={savePrediction} disabled={!userId || order.length === 0}>Save</Button>
           </div>
         </Card>

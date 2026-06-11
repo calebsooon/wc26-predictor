@@ -48,6 +48,7 @@ export async function snapshotLeagueRanks(supabase: SupabaseClient): Promise<num
   }
 
   if (snapshots.length === 0) return 0
-  await supabase.from('rank_snapshots').insert(snapshots)
+  const { error } = await supabase.from('rank_snapshots').insert(snapshots)
+  if (error) throw new Error(`rank_snapshots insert failed: ${error.message}`)
   return snapshots.length
 }

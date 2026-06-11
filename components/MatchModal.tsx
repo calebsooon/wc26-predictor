@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam, normalisePosition, POSITION_ORDER, POSITION_ABBR } from '@/lib/teams'
+import { fmtDateLong } from '@/lib/date-format'
 
 export interface ModalMatch {
   id: string
@@ -26,9 +27,6 @@ function sortPlayers(players: Player[]) {
   })
 }
 
-function fmtDate(iso: string) {
-  return new Intl.DateTimeFormat('en-SG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore', hour12: false }).format(new Date(iso))
-}
 
 function SquadPanel({ code, matchId }: { code: string; matchId: string }) {
   const supabase = createClient()
@@ -36,6 +34,7 @@ function SquadPanel({ code, matchId }: { code: string; matchId: string }) {
   const [squad, setSquad] = useState<Player[] | null>(null)
   const [lineup, setLineup] = useState<LineupPlayer[] | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     if (code === 'TBC') { setSquad([]); setLineup([]); setLoading(false); return }
@@ -43,14 +42,16 @@ function SquadPanel({ code, matchId }: { code: string; matchId: string }) {
       supabase.from('players').select('id, name, position, jersey_number, nationality').eq('team_name', team.playerKey),
       supabase.from('lineups').select('player_id, is_starting, shirt_number, position_label, sort_order, players(name, position)').eq('match_id', matchId).eq('team_code', code).order('sort_order'),
     ]).then(([s, l]) => {
+      if (s.error && l.error) { setLoadError(true); setLoading(false); return }
       setSquad(s.data ? sortPlayers(s.data as Player[]) : [])
       setLineup((l.data ?? []) as unknown as LineupPlayer[])
       setLoading(false)
-    })
+    }).catch(() => { setLoadError(true); setLoading(false) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, matchId])
 
   if (loading) return <div className="flex items-center justify-center h-24"><div className="w-5 h-5 border-2 border-border border-t-primary rounded-full animate-spin" /></div>
+  if (loadError) return <p className="text-sm text-texts py-6 text-center">Could not load squad data.</p>
 
   const hasLineup = lineup && lineup.length > 0
   const starters = lineup?.filter((l) => l.is_starting) ?? []
@@ -130,7 +131,7 @@ export default function MatchModal({ match, onClose }: { match: ModalMatch; onCl
           <div className="flex items-start justify-between mb-4">
             <div>
               <span className="text-xs font-bold text-texts uppercase tracking-widest">{match.group_name ? `Group ${match.group_name}` : match.round_name}</span>
-              <p className="text-xs text-texts mt-0.5">{fmtDate(match.match_date)} SGT</p>
+              <p className="text-xs text-texts mt-0.5">{fmtDateLong(match.match_date)} SGT</p>
             </div>
             <button onClick={onClose} className="text-texts hover:text-textp p-1 -mr-1">✕</button>
           </div>

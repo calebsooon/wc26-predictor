@@ -17,16 +17,25 @@ export default function JoinPage() {
   const [busy, setBusy] = useState(false)
 
   async function refresh(uid: string) {
-    setLeagues(await getMyLeagues(supabase, uid))
+    try {
+      setLeagues(await getMyLeagues(supabase, uid))
+    } catch {
+      // non-fatal — show whatever we already have
+    }
   }
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.replace('/login'); return }
-      setUserId(user.id)
-      await refresh(user.id)
-      setLoading(false)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.replace('/login'); return }
+        setUserId(user.id)
+        await refresh(user.id)
+      } catch {
+        // auth failure — middleware will redirect, nothing to show here
+      } finally {
+        setLoading(false)
+      }
     }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -50,7 +59,8 @@ export default function JoinPage() {
   }
 
   async function makeActive(id: string) {
-    if (!userId) return
+    if (!userId || busy) return
+    setBusy(true)
     await setActiveLeague(supabase, userId, id)
     router.replace('/dashboard')
     router.refresh()

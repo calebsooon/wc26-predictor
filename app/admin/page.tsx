@@ -9,6 +9,7 @@ import {
   PageHeader, Card, Button, Pill, ScoreStepper, ChipRow, Skeleton, ChevDown, SearchIcon, SectionHeader, LeagueBadge,
 } from '@/components/ui'
 import { WEIGHT_FIELDS, resolveWeights, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
+import { fmtDateTime } from '@/lib/date-format'
 
 interface Match {
   id: string
@@ -40,6 +41,7 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
   const [scorerOpen, setScorerOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
+  const [scoringFailed, setScoringFailed] = useState(false)
 
   const hasScore = m.real_home_score !== null && m.real_away_score !== null
   const isKnockout = !m.group_name
@@ -49,16 +51,32 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
     setOpen(opening)
     if (opening && players.length === 0) {
       const { data } = await supabase.from('players').select('id, name, team_name').in('team_name', [home.playerKey, away.playerKey])
-      setPlayers((data ?? []).map((p) => ({
-        id: (p as { id: number }).id, name: (p as { name: string }).name,
-        team_code: (p as { team_name: string }).team_name === home.playerKey ? m.home_team : m.away_team,
-      })))
+      type PlayerRow = { id: number; name: string; team_name: string }
+      setPlayers((data ?? []).map((p) => {
+        const { id, name, team_name } = p as PlayerRow
+        return { id, name, team_code: team_name === home.playerKey ? m.home_team : m.away_team }
+      }))
     }
+  }
+
+  async function scoreOnly() {
+    setSaving(true)
+    setScoringFailed(false)
+    const res = await fetch('/api/score-match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ match_id: m.id }) })
+    setSaving(false)
+    if (!res.ok) {
+      setScoringFailed(true)
+      toast.error((await res.json().catch(() => ({}))).error ?? 'Retry failed — check API logs')
+      return
+    }
+    onSaved({ ...m, real_home_score: h, real_away_score: a, is_locked: true, first_goal_team: fgt, first_goal_player_id: scorerId, match_winner: matchWinner })
+    toast.success(`${home.name} ${h}–${a} ${away.name} re-scored`)
   }
 
   async function save() {
     if (h == null || a == null) { toast.error('Both scores required'); return }
     setSaving(true)
+    setScoringFailed(false)
     const { error } = await supabase.from('matches').update({
       real_home_score: h, real_away_score: a, is_locked: true,
       first_goal_team: fgt, first_goal_player_id: scorerId,
@@ -67,7 +85,11 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
     if (error) { toast.error(error.message); setSaving(false); return }
     const res = await fetch('/api/score-match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ match_id: m.id }) })
     setSaving(false)
-    if (!res.ok) { toast.error((await res.json().catch(() => ({}))).error ?? 'Scoring failed'); return }
+    if (!res.ok) {
+      setScoringFailed(true)
+      toast.error('Match saved but scoring failed — use "Retry scoring" to fix')
+      return
+    }
     onSaved({ ...m, real_home_score: h, real_away_score: a, is_locked: true, first_goal_team: fgt, first_goal_player_id: scorerId, match_winner: matchWinner })
     toast.success(`${home.name} ${h}–${a} ${away.name} saved & scored`)
   }
@@ -84,7 +106,7 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
             <span className="text-texts">v</span>
             <span>{away.flag}</span><span className="truncate">{away.name}</span>
           </div>
-          <div className="text-[11px] text-texts mt-0.5">{fmt(m.match_date)} · {m.rounds?.name ?? '—'}</div>
+          <div className="text-[11px] text-texts mt-0.5">{fmtDateTime(m.match_date)} · {m.rounds?.name ?? '—'}</div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <ScoreStepper value={h} onChange={setH} />
@@ -156,6 +178,11 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
 
       <div className="flex items-center justify-end gap-2 mt-3">
         {hasScore && <Pill tone="green">{m.real_home_score}–{m.real_away_score}</Pill>}
+        {scoringFailed && (
+          <Button size="sm" variant="outline" onClick={scoreOnly} disabled={saving}>
+            {saving ? '…' : 'Retry scoring'}
+          </Button>
+        )}
         <Button size="sm" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save & score'}</Button>
       </div>
     </Card>
@@ -601,16 +628,22 @@ export default function AdminPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.replace('/login'); return }
-      const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single()
-      if (!profile?.is_admin) { router.replace('/dashboard'); return }
-      const { data } = await supabase
-        .from('matches')
-        .select('id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, first_goal_team, first_goal_player_id, match_winner, rounds(name)')
-        .order('match_date')
-      setMatches((data ?? []) as unknown as Match[])
-      setLoading(false)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.replace('/login'); return }
+        const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single()
+        if (!profile?.is_admin) { router.replace('/dashboard'); return }
+        const { data, error } = await supabase
+          .from('matches')
+          .select('id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, first_goal_team, first_goal_player_id, match_winner, rounds(name)')
+          .order('match_date')
+        if (error) throw error
+        setMatches((data ?? []) as unknown as Match[])
+      } catch (e) {
+        toast.error(`Failed to load: ${e instanceof Error ? e.message : String(e)}`)
+      } finally {
+        setLoading(false)
+      }
     }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -638,6 +671,3 @@ export default function AdminPage() {
   )
 }
 
-function fmt(iso: string) {
-  return new Intl.DateTimeFormat('en-SG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore', hour12: false }).format(new Date(iso))
-}

@@ -52,42 +52,46 @@ export default function ProfilePage() {
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
-      const { data } = await supabase.from('profiles').select('id, username, avatar_url, is_admin').eq('id', user.id).single()
-      if (data) { const p = data as Profile; setProfile(p); setUsername(p.username ?? ''); setAvatarUrl(p.avatar_url ?? null) }
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.push('/login'); return }
+        const { data, error: profErr } = await supabase.from('profiles').select('id, username, avatar_url, is_admin').eq('id', user.id).single()
+        if (profErr) throw profErr
+        if (data) { const p = data as Profile; setProfile(p); setUsername(p.username ?? ''); setAvatarUrl(p.avatar_url ?? null) }
 
-      const { data: mine } = await supabase
-        .from('predictions')
-        .select('points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
-        .eq('user_id', user.id).not('points_awarded', 'is', null)
-      setPreds((mine ?? []) as unknown as ScoredPred[])
+        const [{ data: mine }, { data: tp }, { data: gp }, leagueData] = await Promise.all([
+          supabase.from('predictions').select('points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer').eq('user_id', user.id).not('points_awarded', 'is', null),
+          supabase.from('tournament_predictions').select('*').eq('user_id', user.id).eq('phase', 'pre').maybeSingle(),
+          supabase.from('group_predictions').select('group_name, ranked_codes, points_awarded').eq('user_id', user.id).order('group_name'),
+          getActiveLeague(supabase, user.id),
+        ])
+        setPreds((mine ?? []) as unknown as ScoredPred[])
+        if (tp) setTournamentPred(tp as unknown as TournamentPred)
+        if (gp) setGroupPreds(gp as GroupPred[])
 
-      const { data: tp } = await supabase.from('tournament_predictions').select('*').eq('user_id', user.id).eq('phase', 'pre').maybeSingle()
-      if (tp) setTournamentPred(tp as unknown as TournamentPred)
-
-      const { data: gp } = await supabase.from('group_predictions').select('group_name, ranked_codes, points_awarded').eq('user_id', user.id).order('group_name')
-      if (gp) setGroupPreds(gp as GroupPred[])
-
-      // Rank within the active league, using its weights
-      const { weights: w, memberIds } = await getActiveLeague(supabase, user.id)
-      setWeights(w)
-      const ids = memberIds.length ? memberIds : [user.id]
-      const { data: all } = await supabase
-        .from('predictions')
-        .select('user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
-        .not('points_awarded', 'is', null)
-        .in('user_id', ids)
-      const agg = new Map<string, number>()
-      for (const r of (all ?? []) as (ScoredPred & { user_id: string })[]) agg.set(r.user_id, (agg.get(r.user_id) ?? 0) + weightedMatchPoints(r, w))
-      const sorted = Array.from(agg.entries()).sort((a, b) => b[1] - a[1])
-      setTotalPlayers(ids.length)
-      const idx = sorted.findIndex(([uid]) => uid === user.id)
-      setRank(idx >= 0 ? idx + 1 : null)
-      setLoading(false)
+        const { weights: w, memberIds } = leagueData
+        setWeights(w)
+        const ids = memberIds.length ? memberIds : [user.id]
+        const { data: all } = await supabase
+          .from('predictions')
+          .select('user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
+          .not('points_awarded', 'is', null)
+          .in('user_id', ids)
+        const agg = new Map<string, number>()
+        for (const r of (all ?? []) as (ScoredPred & { user_id: string })[]) agg.set(r.user_id, (agg.get(r.user_id) ?? 0) + weightedMatchPoints(r, w))
+        const sorted = Array.from(agg.entries()).sort((a, b) => b[1] - a[1])
+        setTotalPlayers(ids.length)
+        const idx = sorted.findIndex(([uid]) => uid === user.id)
+        setRank(idx >= 0 ? idx + 1 : null)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load profile')
+      } finally {
+        setLoading(false)
+      }
     }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -148,7 +152,15 @@ export default function ProfilePage() {
 
   async function logout() { await supabase.auth.signOut(); router.push('/login') }
 
-  if (loading || !profile) return <div className="space-y-5"><Skeleton className="h-9 w-40" /><div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div><Skeleton className="h-72 rounded-xl" /></div>
+  if (loading || !profile) {
+    if (error) return (
+      <div className="space-y-5">
+        <div className="pb-4 border-b border-border"><h1 className="text-2xl font-black tracking-tight">Profile</h1></div>
+        <EmptyState icon={<TrophyIcon size={22} />} title="Couldn't load profile" desc={error} />
+      </div>
+    )
+    return <div className="space-y-5"><Skeleton className="h-9 w-40" /><div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div><Skeleton className="h-72 rounded-xl" /></div>
+  }
 
   return (
     <div className="space-y-6">

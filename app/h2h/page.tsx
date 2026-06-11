@@ -19,18 +19,24 @@ export default function H2HPage() {
   const [bId, setBId] = useState('')
   const [rows, setRows] = useState<PredRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setLoading(false); return }
-      const { weights: w, memberProfiles } = await getActiveLeague(supabase, user.id)
-      setWeights(w)
-      setMembers(memberProfiles)
-      setAId(user.id)
-      const other = memberProfiles.find((m) => m.id !== user.id)
-      setBId(other?.id ?? '')
-      setLoading(false)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { setLoading(false); return }
+        const { weights: w, memberProfiles } = await getActiveLeague(supabase, user.id)
+        setWeights(w)
+        setMembers(memberProfiles)
+        setAId(user.id)
+        const other = memberProfiles.find((m) => m.id !== user.id)
+        setBId(other?.id ?? '')
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load league')
+      } finally {
+        setLoading(false)
+      }
     }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -39,7 +45,10 @@ export default function H2HPage() {
   useEffect(() => {
     if (!aId || !bId || aId === bId) { setRows([]); return }
     supabase.from('predictions').select(COLS).in('user_id', [aId, bId]).not('points_awarded', 'is', null)
-      .then(({ data }) => setRows((data ?? []) as unknown as PredRow[]))
+      .then(({ data, error: e }) => {
+        if (e) setError(e.message)
+        else setRows((data ?? []) as unknown as PredRow[])
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aId, bId])
 
@@ -71,12 +80,22 @@ export default function H2HPage() {
 
   if (loading) return <div className="space-y-5"><Skeleton className="h-9 w-44" /><Skeleton className="h-72 rounded-xl" /></div>
 
-  const Select = ({ value, onChange, exclude }: { value: string; onChange: (v: string) => void; exclude: string }) => (
-    <select value={value} onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm font-bold text-textp focus:outline-none focus:border-primary">
-      <option value="">Select…</option>
-      {members.filter((m) => m.id !== exclude).map((m) => <option key={m.id} value={m.id}>{m.username ?? '?'}</option>)}
-    </select>
+  if (error) return (
+    <div className="space-y-5">
+      <PageHeader eyebrow="Compare" title="Head-to-head" />
+      <EmptyState icon={<UsersIcon size={22} />} title="Couldn't load data" desc={error} />
+    </div>
+  )
+
+  const Select = ({ id, label, value, onChange, exclude }: { id: string; label: string; value: string; onChange: (v: string) => void; exclude: string }) => (
+    <div>
+      <label htmlFor={id} className="block text-[11px] font-bold uppercase tracking-wider text-texts mb-1">{label}</label>
+      <select id={id} value={value} onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm font-bold text-textp focus:outline-none focus:border-primary">
+        <option value="">Select…</option>
+        {members.filter((m) => m.id !== exclude).map((m) => <option key={m.id} value={m.id}>{m.username ?? '?'}</option>)}
+      </select>
+    </div>
   )
 
   const winPct = stats.common ? (stats.winA / stats.common) * 100 : 50
@@ -90,8 +109,8 @@ export default function H2HPage() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3">
-            <Select value={aId} onChange={setAId} exclude={bId} />
-            <Select value={bId} onChange={setBId} exclude={aId} />
+            <Select id="player-a" label="Player A" value={aId} onChange={setAId} exclude={bId} />
+            <Select id="player-b" label="Player B" value={bId} onChange={setBId} exclude={aId} />
           </div>
 
           {a && b && aId !== bId && (
