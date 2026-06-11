@@ -357,7 +357,6 @@ function PicksView({
         const home = getTeam(m.home_team)
         const away = getTeam(m.away_team)
         const kickoff = new Date(m.match_date)
-        const kicked = kickoff <= new Date() || m.is_locked
         const isScored = m.real_home_score !== null && m.real_away_score !== null
         const stageLabel = m.group_name ? `Group ${m.group_name}` : 'Knockout'
 
@@ -371,15 +370,11 @@ function PicksView({
                 {' · '}
                 {kickoff.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore', hour12: false })}
               </span>
-              {isScored && (
+              {isScored ? (
                 <Pill tone="green" className="ml-auto">{m.real_home_score}–{m.real_away_score} FT</Pill>
-              )}
-              {!isScored && kicked && (
+              ) : m.is_locked ? (
                 <Pill tone="default" className="ml-auto">Locked</Pill>
-              )}
-              {!kicked && (
-                <span className="ml-auto text-[11px] text-texts font-medium">Picks hidden until kickoff</span>
-              )}
+              ) : null}
             </div>
 
             {/* Teams */}
@@ -395,57 +390,36 @@ function PicksView({
               </div>
             </div>
 
-            {/* Member picks — only show after kickoff */}
-            {kicked ? (
-              <div className="divide-y divide-border/40">
-                {members.map((member) => {
-                  const pick = predMap.get(`${m.id}|${member.id}`)
-                  const isMe = member.id === userId
-                  const scored = pick?.points_awarded != null
-                  return (
-                    <div key={member.id} className={`flex items-center gap-3 py-2 ${isMe ? 'bg-blue/[0.04] -mx-4 px-4' : ''}`}>
-                      <Avatar name={member.username ?? '?'} src={member.avatar_url} size={26} you={isMe} />
-                      <span className={`flex-1 text-[13px] font-semibold truncate ${isMe ? 'text-primary' : 'text-textp'}`}>
-                        {member.username ?? '?'}{isMe ? ' (you)' : ''}
-                      </span>
-                      {pick?.pred_home != null && pick?.pred_away != null ? (
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold tabular-nums text-sm text-textp">
-                            {pick.pred_home}–{pick.pred_away}
+            {/* Member picks — always visible when reveal_predictions is on */}
+            <div className="divide-y divide-border/40">
+              {members.map((member) => {
+                const pick = predMap.get(`${m.id}|${member.id}`)
+                const isMe = member.id === userId
+                const scored = pick?.points_awarded != null
+                return (
+                  <div key={member.id} className={`flex items-center gap-3 py-2 ${isMe ? 'bg-blue/[0.04] -mx-4 px-4' : ''}`}>
+                    <Avatar name={member.username ?? '?'} src={member.avatar_url} size={26} you={isMe} />
+                    <span className={`flex-1 text-[13px] font-semibold truncate ${isMe ? 'text-primary' : 'text-textp'}`}>
+                      {member.username ?? '?'}{isMe ? ' (you)' : ''}
+                    </span>
+                    {pick?.pred_home != null && pick?.pred_away != null ? (
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold tabular-nums text-sm text-textp">
+                          {pick.pred_home}–{pick.pred_away}
+                        </span>
+                        {scored && (
+                          <span className={`text-[11px] font-bold tabular-nums ${(pick.points_awarded ?? 0) >= 8 ? 'text-primary' : (pick.points_awarded ?? 0) > 0 ? 'text-gold' : 'text-error'}`}>
+                            +{pick.points_awarded}pts
                           </span>
-                          {scored && (
-                            <span className={`text-[11px] font-bold tabular-nums ${(pick.points_awarded ?? 0) >= 8 ? 'text-primary' : (pick.points_awarded ?? 0) > 0 ? 'text-gold' : 'text-error'}`}>
-                              +{pick.points_awarded}pts
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-texts font-medium italic">no pick</span>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 py-1">
-                <div className="flex -space-x-2">
-                  {members.slice(0, 5).map((member) => {
-                    const hasPick = predMap.get(`${m.id}|${member.id}`)?.pred_home != null
-                    return (
-                      <div key={member.id} className={`relative ${hasPick ? '' : 'opacity-30'}`}>
-                        <Avatar name={member.username ?? '?'} src={member.avatar_url} size={28} you={member.id === userId} />
+                        )}
                       </div>
-                    )
-                  })}
-                  {members.length > 5 && (
-                    <div className="w-7 h-7 rounded-full bg-surface border border-border grid place-items-center text-[10px] font-bold text-texts">+{members.length - 5}</div>
-                  )}
-                </div>
-                <span className="text-[12px] text-texts">
-                  {preds.filter((p) => p.match_id === m.id && p.pred_home != null).length}/{members.length} picked
-                </span>
-              </div>
-            )}
+                    ) : (
+                      <span className="text-[11px] text-texts font-medium italic">no pick</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </Card>
         )
       })}
