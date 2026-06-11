@@ -104,12 +104,17 @@ export default function LeaderboardPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setLoading(false); return }
-      setUserId(user.id)
-      setMyLeagues(await getMyLeagues(supabase, user.id))
-      await applyLeague(user.id)
-      setLoading(false)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { setLoading(false); return }
+        setUserId(user.id)
+        setMyLeagues(await getMyLeagues(supabase, user.id))
+        await applyLeague(user.id)
+      } catch {
+        // non-fatal — empty state will show
+      } finally {
+        setLoading(false)
+      }
     }
     load()
     const channel = supabase.channel('lb').on('postgres_changes', { event: '*', schema: 'public', table: 'predictions' }, () => { if (memberIdsRef.current.length) fetchRows(memberIdsRef.current) }).subscribe()
@@ -126,44 +131,51 @@ export default function LeaderboardPage() {
 
   async function loadPicks() {
     setPicksLoading(true)
-    // Fetch upcoming + recently locked matches
-    const { data: matches } = await supabase
-      .from('matches')
-      .select('id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name')
-      .order('match_date', { ascending: true })
-      .limit(30)
-    setPickMatches((matches ?? []) as PickMatch[])
+    try {
+      const { data: matches, error: mErr } = await supabase
+        .from('matches')
+        .select('id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name')
+        .order('match_date', { ascending: true })
+        .limit(30)
+      if (mErr) throw mErr
+      setPickMatches((matches ?? []) as PickMatch[])
 
-    if (matches && matches.length > 0) {
-      const matchIds = (matches as PickMatch[]).map((m) => m.id)
-      const { data: preds } = await supabase
-        .from('predictions')
-        .select('match_id, user_id, pred_home, pred_away, points_awarded')
-        .in('match_id', matchIds)
-        .in('user_id', memberIdsRef.current)
-      setPickPreds((preds ?? []) as PickPred[])
+      if (matches && matches.length > 0) {
+        const matchIds = (matches as PickMatch[]).map((m) => m.id)
+        const { data: preds, error: pErr } = await supabase
+          .from('predictions')
+          .select('match_id, user_id, pred_home, pred_away, points_awarded')
+          .in('match_id', matchIds)
+          .in('user_id', memberIdsRef.current)
+        if (pErr) throw pErr
+        setPickPreds((preds ?? []) as PickPred[])
+      }
+    } catch {
+      // picks are non-critical — silently degrade, skeleton clears
+    } finally {
+      setPicksLoading(false)
     }
-    setPicksLoading(false)
   }
 
   async function fetchRows(ids: string[]) {
     if (ids.length === 0) { setRows([]); return }
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('predictions')
       .select(PRED_COLS)
       .not('points_awarded', 'is', null)
       .in('user_id', ids)
-    setRows((data ?? []) as unknown as PredRow[])
+    if (!error) setRows((data ?? []) as unknown as PredRow[])
   }
 
   async function fetchSnaps(leagueId: string | null) {
     if (!leagueId) { setPrevRanks(new Map()); return }
-    const { data: snaps } = await supabase
+    const { data: snaps, error } = await supabase
       .from('rank_snapshots')
       .select('user_id, rank, snapshot_at')
       .eq('league_id', leagueId)
       .order('snapshot_at', { ascending: false })
       .limit(200)
+    if (error) return
     if (snaps && snaps.length > 0) {
       const latest = (snaps[0] as SnapRow).snapshot_at
       const map = new Map<string, number>()
