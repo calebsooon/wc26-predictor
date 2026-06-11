@@ -8,6 +8,7 @@ import { getTeam, TEAMS } from '@/lib/teams'
 import MatchModal, { type ModalMatch } from '@/components/MatchModal'
 import { PageHeader, Card, Tabs, Skeleton, EmptyState, TreeIcon, Pill, Button, SectionHeader, SearchIcon, LockIcon } from '@/components/ui'
 import { getActiveLeague } from '@/lib/league'
+import { fmtDateTime } from '@/lib/date-format'
 
 interface Match {
   id: string
@@ -43,10 +44,6 @@ const ROUND_IDS = {
 
 const ALL_TEAMS = Object.values(TEAMS).sort((a, b) => a.name.localeCompare(b.name))
 
-function fmtDate(iso: string) {
-  return new Intl.DateTimeFormat('en-SG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore', hour12: false }).format(new Date(iso))
-}
-
 function winner(m: Match): string | null {
   if (m.real_home_score === null || m.real_away_score === null) return null
   if (m.real_home_score > m.real_away_score) return m.home_team
@@ -75,7 +72,7 @@ function BracketCard({ match, onClick }: { match: Match | undefined; onClick?: (
 
   return (
     <button onClick={() => onClick?.(match)} className="w-44 rounded-xl border border-border bg-card hover:border-texts/40 transition-all text-left overflow-hidden">
-      <div className="bg-surface border-b border-border px-2.5 py-1"><p className="text-[10px] text-texts font-bold">{fmtDate(match.match_date)}</p></div>
+      <div className="bg-surface border-b border-border px-2.5 py-1"><p className="text-[10px] text-texts font-bold">{fmtDateTime(match.match_date)}</p></div>
       <Row code={match.home_team} score={match.real_home_score} win={w === match.home_team} />
       <div className="h-px bg-border/60" />
       <Row code={match.away_team} score={match.real_away_score} win={w === match.away_team} />
@@ -333,7 +330,7 @@ function BracketPageInner() {
 
   const byId: Record<string, Match[]> = {}
   for (const m of matches) {
-    const rid = (m as unknown as Record<string, string>).round_id
+    const rid = m.round_id ?? ''
     ;(byId[rid] ||= []).push(m)
   }
   const r32 = byId[ROUND_IDS.R32] ?? [], r16 = byId[ROUND_IDS.R16] ?? [], qf = byId[ROUND_IDS.QF] ?? []

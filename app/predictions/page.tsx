@@ -8,6 +8,7 @@ import { MatchCard } from '@/components/football'
 import { toUIMatch, type DBMatch, type MyPred } from '@/lib/match-ui'
 import { getActiveLeague } from '@/lib/league'
 import { DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
+import { fmtDateKey } from '@/lib/date-format'
 
 interface RoundRow { id: string; name: string; order: number; matches: DBMatch[] }
 
@@ -19,34 +20,42 @@ export default function FixturesPage() {
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.replace('/login'); return }
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.replace('/login'); return }
 
-      const { data: roundData } = await supabase
-        .from('rounds')
-        .select('id, name, "order", matches (id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, gameweek)')
-        .order('"order"')
-        .order('match_date', { referencedTable: 'matches' })
-      const flat: DBMatch[] = []
-      for (const r of (roundData ?? []) as unknown as RoundRow[]) {
-        for (const m of r.matches ?? []) flat.push({ ...m, round_name: r.name })
+        const { data: roundData, error: roundErr } = await supabase
+          .from('rounds')
+          .select('id, name, "order", matches (id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, gameweek)')
+          .order('"order"')
+          .order('match_date', { referencedTable: 'matches' })
+        if (roundErr) throw roundErr
+        const flat: DBMatch[] = []
+        for (const r of (roundData ?? []) as unknown as RoundRow[]) {
+          for (const m of r.matches ?? []) flat.push({ ...m, round_name: r.name })
+        }
+        setMatches(flat)
+
+        const { data: myData, error: predErr } = await supabase
+          .from('predictions')
+          .select('match_id, pred_home, pred_away, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
+          .eq('user_id', user.id)
+        if (predErr) throw predErr
+        const map: Record<string, MyPred> = {}
+        for (const p of myData ?? []) map[(p as { match_id: string }).match_id] = p as unknown as MyPred
+        setPreds(map)
+
+        const { weights: w } = await getActiveLeague(supabase, user.id)
+        setWeights(w)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load fixtures')
+      } finally {
+        setLoading(false)
       }
-      setMatches(flat)
-
-      const { data: myData } = await supabase
-        .from('predictions')
-        .select('match_id, pred_home, pred_away, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
-        .eq('user_id', user.id)
-      const map: Record<string, MyPred> = {}
-      for (const p of myData ?? []) map[(p as { match_id: string }).match_id] = p as unknown as MyPred
-      setPreds(map)
-
-      const { weights: w } = await getActiveLeague(supabase, user.id)
-      setWeights(w)
-      setLoading(false)
     }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -98,7 +107,30 @@ export default function FixturesPage() {
   const dates = Object.keys(byDate).sort()
 
   if (loading) {
-    return <div className="space-y-5"><Skeleton className="h-9 w-40" /><Skeleton className="h-9 w-full" /><div className="grid sm:grid-cols-2 gap-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div></div>
+    return (
+      <div className="space-y-5">
+        <Skeleton className="h-9 w-40" />
+        <Skeleton className="h-9 w-full" />
+        {[0, 1, 2].map((i) => (
+          <div key={i}>
+            <Skeleton className="h-5 w-32 mb-3" />
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Skeleton className="h-32 rounded-xl" />
+              <Skeleton className="h-32 rounded-xl" />
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-5">
+        <PageHeader eyebrow="World Cup 2026" title="Fixtures" />
+        <EmptyState icon={<CalIcon size={22} />} title="Couldn't load fixtures" desc={error} />
+      </div>
+    )
   }
 
   return (
@@ -112,7 +144,7 @@ export default function FixturesPage() {
         dates.map((d) => (
           <div key={d}>
             <div className="flex items-center gap-3 mb-3 mt-2">
-              <h2 className="text-sm font-extrabold uppercase tracking-wider text-texts">{fmtDate(d)}</h2>
+              <h2 className="text-sm font-extrabold uppercase tracking-wider text-texts">{fmtDateKey(d)}</h2>
               <div className="flex-1 h-px bg-border" />
               <span className="text-xs text-texts font-bold tabular-nums">{byDate[d].length} matches</span>
             </div>
@@ -130,10 +162,3 @@ export default function FixturesPage() {
   )
 }
 
-function fmtDate(d: string) {
-  // d is a YYYY-MM-DD date in SGT — parse as midnight SGT
-  const date = new Date(d + 'T00:00:00+08:00')
-  const todaySGT = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(new Date())
-  const label = new Intl.DateTimeFormat('en-SG', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Singapore' }).format(date)
-  return d === todaySGT ? `Today · ${label}` : label
-}

@@ -9,6 +9,7 @@ import {
   PageHeader, Card, Button, Pill, ScoreStepper, ChipRow, Skeleton, ChevDown, SearchIcon, SectionHeader, LeagueBadge,
 } from '@/components/ui'
 import { WEIGHT_FIELDS, resolveWeights, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
+import { fmtDateTime } from '@/lib/date-format'
 
 interface Match {
   id: string
@@ -49,10 +50,11 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
     setOpen(opening)
     if (opening && players.length === 0) {
       const { data } = await supabase.from('players').select('id, name, team_name').in('team_name', [home.playerKey, away.playerKey])
-      setPlayers((data ?? []).map((p) => ({
-        id: (p as { id: number }).id, name: (p as { name: string }).name,
-        team_code: (p as { team_name: string }).team_name === home.playerKey ? m.home_team : m.away_team,
-      })))
+      type PlayerRow = { id: number; name: string; team_name: string }
+      setPlayers((data ?? []).map((p) => {
+        const { id, name, team_name } = p as PlayerRow
+        return { id, name, team_code: team_name === home.playerKey ? m.home_team : m.away_team }
+      }))
     }
   }
 
@@ -84,7 +86,7 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
             <span className="text-texts">v</span>
             <span>{away.flag}</span><span className="truncate">{away.name}</span>
           </div>
-          <div className="text-[11px] text-texts mt-0.5">{fmt(m.match_date)} · {m.rounds?.name ?? '—'}</div>
+          <div className="text-[11px] text-texts mt-0.5">{fmtDateTime(m.match_date)} · {m.rounds?.name ?? '—'}</div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <ScoreStepper value={h} onChange={setH} />
@@ -601,16 +603,22 @@ export default function AdminPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.replace('/login'); return }
-      const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single()
-      if (!profile?.is_admin) { router.replace('/dashboard'); return }
-      const { data } = await supabase
-        .from('matches')
-        .select('id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, first_goal_team, first_goal_player_id, match_winner, rounds(name)')
-        .order('match_date')
-      setMatches((data ?? []) as unknown as Match[])
-      setLoading(false)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.replace('/login'); return }
+        const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single()
+        if (!profile?.is_admin) { router.replace('/dashboard'); return }
+        const { data, error } = await supabase
+          .from('matches')
+          .select('id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, first_goal_team, first_goal_player_id, match_winner, rounds(name)')
+          .order('match_date')
+        if (error) throw error
+        setMatches((data ?? []) as unknown as Match[])
+      } catch (e) {
+        toast.error(`Failed to load: ${e instanceof Error ? e.message : String(e)}`)
+      } finally {
+        setLoading(false)
+      }
     }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -638,6 +646,3 @@ export default function AdminPage() {
   )
 }
 
-function fmt(iso: string) {
-  return new Intl.DateTimeFormat('en-SG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore', hour12: false }).format(new Date(iso))
-}
