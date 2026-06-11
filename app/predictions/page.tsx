@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase-browser'
 import { PageHeader, ChipRow, EmptyState, Skeleton, CalIcon } from '@/components/ui'
 import { MatchCard } from '@/components/football'
 import { toUIMatch, type DBMatch, type MyPred } from '@/lib/match-ui'
+import { getActiveLeague } from '@/lib/league'
+import { DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 
 interface RoundRow { id: string; name: string; order: number; matches: DBMatch[] }
 
@@ -14,6 +16,7 @@ export default function FixturesPage() {
   const router = useRouter()
   const [matches, setMatches] = useState<DBMatch[]>([])
   const [preds, setPreds] = useState<Record<string, MyPred>>({})
+  const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(true)
 
@@ -35,11 +38,14 @@ export default function FixturesPage() {
 
       const { data: myData } = await supabase
         .from('predictions')
-        .select('match_id, pred_home, pred_away, points_awarded')
+        .select('match_id, pred_home, pred_away, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer')
         .eq('user_id', user.id)
       const map: Record<string, MyPred> = {}
       for (const p of myData ?? []) map[(p as { match_id: string }).match_id] = p as unknown as MyPred
       setPreds(map)
+
+      const { weights: w } = await getActiveLeague(supabase, user.id)
+      setWeights(w)
       setLoading(false)
     }
     load()
@@ -112,7 +118,7 @@ export default function FixturesPage() {
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
               {byDate[d].map((m) => (
-                <MatchCard key={m.id} m={toUIMatch(m, preds[m.id])} onClick={() => router.push(`/match/${m.id}`)} />
+                <MatchCard key={m.id} m={toUIMatch(m, preds[m.id], weights)} onClick={() => router.push(`/match/${m.id}`)} />
               ))}
             </div>
           </div>

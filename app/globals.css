@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /*
- * BRACKET XI tokens as space-separated RGB channels.
+ * MatchDay tokens as space-separated RGB channels.
  * :root = light mode · .dark = dark mode ("Dark Stadium Analytics").
  */
 :root {

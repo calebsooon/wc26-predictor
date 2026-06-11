@@ -1,7 +1,7 @@
 'use client'
 
 /* ============================================================
-   BRACKET XI — MatchCard + LeaderboardTable (shared)
+   MatchDay — MatchCard + LeaderboardTable (shared)
    ============================================================ */
 
 import { getTeam } from '@/lib/teams'
@@ -111,26 +111,27 @@ export function NextPredictCard({
   const home = getTeam(m.home), away = getTeam(m.away)
   const missing = pred.h == null || pred.a == null
   return (
-    <Card className={`p-4 ${missing ? 'border-l-2 border-l-error' : ''}`}>
+    <Card hover onClick={onOpen} className={`p-4 cursor-pointer group/card ${missing ? 'border-l-2 border-l-error' : ''}`}>
       <div className="flex items-center justify-between mb-3">
         <Pill tone={m.knockout ? 'gold' : 'default'}>{m.stage === 'Group' ? `Group ${m.group ?? ''}`.trim() : m.stage}</Pill>
         {missing ? <Pill tone="red">● Missing</Pill> : <Pill tone="blue">✓ Submitted</Pill>}
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <button onClick={onOpen} className="flex flex-col items-center gap-1.5 flex-1 group">
+        <div className="flex flex-col items-center gap-1.5 flex-1">
           <span className="text-[34px] leading-none">{home.flag}</span>
-          <span className="text-xs font-bold text-textp group-hover:text-primary transition-colors">{home.code}</span>
-        </button>
-        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-xs font-bold text-textp group-hover/card:text-primary transition-colors">{home.code}</span>
+        </div>
+        {/* Steppers must not trigger card navigation */}
+        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
           <ScoreStepper value={pred.h} onChange={(v) => onChange('h', v)} compact />
           <span className="text-texts font-bold px-0.5">:</span>
           <ScoreStepper value={pred.a} onChange={(v) => onChange('a', v)} compact />
         </div>
-        <button onClick={onOpen} className="flex flex-col items-center gap-1.5 flex-1 group">
+        <div className="flex flex-col items-center gap-1.5 flex-1">
           <span className="text-[34px] leading-none">{away.flag}</span>
-          <span className="text-xs font-bold text-textp group-hover:text-primary transition-colors">{away.code}</span>
-        </button>
+          <span className="text-xs font-bold text-textp group-hover/card:text-primary transition-colors">{away.code}</span>
+        </div>
       </div>
 
       <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-border/60">
@@ -140,7 +141,7 @@ export function NextPredictCard({
             <LockIcon size={11} className="text-gold" />
             <Countdown kickoff={m.kickoff} className="text-[11px]" />
           </span>
-          <button onClick={onOpen} className="text-[11px] font-bold text-primary hover:underline">View →</button>
+          <span className="text-[11px] font-bold text-primary group-hover/card:underline">View →</span>
         </div>
       </div>
     </Card>

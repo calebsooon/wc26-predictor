@@ -7,7 +7,8 @@ import {
   PageHeader, Card, StatCard, Button, Avatar, ProgressBar, Skeleton, Pill, SectionHeader, EmptyState, TrophyIcon,
 } from '@/components/ui'
 import { getTeam } from '@/lib/teams'
-import { TOURNAMENT_POINTS } from '@/lib/scoring'
+import { weightedMatchPoints, weightedGroupPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
+import { getActiveLeague } from '@/lib/league'
 
 interface Profile { id: string; username: string; avatar_url: string | null; is_admin: boolean }
 interface TournamentPred {
@@ -45,6 +46,7 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [tournamentPred, setTournamentPred] = useState<TournamentPred | null>(null)
   const [groupPreds, setGroupPreds] = useState<GroupPred[]>([])
+  const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
@@ -63,17 +65,25 @@ export default function ProfilePage() {
         .eq('user_id', user.id).not('points_awarded', 'is', null)
       setPreds((mine ?? []) as unknown as ScoredPred[])
 
-      const { data: tp } = await supabase.from('tournament_predictions').select('*').eq('user_id', user.id).maybeSingle()
+      const { data: tp } = await supabase.from('tournament_predictions').select('*').eq('user_id', user.id).eq('phase', 'pre').maybeSingle()
       if (tp) setTournamentPred(tp as unknown as TournamentPred)
 
       const { data: gp } = await supabase.from('group_predictions').select('group_name, ranked_codes, points_awarded').eq('user_id', user.id).order('group_name')
       if (gp) setGroupPreds(gp as GroupPred[])
 
-      const { data: all } = await supabase.from('predictions').select('user_id, points_awarded').not('points_awarded', 'is', null)
+      // Rank within the active league, using its weights
+      const { weights: w, memberIds } = await getActiveLeague(supabase, user.id)
+      setWeights(w)
+      const ids = memberIds.length ? memberIds : [user.id]
+      const { data: all } = await supabase
+        .from('predictions')
+        .select('user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer')
+        .not('points_awarded', 'is', null)
+        .in('user_id', ids)
       const agg = new Map<string, number>()
-      for (const r of (all ?? []) as { user_id: string; points_awarded: number }[]) agg.set(r.user_id, (agg.get(r.user_id) ?? 0) + r.points_awarded)
+      for (const r of (all ?? []) as (ScoredPred & { user_id: string })[]) agg.set(r.user_id, (agg.get(r.user_id) ?? 0) + weightedMatchPoints(r, w))
       const sorted = Array.from(agg.entries()).sort((a, b) => b[1] - a[1])
-      setTotalPlayers(sorted.length)
+      setTotalPlayers(ids.length)
       const idx = sorted.findIndex(([uid]) => uid === user.id)
       setRank(idx >= 0 ? idx + 1 : null)
       setLoading(false)
@@ -84,7 +94,7 @@ export default function ProfilePage() {
 
   const stats = useMemo(() => {
     const scored = preds.length
-    const totalPts = preds.reduce((s, p) => s + p.points_awarded, 0)
+    const totalPts = preds.reduce((s, p) => s + weightedMatchPoints(p, weights), 0)
     const exact = preds.filter((p) => (p.pts_exact ?? 0) > 0).length
     const correctOutcome = preds.filter((p) => (p.pts_outcome ?? (p.points_awarded >= 3 ? 1 : 0)) > 0 || p.points_awarded >= 3).length
     const acc = scored ? Math.round((correctOutcome / scored) * 100) : 0
@@ -94,7 +104,7 @@ export default function ProfilePage() {
     })
     const ranked = [...cats].sort((a, b) => b.pct - a.pct)
     return { scored, totalPts, exact, acc, cats, best: ranked[0], worst: ranked[ranked.length - 1] }
-  }, [preds])
+  }, [preds, weights])
 
   const badges = useMemo(() => {
     const c = (key: typeof CATEGORIES[number]['key']) => preds.filter((p) => (p[key] ?? 0) > 0).length
@@ -200,30 +210,23 @@ export default function ProfilePage() {
         </div>
       </Card>
 
-      {/* tournament picks */}
+      {/* tournament picks — for fun, no points */}
       <Card className="p-5">
-        <SectionHeader title="Tournament picks" sub="Your pre-knockout champion and finalist selections." />
+        <SectionHeader title="Bracket game picks" sub="Your for-fun champion and finalist calls — no effect on points." />
         {!tournamentPred || (!tournamentPred.champion && !tournamentPred.runner_up && !tournamentPred.semi?.length && !tournamentPred.quarter?.length) ? (
-          <EmptyState icon={<TrophyIcon size={20} />} title="No tournament picks" desc="Go to Bracket → My Tournament Picks to make your selections." />
+          <EmptyState icon={<TrophyIcon size={20} />} title="No bracket picks" desc="Go to Bracket → Bracket Game to make your selections." />
         ) : (
           <div className="space-y-3 mt-3">
             {[
-              { label: '🏆 Champion', value: tournamentPred.champion, pts: tournamentPred.pts_champion, max: TOURNAMENT_POINTS.champion },
-              { label: '🥈 Runner-Up', value: tournamentPred.runner_up, pts: tournamentPred.pts_runner_up, max: TOURNAMENT_POINTS.runner_up },
+              { label: '🏆 Champion', value: tournamentPred.champion },
+              { label: '🥈 Runner-Up', value: tournamentPred.runner_up },
             ].map((row) => row.value && (
-              <div key={row.label} className="flex items-center justify-between p-2.5 rounded-lg bg-surface border border-border">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-lg">{getTeam(row.value).flag}</span>
-                  <div>
-                    <p className="text-[11px] text-texts font-bold uppercase tracking-wider">{row.label}</p>
-                    <p className="text-sm font-bold text-textp">{getTeam(row.value).name}</p>
-                  </div>
+              <div key={row.label} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-surface border border-border">
+                <span className="text-lg">{getTeam(row.value).flag}</span>
+                <div>
+                  <p className="text-[11px] text-texts font-bold uppercase tracking-wider">{row.label}</p>
+                  <p className="text-sm font-bold text-textp">{getTeam(row.value).name}</p>
                 </div>
-                {row.pts !== null ? (
-                  <Pill tone={row.pts > 0 ? 'green' : 'red'}>+{row.pts}</Pill>
-                ) : (
-                  <span className="text-xs text-texts">+{row.max} possible</span>
-                )}
               </div>
             ))}
             {tournamentPred.semi?.length > 0 && (
@@ -236,7 +239,6 @@ export default function ProfilePage() {
                     </div>
                   ))}
                 </div>
-                {tournamentPred.pts_semi !== null && <Pill tone={tournamentPred.pts_semi > 0 ? 'green' : 'red'} className="mt-2">+{tournamentPred.pts_semi}</Pill>}
               </div>
             )}
             {tournamentPred.quarter?.length > 0 && (
@@ -249,7 +251,6 @@ export default function ProfilePage() {
                     </div>
                   ))}
                 </div>
-                {tournamentPred.pts_quarter !== null && <Pill tone={tournamentPred.pts_quarter > 0 ? 'green' : 'red'} className="mt-2">+{tournamentPred.pts_quarter}</Pill>}
               </div>
             )}
           </div>
@@ -259,7 +260,7 @@ export default function ProfilePage() {
       {/* group predictions */}
       {groupPreds.length > 0 && (
         <Card className="p-5">
-          <SectionHeader title="Group predictions" sub="+2 pts per team in exact finishing position." />
+          <SectionHeader title="Group predictions" sub={`+${weights.groupPosition} pts per team in exact finishing position.`} />
           <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-3">
             {groupPreds.map((gp) => (
               <div key={gp.group_name} className={`p-2.5 rounded-lg border text-center ${gp.points_awarded != null ? (gp.points_awarded > 0 ? 'border-primary/30 bg-primary/[0.05]' : 'border-border bg-surface') : 'border-border bg-surface'}`}>
@@ -270,7 +271,7 @@ export default function ProfilePage() {
                   ))}
                 </div>
                 {gp.points_awarded !== null ? (
-                  <span className={`text-xs font-extrabold tabular-nums ${gp.points_awarded > 0 ? 'text-primary' : 'text-texts'}`}>+{gp.points_awarded}</span>
+                  <span className={`text-xs font-extrabold tabular-nums ${gp.points_awarded > 0 ? 'text-primary' : 'text-texts'}`}>+{weightedGroupPoints(gp.points_awarded, weights)}</span>
                 ) : (
                   <span className="text-[10px] text-texts">pending</span>
                 )}

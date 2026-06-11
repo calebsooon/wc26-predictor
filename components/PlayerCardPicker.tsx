@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { getTeam } from '@/lib/teams'
+import { getTeam, normalisePosition, POSITION_ABBR } from '@/lib/teams'
 import { SearchIcon } from '@/components/ui'
 
 export interface PlayerForPicker {
@@ -9,6 +9,20 @@ export interface PlayerForPicker {
   name: string
   team_code: string
   jersey_number: number | null
+  position?: string | null
+}
+
+/** Short group abbrev (GK/DEF/MID/FWD) for either coarse sections or detailed positions. */
+function posAbbr(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const g = normalisePosition(raw)
+  if (POSITION_ABBR[g]) return POSITION_ABBR[g]
+  const s = raw.toLowerCase()
+  if (s.includes('keeper')) return 'GK'
+  if (s.includes('back') || s.includes('defen')) return 'DEF'
+  if (s.includes('midfield')) return 'MID'
+  if (s.includes('forward') || s.includes('wing') || s.includes('strik') || s.includes('attack') || s.includes('offence')) return 'FWD'
+  return raw.slice(0, 3).toUpperCase()
 }
 
 function Silhouette() {
@@ -39,11 +53,14 @@ function PlayerCard({
         <div className="w-3/5 text-texts/20" style={{ lineHeight: 0 }}>
           <Silhouette />
         </div>
-        {player.jersey_number != null && (
-          <span className="absolute bottom-2 text-[11px] font-extrabold tabular-nums text-texts/50">
-            {player.jersey_number}
-          </span>
-        )}
+        <div className="absolute bottom-1.5 inset-x-0 flex items-center justify-center gap-1">
+          {player.jersey_number != null && (
+            <span className="text-[11px] font-extrabold tabular-nums text-texts/50">{player.jersey_number}</span>
+          )}
+          {posAbbr(player.position) && (
+            <span className="text-[8px] font-extrabold tracking-wide text-texts/40">{posAbbr(player.position)}</span>
+          )}
+        </div>
         {selected && (
           <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-gold grid place-items-center">
             <span className="text-[9px] font-black text-white leading-none">✓</span>
@@ -127,7 +144,10 @@ export function PlayerCardPicker({
         {selected ? (
           <>
             <span className="text-lg leading-none">{getTeam(selected.team_code).flag}</span>
-            <span className="flex-1 text-left text-textp">{selected.name}</span>
+            <span className="flex-1 text-left text-textp truncate">{selected.name}</span>
+            {selected.position && (
+              <span className="text-[10px] text-texts font-bold uppercase tracking-wide shrink-0">{normalisePosition(selected.position)}</span>
+            )}
             {selected.jersey_number != null && (
               <span className="text-[11px] text-texts font-extrabold tabular-nums shrink-0">#{selected.jersey_number}</span>
             )}

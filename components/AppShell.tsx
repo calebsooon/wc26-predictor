@@ -4,16 +4,18 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { getMyLeagues, setActiveLeague, type League } from '@/lib/league'
 import ThemeToggle from '@/components/ThemeToggle'
 import {
-  Logo, Avatar, ChevDown,
-  HomeIcon, CalIcon, TrophyIcon, GridIcon, TreeIcon, UserIcon, ShieldIcon, UsersIcon,
+  Logo, Avatar, ChevDown, Pill,
+  HomeIcon, CalIcon, TrophyIcon, GridIcon, TreeIcon, UserIcon, ShieldIcon, UsersIcon, HelpIcon,
 } from '@/components/ui'
 
 interface Profile {
   username: string
   avatar_url: string | null
   is_admin: boolean
+  active_league_id: string | null
 }
 
 type NavItem = { href: string; label: string; icon: (p: { size?: number; className?: string }) => JSX.Element; admin?: boolean }
@@ -25,6 +27,7 @@ const SIDEBAR: NavItem[] = [
   { href: '/groups',      label: 'Groups',      icon: GridIcon },
   { href: '/bracket',     label: 'Bracket',     icon: TreeIcon },
   { href: '/squads',      label: 'Squads',      icon: UsersIcon },
+  { href: '/rules',       label: 'Rules',       icon: HelpIcon },
   { href: '/profile',     label: 'Profile',     icon: UserIcon },
   { href: '/admin',       label: 'Admin',       icon: ShieldIcon, admin: true },
 ]
@@ -45,21 +48,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [myLeagues, setMyLeagues] = useState<League[]>([])
+  const [leaguesReady, setLeaguesReady] = useState(false)
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setProfile(null); return }
-      const { data } = await supabase
-        .from('profiles')
-        .select('username, avatar_url, is_admin')
-        .eq('id', user.id)
-        .single()
+      if (!user) { setProfile(null); setLeaguesReady(false); return }
+      const [{ data }, leagues] = await Promise.all([
+        supabase.from('profiles').select('username, avatar_url, is_admin, active_league_id').eq('id', user.id).single(),
+        getMyLeagues(supabase, user.id),
+      ])
       if (data) setProfile(data as Profile)
+      setMyLeagues(leagues)
+      setLeaguesReady(true)
     }
     load()
     const { data: listener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') setProfile(null)
+      if (event === 'SIGNED_OUT') { setProfile(null); setMyLeagues([]); setLeaguesReady(false) }
       if (event === 'SIGNED_IN') load()
     })
     return () => listener.subscription.unsubscribe()
@@ -67,6 +73,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, [])
 
   const isBare = BARE.some((b) => pathname === b || pathname.startsWith('/auth'))
+
+  // Gate: a signed-in user with no league memberships must onboard via /join
+  useEffect(() => {
+    if (isBare || !leaguesReady) return
+    if (myLeagues.length === 0 && pathname !== '/join') router.replace('/join')
+  }, [isBare, leaguesReady, myLeagues.length, pathname, router])
+
+  const activeLeague = myLeagues.find((l) => l.id === profile?.active_league_id) ?? myLeagues[0] ?? null
+
+  async function switchLeague(id: string) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await setActiveLeague(supabase, user.id, id)
+    setProfile((p) => (p ? { ...p, active_league_id: id } : p))
+    router.refresh()
+  }
+
   if (isBare) return <>{children}</>
 
   const items = SIDEBAR.filter((it) => !it.admin || profile?.is_admin)
@@ -83,8 +106,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-60 border-r border-border bg-surface/50 z-30">
         <Link href="/dashboard" className="h-16 flex items-center gap-2.5 px-5 border-b border-border">
           <Logo />
-          <span className="font-extrabold tracking-tight">BRACKET XI</span>
+          <span className="font-extrabold tracking-tight">MATCHDAY</span>
         </Link>
+        {activeLeague && (
+          <div className="px-3 pt-3">
+            <LeagueSwitcher leagues={myLeagues} active={activeLeague} onSwitch={switchLeague} />
+          </div>
+        )}
         <nav className="flex-1 p-3 space-y-1">
           {items.map((it) => {
             const Ic = it.icon
@@ -120,12 +148,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="h-full max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between">
             <Link href="/dashboard" className="flex items-center gap-2 lg:hidden">
               <Logo size={26} />
-              <span className="font-extrabold tracking-tight text-sm">BRACKET XI</span>
+              <span className="font-extrabold tracking-tight text-sm">MATCHDAY</span>
             </Link>
             <div className="hidden lg:flex items-center gap-3.5">
               <span className="text-xs font-bold uppercase tracking-wider text-texts whitespace-nowrap">World Cup 2026</span>
             </div>
             <div className="flex items-center gap-2 sm:gap-2.5">
+              {activeLeague && (
+                <div className="lg:hidden">
+                  <LeagueSwitcher leagues={myLeagues} active={activeLeague} onSwitch={switchLeague} compact />
+                </div>
+              )}
               <ThemeToggle />
               <Link href="/profile" className="lg:hidden">
                 <Avatar name={profile?.username ?? '?'} src={profile?.avatar_url} size={34} />
@@ -155,6 +188,52 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </div>
       </nav>
+    </div>
+  )
+}
+
+function LeagueSwitcher({
+  leagues, active, onSwitch, compact = false,
+}: { leagues: League[]; active: League; onSwitch: (id: string) => void; compact?: boolean }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-2 rounded-xl border border-border bg-card hover:border-texts/40 transition-colors ${compact ? 'h-9 px-2.5 max-w-[150px]' : 'w-full h-11 px-3'}`}
+      >
+        <TrophyIcon size={15} className={active.type === 'money' ? 'text-gold' : 'text-primary'} />
+        <span className="flex-1 text-left font-bold text-[13px] truncate">{active.name}</span>
+        {!compact && <Pill tone={active.type === 'money' ? 'gold' : 'green'} className="!px-1.5 !py-0.5 !text-[9px]">{active.type === 'money' ? '$' : 'PTS'}</Pill>}
+        <ChevDown size={13} className="text-texts shrink-0" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className={`absolute z-40 mt-2 ${compact ? 'right-0 w-56' : 'left-0 w-full'} bg-card border border-border rounded-xl shadow-2xl overflow-hidden`}>
+            <div className="max-h-72 overflow-y-auto p-1.5">
+              {leagues.map((l) => (
+                <button
+                  key={l.id}
+                  onClick={() => { onSwitch(l.id); setOpen(false) }}
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-colors ${l.id === active.id ? 'bg-primary/10' : 'hover:bg-surface'}`}
+                >
+                  <TrophyIcon size={14} className={l.type === 'money' ? 'text-gold' : 'text-primary'} />
+                  <span className="flex-1 text-[13px] font-semibold text-textp truncate">{l.name}</span>
+                  <Pill tone={l.type === 'money' ? 'gold' : 'green'} className="!px-1.5 !py-0.5 !text-[9px]">{l.type === 'money' ? '$' : 'PTS'}</Pill>
+                </button>
+              ))}
+            </div>
+            <Link
+              href="/join"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-3 h-10 border-t border-border text-[13px] font-bold text-primary hover:bg-surface"
+            >
+              + Enter a league code
+            </Link>
+          </div>
+        </>
+      )}
     </div>
   )
 }

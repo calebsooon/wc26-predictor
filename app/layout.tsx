@@ -18,8 +18,8 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Bracket XI — World Cup 2026 Prediction League",
-  description: "Predict every match. Prove every take.",
+  title: "MatchDay — World Cup 2026 Prediction League",
+  description: "Your road to glory starts here.",
 };
 
 // Set the theme class before paint to avoid a flash of the wrong theme.

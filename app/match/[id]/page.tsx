@@ -10,10 +10,11 @@ import {
 } from '@/components/ui'
 import { ScoreDisplay } from '@/components/football'
 import { type DBMatch } from '@/lib/match-ui'
-import { POINTS } from '@/lib/scoring'
+import { POINTS, weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights, type MatchBreakdown } from '@/lib/scoring'
+import { getActiveLeague } from '@/lib/league'
 import { PlayerCardPicker, type PlayerForPicker } from '@/components/PlayerCardPicker'
 
-interface OtherPred {
+interface OtherPred extends MatchBreakdown {
   user_id: string
   pred_home: number
   pred_away: number
@@ -40,6 +41,7 @@ export default function MatchDetailPage() {
   const [gdManual, setGdManual] = useState(false)
   const [players, setPlayers] = useState<PlayerForPicker[]>([])
   const [others, setOthers] = useState<OtherPred[]>([])
+  const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
@@ -62,7 +64,7 @@ export default function MatchDetailPage() {
       const home = getTeam(dbm.home_team), away = getTeam(dbm.away_team)
       const { data: pl } = await supabase
         .from('players')
-        .select('id, name, team_name, jersey_number')
+        .select('id, name, team_name, jersey_number, position')
         .in('team_name', [home.playerKey, away.playerKey])
         .order('jersey_number', { ascending: true, nullsFirst: false })
       setPlayers((pl ?? []).map((p) => {
@@ -72,6 +74,7 @@ export default function MatchDetailPage() {
           name: (p as { name: string }).name,
           team_code: code,
           jersey_number: (p as { jersey_number: number | null }).jersey_number,
+          position: (p as { position: string | null }).position ?? null,
         }
       }))
 
@@ -88,12 +91,17 @@ export default function MatchDetailPage() {
         if (p.pred_goal_diff != null) { setPredGoalDiff(p.pred_goal_diff as number); setGdManual(true) }
       }
 
+      const { weights: w, memberIds } = await getActiveLeague(supabase, user.id)
+      setWeights(w)
+
       const kickedOff = dbm.is_locked || new Date(dbm.match_date) <= new Date()
       if (kickedOff) {
-        const { data: o } = await supabase
+        let q = supabase
           .from('predictions')
-          .select('user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, points_awarded, profiles(username, avatar_url)')
+          .select('user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer, profiles(username, avatar_url)')
           .eq('match_id', id)
+        if (memberIds.length) q = q.in('user_id', memberIds)
+        const { data: o } = await q
         setOthers((o ?? []) as unknown as OtherPred[])
       }
       setLoading(false)
@@ -286,6 +294,7 @@ export default function MatchDetailPage() {
             {others.map((pk) => {
               const correct = scored && pk.pred_home === match.real_home_score && pk.pred_away === match.real_away_score
               const you = pk.user_id === userId
+              const pkPts = pk.points_awarded != null ? weightedMatchPoints(pk, weights) : null
               const scorerName = pk.pred_first_scorer_id ? players.find((p) => p.id === pk.pred_first_scorer_id)?.name : null
               const fgtLabel = pk.pred_first_goal_team === match.home_team ? home.code : pk.pred_first_goal_team === match.away_team ? away.code : pk.pred_first_goal_team === 'NONE' ? '–' : null
               return (
@@ -294,7 +303,7 @@ export default function MatchDetailPage() {
                     <Avatar name={pk.profiles?.username ?? '?'} src={pk.profiles?.avatar_url} size={30} you={you} />
                     <span className="font-bold text-sm flex-1 truncate">{pk.profiles?.username ?? '?'}{you && ' (you)'}</span>
                     <span className={`font-extrabold tabular-nums ${correct ? 'text-primary' : 'text-textp'}`}>{pk.pred_home}–{pk.pred_away}</span>
-                    {pk.points_awarded != null && <Pill tone={pk.points_awarded >= 6 ? 'green' : pk.points_awarded > 0 ? 'gold' : 'red'} className="!px-2 tabular-nums">+{pk.points_awarded}</Pill>}
+                    {pkPts != null && <Pill tone={pkPts >= 6 ? 'green' : pkPts > 0 ? 'gold' : 'red'} className="!px-2 tabular-nums">+{pkPts}</Pill>}
                   </div>
                   {(fgtLabel || scorerName) && (
                     <div className="flex items-center gap-3 mt-1.5 pl-9 text-[11px] text-texts font-medium">
