@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
-import { PageHeader, ChipRow, EmptyState, Skeleton, CalIcon } from '@/components/ui'
+import { PageHeader, ChipRow, EmptyState, Skeleton, CalIcon, StaggerList, StaggerItem } from '@/components/ui'
 import { MatchCard } from '@/components/football'
 import { toUIMatch, type DBMatch, type MyPred } from '@/lib/match-ui'
 import { getActiveLeague } from '@/lib/league'
@@ -116,11 +116,13 @@ export default function FixturesPage() {
               <div className="flex-1 h-px bg-border" />
               <span className="text-xs text-texts font-bold tabular-nums">{byDate[d].length} matches</span>
             </div>
-            <div className="grid sm:grid-cols-2 gap-3">
+            <StaggerList className="grid sm:grid-cols-2 gap-3">
               {byDate[d].map((m) => (
-                <MatchCard key={m.id} m={toUIMatch(m, preds[m.id], weights)} onClick={() => router.push(`/match/${m.id}`)} />
+                <StaggerItem key={m.id}>
+                  <MatchCard m={toUIMatch(m, preds[m.id], weights)} onClick={() => router.push(`/match/${m.id}`)} />
+                </StaggerItem>
               ))}
-            </div>
+            </StaggerList>
           </div>
         ))
       )}

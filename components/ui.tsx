@@ -7,6 +7,7 @@
    ============================================================ */
 
 import { useEffect, useRef, useState, type ReactNode, type ButtonHTMLAttributes } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { getTeam } from '@/lib/teams'
 
 /* ---------- Flag + Team name ---------- */
@@ -223,11 +224,30 @@ export function Pill({
 
 export type PredStatus = 'missing' | 'submitted' | 'locked' | 'scored'
 export function StatusBadge({ status, pts }: { status: PredStatus; pts?: number | null }) {
-  if (status === 'missing') return <Pill tone="red" icon={<span>●</span>}>Missing</Pill>
-  if (status === 'submitted') return <Pill tone="blue">✓ Submitted</Pill>
-  if (status === 'locked') return <Pill tone="default" icon={<LockIcon size={11} />}>Locked</Pill>
-  if (status === 'scored') return <Pill tone="green">+{pts ?? 0} pts</Pill>
-  return null
+  const pill =
+    status === 'missing'   ? <Pill tone="red" icon={<span>●</span>}>Missing</Pill> :
+    status === 'submitted' ? <Pill tone="blue">✓ Submitted</Pill> :
+    status === 'locked'    ? <Pill tone="default" icon={<LockIcon size={11} />}>Locked</Pill> :
+    status === 'scored'    ? <Pill tone="green">+{pts ?? 0} pts</Pill> : null
+
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={status + (pts ?? '')}
+        initial={{ scale: 0.6, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.8, opacity: 0 }}
+        transition={
+          status === 'scored'
+            ? { type: 'spring', stiffness: 500, damping: 18 }
+            : { duration: 0.15 }
+        }
+        className="inline-flex"
+      >
+        {pill}
+      </motion.div>
+    </AnimatePresence>
+  )
 }
 
 /* ---------- Tabs (underline) ---------- */
@@ -433,6 +453,35 @@ export function PageHeader({ eyebrow, title, sub, action }: { eyebrow?: ReactNod
 }
 
 /* ---------- Empty state ---------- */
+/* ---------- StaggerList — animates children in with a cascade ---------- */
+const staggerContainer = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.04 } },
+}
+const staggerItem: import('framer-motion').Variants = {
+  hidden: { opacity: 0, y: 14 },
+  show:   { opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.25, 0, 0, 1] } },
+}
+export function StaggerList({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <motion.div
+      variants={staggerContainer}
+      initial="hidden"
+      animate="show"
+      className={className}
+    >
+      {children}
+    </motion.div>
+  )
+}
+export function StaggerItem({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <motion.div variants={staggerItem} className={className}>
+      {children}
+    </motion.div>
+  )
+}
+
 export function EmptyState({ icon, title, desc, action }: { icon?: ReactNode; title: string; desc?: string; action?: ReactNode }) {
   return (
     <Card className="p-10 text-center">
