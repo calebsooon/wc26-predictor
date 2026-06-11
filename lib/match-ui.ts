@@ -1,5 +1,6 @@
 import type { UIMatch } from '@/components/football'
 import type { PredStatus } from '@/components/ui'
+import { weightedMatchPoints, type ScoringWeights } from '@/lib/scoring'
 
 export interface DBMatch {
   id: string
@@ -41,8 +42,13 @@ export function matchStatus(m: DBMatch, pred?: MyPred | null): PredStatus {
   return pred ? 'submitted' : 'missing'
 }
 
-export function toUIMatch(m: DBMatch, pred?: MyPred | null): UIMatch {
+export function toUIMatch(m: DBMatch, pred?: MyPred | null, weights?: ScoringWeights): UIMatch {
   const knockout = isKnockout(m)
+  const scored = m.real_home_score !== null && m.real_away_score !== null
+  // League-weighted points when weights are supplied; otherwise the stored total.
+  const pts = pred && scored
+    ? (weights ? weightedMatchPoints(pred, weights) : (pred.points_awarded ?? null))
+    : (pred?.points_awarded ?? null)
   return {
     id: m.id,
     home: m.home_team,
@@ -52,9 +58,8 @@ export function toUIMatch(m: DBMatch, pred?: MyPred | null): UIMatch {
     group: m.group_name,
     knockout,
     status: matchStatus(m, pred),
-    result: m.real_home_score !== null && m.real_away_score !== null
-      ? { h: m.real_home_score, a: m.real_away_score } : null,
+    result: scored ? { h: m.real_home_score as number, a: m.real_away_score as number } : null,
     pred: pred ? { h: pred.pred_home, a: pred.pred_away } : null,
-    pts: pred?.points_awarded ?? null,
+    pts,
   }
 }

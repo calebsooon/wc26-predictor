@@ -7,15 +7,20 @@ import { createClient } from '@/lib/supabase-browser'
 import { Card, StatCard, SectionHeader, Button, Skeleton, BoltIcon, EmptyState, CalIcon, Pill, CountUp, ScoreStepper, Countdown, ProgressBar } from '@/components/ui'
 import { NextPredictCard, LeaderboardTable, type LBRow } from '@/components/football'
 import RulesModal from '@/components/RulesModal'
-import { aggregateLeaderboard } from '@/lib/leaderboard'
+import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
+import { getActiveLeague } from '@/lib/league'
 import { toUIMatch, isKnockout, type DBMatch, type MyPred } from '@/lib/match-ui'
 import { getTeam } from '@/lib/teams'
-import { SCORING_RULES } from '@/lib/scoring'
+import { SCORING_RULES, weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { computePrizeSnapshot, formatPrize, prizeTone, GW_NAMES, GW_PRIZES, OVERALL_PRIZES } from '@/lib/prizes'
+
+const SCORED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer, profiles(username, avatar_url), matches(gw_number)'
 
 interface RoundRow { id: string; name: string; order: number; matches: DBMatch[] }
 interface ScoredPredRow {
-  user_id: string; points_awarded: number; pts_outcome: number | null
+  user_id: string; points_awarded: number
+  pts_outcome: number | null; pts_exact: number | null; pts_goal_diff: number | null
+  pts_total_goals: number | null; pts_btts: number | null; pts_first_team: number | null; pts_first_scorer: number | null
   profiles: { username: string; avatar_url: string | null } | null
   matches: { gw_number: number | null } | null
 }
@@ -32,6 +37,9 @@ export default function DashboardPage() {
   const [scoredPreds, setScoredPreds] = useState<ScoredPredRow[]>([])
   const [gwMatchRows, setGwMatchRows] = useState<MatchGWRow[]>([])
   const [prevRank, setPrevRank] = useState<number | null>(null)
+  const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
+  const [isMoney, setIsMoney] = useState(false)
+  const [leagueName, setLeagueName] = useState('')
   const [rulesOpen, setRulesOpen] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -61,21 +69,26 @@ export default function DashboardPage() {
       for (const p of myData ?? []) map[(p as { match_id: string }).match_id] = p as unknown as MyPred
       setPreds(map)
 
-      // All profiles + scored predictions in parallel for leaderboard + prize calc
-      const [{ data: scored }, { data: profiles }] = await Promise.all([
-        supabase.from('predictions')
-          .select('user_id, points_awarded, pts_outcome, profiles(username, avatar_url), matches(gw_number)')
-          .not('points_awarded', 'is', null),
-        supabase.from('profiles').select('id, username, avatar_url'),
-      ])
+      // Active league — scopes the leaderboard, prize and points to its members + weights
+      const { league, weights: w, memberIds, memberProfiles } = await getActiveLeague(supabase, user.id)
+      setWeights(w)
+      setIsMoney(league?.type === 'money')
+      setLeagueName(league?.name ?? '')
+
+      const ids = memberIds.length ? memberIds : [user.id]
+      const { data: scored } = await supabase.from('predictions')
+        .select(SCORED_COLS)
+        .not('points_awarded', 'is', null)
+        .in('user_id', ids)
       const allScored = (scored ?? []) as unknown as ScoredPredRow[]
       setScoredPreds(allScored)
 
       // Leaderboard aggregation — shared helper keeps order identical to /leaderboard
       setLb(aggregateLeaderboard({
         scoredPreds: allScored,
-        profiles: (profiles ?? []) as { id: string; username: string | null; avatar_url: string | null }[],
+        profiles: memberProfiles as ProfileLite[],
         userId: user.id,
+        weights: w,
       }))
 
       // GW match status for prize range
@@ -88,14 +101,15 @@ export default function DashboardPage() {
       const { data: tp } = await supabase.from('tournament_predictions').select('user_id').eq('user_id', user.id).maybeSingle()
       setHasTournamentPick(!!tp)
 
-      // Latest rank snapshot for this user → drives the My Rank trend arrow
-      const { data: snap } = await supabase
+      // Latest rank snapshot for this user in this league → My Rank trend arrow
+      const { data: snap } = league ? await supabase
         .from('rank_snapshots')
         .select('rank, snapshot_at')
         .eq('user_id', user.id)
+        .eq('league_id', league.id)
         .order('snapshot_at', { ascending: false })
         .limit(1)
-        .maybeSingle()
+        .maybeSingle() : { data: null }
       setPrevRank((snap as { rank: number } | null)?.rank ?? null)
 
       setLoading(false)
@@ -125,7 +139,7 @@ export default function DashboardPage() {
     .sort((a, b) => +new Date(b.match_date) - +new Date(a.match_date)), [matches, preds])
 
   const prize = useMemo(() => {
-    if (!userId || scoredPreds.length === 0) return null
+    if (!userId || !isMoney || scoredPreds.length === 0) return null
     const gwMatchStatus = new Map<number, { total: number; scored: number }>()
     for (const m of gwMatchRows) {
       if (!m.gw_number) continue
@@ -136,12 +150,12 @@ export default function DashboardPage() {
     }
     const predsForCalc = scoredPreds.map((r) => ({
       user_id: r.user_id,
-      points_awarded: r.points_awarded,
+      points_awarded: weightedMatchPoints(r, weights),
       pts_outcome: r.pts_outcome,
       gw_number: r.matches?.gw_number ?? null,
     }))
     return computePrizeSnapshot({ userId, allScoredPreds: predsForCalc, gwMatchStatus, overallRank: myRank })
-  }, [userId, scoredPreds, gwMatchRows, myRank])
+  }, [userId, isMoney, scoredPreds, gwMatchRows, myRank, weights])
 
   async function savePred(matchId: string, side: 'h' | 'a', val: number) {
     if (!userId) return
@@ -173,7 +187,10 @@ export default function DashboardPage() {
     <div className="space-y-7">
       <div className="flex items-end justify-between flex-wrap gap-3 pb-4 border-b border-border">
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-primary mb-1.5">World Cup 2026</div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-primary">World Cup 2026</span>
+            {leagueName && <Pill tone={isMoney ? 'gold' : 'green'} className="!py-0.5">{leagueName}{isMoney ? ' · 💰' : ''}</Pill>}
+          </div>
           <h1 className="text-2xl sm:text-[28px] font-black tracking-tight leading-none">Dashboard</h1>
           <p className="text-texts font-medium mt-2 text-sm">
             {myRank ? <>You&apos;re <span className="text-gold font-bold">{ordinal(myRank)}</span></> : 'Make your first picks'}
@@ -246,7 +263,7 @@ export default function DashboardPage() {
           )}
 
           {myScored.length > 0 && (
-            <RecentResults items={myScored.slice(0, 5).map((m) => ({ m, pred: preds[m.id] }))} onOpen={(id) => router.push(`/match/${id}`)} />
+            <RecentResults items={myScored.slice(0, 5).map((m) => ({ m, pred: preds[m.id] }))} weights={weights} onOpen={(id) => router.push(`/match/${id}`)} />
           )}
         </div>
 
@@ -263,7 +280,7 @@ export default function DashboardPage() {
             )}
           </Card>
 
-          {myScored.length > 0 && <FormAccuracy items={myScored.map((m) => preds[m.id])} />}
+          {myScored.length > 0 && <FormAccuracy items={myScored.map((m) => preds[m.id])} weights={weights} />}
 
           <Card className="overflow-hidden">
             <div className="flex items-center justify-between px-4 h-12 border-b border-border">
@@ -436,7 +453,7 @@ function HeroMatch({
 }
 
 /* Recent results — how the user's latest scored picks landed */
-function RecentResults({ items, onOpen }: { items: { m: DBMatch; pred?: MyPred }[]; onOpen: (id: string) => void }) {
+function RecentResults({ items, weights, onOpen }: { items: { m: DBMatch; pred?: MyPred }[]; weights: ScoringWeights; onOpen: (id: string) => void }) {
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center px-4 h-12 border-b border-border">
@@ -445,7 +462,7 @@ function RecentResults({ items, onOpen }: { items: { m: DBMatch; pred?: MyPred }
       <div className="divide-y divide-border/60">
         {items.map(({ m, pred }) => {
           const home = getTeam(m.home_team), away = getTeam(m.away_team)
-          const pts = pred?.points_awarded ?? 0
+          const pts = pred ? weightedMatchPoints(pred, weights) : 0
           return (
             <button key={m.id} onClick={() => onOpen(m.id)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface/60 transition-colors text-left">
               <div className="flex-1 min-w-0 flex items-center gap-1.5 text-[13px] font-bold text-textp">
@@ -466,7 +483,7 @@ function RecentResults({ items, onOpen }: { items: { m: DBMatch; pred?: MyPred }
 }
 
 /* Form (last 5) + per-category accuracy */
-function FormAccuracy({ items }: { items: (MyPred | undefined)[] }) {
+function FormAccuracy({ items, weights }: { items: (MyPred | undefined)[]; weights: ScoringWeights }) {
   const scored = items.filter((p): p is MyPred => !!p)
   const form = scored.slice(0, 5)
   const total = scored.length
@@ -488,7 +505,7 @@ function FormAccuracy({ items }: { items: (MyPred | undefined)[] }) {
           <p className="text-[11px] font-bold uppercase tracking-wider text-texts mb-2">Last {form.length}</p>
           <div className="flex items-center gap-1.5">
             {form.map((p, i) => {
-              const pts = p.points_awarded ?? 0
+              const pts = weightedMatchPoints(p, weights)
               return (
                 <span key={i} title={`+${pts}`} className="w-6 h-6 grid place-items-center rounded-md text-[10px] font-extrabold tabular-nums text-white" style={{ background: ptsColor(pts) }}>{pts}</span>
               )

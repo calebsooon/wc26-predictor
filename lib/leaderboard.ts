@@ -5,13 +5,12 @@
    ============================================================ */
 
 import type { LBRow } from '@/components/football'
+import { weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights, type MatchBreakdown } from '@/lib/scoring'
 
 /** A scored prediction row as fetched from Supabase (joined to profile + match). */
-export interface ScoredPred {
+export interface ScoredPred extends MatchBreakdown {
   user_id: string
   points_awarded: number
-  pts_outcome?: number | null
-  pts_exact?: number | null
   profiles?: { username: string | null; avatar_url: string | null } | null
   matches?: { gw_number: number | null } | null
 }
@@ -54,11 +53,13 @@ export function aggregateLeaderboard({
   profiles,
   userId,
   gwNumber = null,
+  weights = DEFAULT_WEIGHTS,
 }: {
   scoredPreds: ScoredPred[]
   profiles: ProfileLite[]
   userId: string | null
   gwNumber?: number | null
+  weights?: ScoringWeights
 }): AggRow[] {
   const filtered = gwNumber == null
     ? scoredPreds
@@ -75,10 +76,9 @@ export function aggregateLeaderboard({
 
   for (const r of filtered) {
     const cur = agg.get(r.user_id) ?? seed(r.user_id, r.profiles?.username ?? null, r.profiles?.avatar_url)
-    cur.pts += r.points_awarded
+    cur.pts += weightedMatchPoints(r, weights)   // league-weighted total
     cur.scored += 1
-    if (r.points_awarded >= 3) cur.correct += 1
-    if ((r.pts_outcome ?? 0) > 0) cur.outcomeWins += 1
+    if ((r.pts_outcome ?? 0) > 0) { cur.correct += 1; cur.outcomeWins += 1 }
     if ((r.pts_exact ?? 0) > 0) cur.exact = (cur.exact ?? 0) + 1
     agg.set(r.user_id, cur)
   }

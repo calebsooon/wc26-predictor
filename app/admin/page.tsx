@@ -7,6 +7,7 @@ import { getTeam } from '@/lib/teams'
 import {
   PageHeader, Card, Button, Pill, ScoreStepper, ChipRow, Skeleton, ChevDown, SearchIcon, SectionHeader,
 } from '@/components/ui'
+import { WEIGHT_FIELDS, resolveWeights, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 
 interface Match {
   id: string
@@ -206,6 +207,127 @@ function AdminActions() {
   )
 }
 
+interface LeagueAdminRow { id: string; name: string; type: 'money' | 'points'; join_code: string; scoring: unknown; members: number }
+
+function ScoringEditor({ league, onClose }: { league: LeagueAdminRow; onClose: () => void }) {
+  const supabase = createClient()
+  const [w, setW] = useState<ScoringWeights>(() => resolveWeights(league.scoring))
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const groups = ['Match', 'Group', 'Tournament'] as const
+
+  async function save() {
+    setSaving(true); setMsg(null)
+    const { error } = await supabase.from('leagues').update({ scoring: w }).eq('id', league.id)
+    setSaving(false)
+    setMsg(error ? error.message : 'Saved — leaderboards recompute on next load.')
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border space-y-3">
+      {groups.map((g) => (
+        <div key={g}>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-texts mb-1.5">{g}</p>
+          <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1.5">
+            {WEIGHT_FIELDS.filter((f) => f.group === g).map((f) => (
+              <div key={f.key} className="flex items-center justify-between gap-2">
+                <span className="text-[13px] text-textp truncate">{f.label}</span>
+                <ScoreStepper value={w[f.key]} onChange={(v) => setW((p) => ({ ...p, [f.key]: v }))} compact min={0} max={50} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="flex items-center gap-2 pt-1">
+        <Button size="sm" variant="primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save weights'}</Button>
+        <Button size="sm" variant="ghost" onClick={() => setW({ ...DEFAULT_WEIGHTS })}>Reset to default</Button>
+        <Button size="sm" variant="ghost" onClick={onClose}>Close</Button>
+        {msg && <span className="text-[11px] text-primary font-medium">{msg}</span>}
+      </div>
+    </div>
+  )
+}
+
+function randomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let s = ''
+  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)]
+  return s
+}
+
+function LeagueAdmin() {
+  const supabase = createClient()
+  const [leagues, setLeagues] = useState<LeagueAdminRow[]>([])
+  const [name, setName] = useState('')
+  const [type, setType] = useState<'money' | 'points'>('points')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
+
+  async function load() {
+    const [{ data: ls }, { data: ms }] = await Promise.all([
+      supabase.from('leagues').select('id, name, type, join_code, scoring').order('created_at'),
+      supabase.from('league_members').select('league_id'),
+    ])
+    const counts = new Map<string, number>()
+    for (const m of (ms ?? []) as { league_id: string }[]) counts.set(m.league_id, (counts.get(m.league_id) ?? 0) + 1)
+    setLeagues(((ls ?? []) as Omit<LeagueAdminRow, 'members'>[]).map((l) => ({ ...l, members: counts.get(l.id) ?? 0 })))
+  }
+
+  useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function create() {
+    if (!name.trim()) { setMsg('Name required'); return }
+    setBusy(true); setMsg(null)
+    const { data: { user } } = await supabase.auth.getUser()
+    // Retry on the (rare) unique-code collision
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = randomCode()
+      const { error } = await supabase.from('leagues').insert({ name: name.trim(), type, join_code: code, created_by: user?.id ?? null })
+      if (!error) { setName(''); setMsg(`Created “${name.trim()}” · code ${code}`); await load(); break }
+      if (!error.message.toLowerCase().includes('duplicate')) { setMsg(error.message); break }
+    }
+    setBusy(false)
+  }
+
+  return (
+    <Card className="p-4">
+      <SectionHeader title="Leagues" sub="Create leagues and share their join codes. Only the money league shows the prize pool." />
+      <div className="flex flex-wrap items-end gap-2 mt-3">
+        <div className="flex-1 min-w-[160px]">
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-texts mb-1">League name</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Office League"
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-textp placeholder:text-texts focus:outline-none focus:border-primary" />
+        </div>
+        <ChipRow chips={[{ key: 'points', label: 'Points' }, { key: 'money', label: 'Money' }]} value={type} onChange={(v) => setType(v as 'money' | 'points')} />
+        <Button size="sm" variant="primary" onClick={create} disabled={busy || !name.trim()}>{busy ? '…' : 'Create'}</Button>
+      </div>
+      {msg && <p className="text-[12px] text-primary mt-2 font-medium">{msg}</p>}
+
+      <div className="mt-4 divide-y divide-border/60">
+        {leagues.map((l) => (
+          <div key={l.id} className="py-2.5">
+            <div className="flex items-center gap-3">
+              <Pill tone={l.type === 'money' ? 'gold' : 'green'}>{l.type === 'money' ? 'Money' : 'Points'}</Pill>
+              <span className="flex-1 font-bold text-sm text-textp truncate">{l.name}</span>
+              <span className="text-[11px] text-texts font-medium">{l.members} member{l.members !== 1 ? 's' : ''}</span>
+              <span className="font-mono text-[13px] font-extrabold tracking-widest text-textp bg-surface border border-border rounded px-2 py-0.5">{l.join_code}</span>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(editing === l.id ? null : l.id)}>
+                {editing === l.id ? 'Hide' : 'Scoring'}
+              </Button>
+            </div>
+            {editing === l.id && <ScoringEditor league={l} onClose={() => setEditing(null)} />}
+          </div>
+        ))}
+        {leagues.length === 0 && <p className="text-sm text-texts py-3">No leagues yet — create one above.</p>}
+      </div>
+    </Card>
+  )
+}
+
 export default function AdminPage() {
   const supabase = createClient()
   const router = useRouter()
@@ -240,6 +362,7 @@ export default function AdminPage() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Admin" title="Enter results" sub="Saving a result locks the match and recalculates points." />
+      <LeagueAdmin />
       <AdminActions />
       <ChipRow chips={[{ key: 'pending', label: 'Pending' }, { key: 'done', label: 'Scored' }, { key: 'all', label: 'All' }]} value={filter} onChange={setFilter} />
       <div className="space-y-2.5">
