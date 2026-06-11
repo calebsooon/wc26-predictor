@@ -10,6 +10,7 @@ import {
   Card, Pill, StatusBadge, Avatar, Countdown, LockIcon, ScoreStepper,
   type PredStatus,
 } from '@/components/ui'
+import { fmtTime } from '@/lib/date-format'
 
 export interface UIMatch {
   id: string
@@ -34,9 +35,6 @@ export function ScoreDisplay({ a, b, color = 'rgb(var(--textp))', size = 'text-2
   )
 }
 
-function fmtTime(iso: string) {
-  return new Intl.DateTimeFormat('en-SG', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore', hour12: false }).format(new Date(iso))
-}
 
 export function MatchCard({ m, onClick, compact = false }: { m: UIMatch; onClick?: () => void; compact?: boolean }) {
   const home = getTeam(m.home), away = getTeam(m.away)
