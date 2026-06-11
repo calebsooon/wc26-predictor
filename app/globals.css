@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Keyboard focus ring (mouse clicks don't trigger :focus-visible) */
+@layer base {
+  :focus-visible {
+    outline: 2px solid rgb(var(--primary));
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+}
+
 /*
  * MatchDay tokens as space-separated RGB channels.
  * :root = light mode · .dark = dark mode ("Dark Stadium Analytics").

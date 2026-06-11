@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { PageHeader, Tabs, Card, Skeleton, EmptyState, TrophyIcon, Avatar, LeagueBadge } from '@/components/ui'
 import { LeaderboardTable, type LBRow } from '@/components/football'
@@ -35,7 +35,7 @@ export default function LeaderboardPage() {
   const supabase = createClient()
   const [rows, setRows] = useState<PredRow[]>([])
   const [members, setMembers] = useState<ProfileLite[]>([])
-  const [memberIds, setMemberIds] = useState<string[]>([])
+  const memberIdsRef = useRef<string[]>([])
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [leagueName, setLeagueName] = useState<string>('')
   const [leagueLabel, setLeagueLabel] = useState<LeagueLabel | null>(null)
@@ -51,7 +51,7 @@ export default function LeaderboardPage() {
     const { league, weights: w, memberIds: ids, memberProfiles } = await getActiveLeague(supabase, uid)
     setWeights(w)
     setMembers(memberProfiles)
-    setMemberIds(ids)
+    memberIdsRef.current = ids
     setLeagueName(league?.name ?? '')
     setLeagueLabel(league?.league_labels ?? null)
     setIsMoney(isMoneyLeague(league))
@@ -77,7 +77,7 @@ export default function LeaderboardPage() {
       setLoading(false)
     }
     load()
-    const channel = supabase.channel('lb').on('postgres_changes', { event: '*', schema: 'public', table: 'predictions' }, () => { if (memberIds.length) fetchRows(memberIds) }).subscribe()
+    const channel = supabase.channel('lb').on('postgres_changes', { event: '*', schema: 'public', table: 'predictions' }, () => { if (memberIdsRef.current.length) fetchRows(memberIdsRef.current) }).subscribe()
     return () => { supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

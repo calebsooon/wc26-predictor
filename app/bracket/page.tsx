@@ -181,6 +181,7 @@ function PhasePicks({
         }
         setLoading(false)
       })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, phase])
 
   async function save() {
@@ -327,6 +328,7 @@ function BracketPageInner() {
       setLoading(false)
     }
     load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const byId: Record<string, Match[]> = {}

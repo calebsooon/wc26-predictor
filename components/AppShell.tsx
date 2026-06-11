@@ -4,7 +4,7 @@ import { Toaster } from 'sonner'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import { createClient } from '@/lib/supabase-browser'
 import { getMyLeagues, setActiveLeague, isMoneyLeague, type League } from '@/lib/league'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -92,7 +92,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     router.refresh()
   }
 
-  if (isBare) return <>{children}<Toaster position="bottom-center" richColors /></>
+  if (isBare) return <MotionConfig reducedMotion="user">{children}<Toaster position="bottom-center" richColors /></MotionConfig>
 
   const items = SIDEBAR.filter((it) => !it.admin || profile?.is_admin)
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
@@ -103,6 +103,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="min-h-screen bg-bg text-textp">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-60 border-r border-border bg-surface/50 z-30">
@@ -203,6 +204,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </nav>
       <Toaster position="bottom-center" richColors />
     </div>
+    </MotionConfig>
   )
 }
 

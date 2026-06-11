@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
 import {
@@ -143,7 +144,7 @@ export default function MatchDetailPage() {
   async function submit() {
     if (!userId || h == null || a == null) return
     setSaving(true)
-    await supabase.from('predictions').upsert({
+    const { error } = await supabase.from('predictions').upsert({
       user_id: userId, match_id: id,
       pred_home: h, pred_away: a,
       pred_first_goal_team: firstTeam,
@@ -154,6 +155,8 @@ export default function MatchDetailPage() {
       pred_btts: bttsManual ? predBtts : null,
     }, { onConflict: 'user_id,match_id' })
     setSaving(false)
+    if (error) { toast.error(`Couldn't save: ${error.message}`); return }
+    toast.success(`Prediction locked in — ${home.code} ${h}–${a} ${away.code}`)
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
   }
