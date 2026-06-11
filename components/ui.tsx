@@ -360,34 +360,31 @@ export function ScoreStepper({
       >
         −
       </motion.button>
-      <AnimatePresence mode="popLayout" initial={false}>
-        <motion.div
-          key={draft}
-          initial={{ scale: 0.7, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.7, opacity: 0 }}
-          transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-          className={`${disp} ${border} grid place-items-center`}
-          style={{
-            borderColor: value == null ? 'rgb(var(--border))' : color,
-            background: value == null ? 'transparent' : 'rgb(var(--surface))',
-          }}
-        >
-          <input
-            type="text"
-            inputMode={allowNeg ? 'text' : 'numeric'}
-            pattern={allowNeg ? '[\\-0-9]*' : '[0-9]*'}
-            maxLength={allowNeg ? 4 : 2}
-            value={draft}
-            onChange={handleInput}
-            onBlur={handleBlur}
-            disabled={disabled}
-            placeholder="–"
-            className="w-full h-full text-center font-extrabold tabular-nums bg-transparent focus:outline-none disabled:pointer-events-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            style={{ color: value == null ? 'rgb(var(--texts))' : color }}
-          />
-        </motion.div>
-      </AnimatePresence>
+      <motion.div
+        key={value ?? 'null'}
+        initial={{ scale: 0.65, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+        className={`${disp} ${border} grid place-items-center`}
+        style={{
+          borderColor: value == null ? 'rgb(var(--border))' : color,
+          background: value == null ? 'transparent' : 'rgb(var(--surface))',
+        }}
+      >
+        <input
+          type="text"
+          inputMode={allowNeg ? 'text' : 'numeric'}
+          pattern={allowNeg ? '[\\-0-9]*' : '[0-9]*'}
+          maxLength={allowNeg ? 4 : 2}
+          value={draft}
+          onChange={handleInput}
+          onBlur={handleBlur}
+          disabled={disabled}
+          placeholder="–"
+          className="w-full h-full text-center font-extrabold tabular-nums bg-transparent focus:outline-none disabled:pointer-events-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          style={{ color: value == null ? 'rgb(var(--texts))' : color }}
+        />
+      </motion.div>
       <motion.button
         whileTap={{ scale: 0.82 }}
         transition={{ type: 'spring', stiffness: 600, damping: 20 }}
