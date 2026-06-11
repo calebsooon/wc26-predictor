@@ -351,37 +351,52 @@ export function ScoreStepper({
   const gap = compact ? 'gap-1' : 'gap-2'
   return (
     <div className={`flex items-center ${gap}`}>
-      <button
+      <motion.button
+        whileTap={{ scale: 0.82 }}
+        transition={{ type: 'spring', stiffness: 600, damping: 20 }}
         onClick={() => set((value ?? 0) - 1)}
         disabled={disabled || (value ?? 0) <= min}
         className={`${btn} grid place-items-center border border-border bg-surface text-texts font-bold hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:pointer-events-none transition-colors`}
       >
         −
-      </button>
-      <input
-        type="text"
-        inputMode={allowNeg ? 'text' : 'numeric'}
-        pattern={allowNeg ? '[\\-0-9]*' : '[0-9]*'}
-        maxLength={allowNeg ? 4 : 2}
-        value={draft}
-        onChange={handleInput}
-        onBlur={handleBlur}
-        disabled={disabled}
-        placeholder="–"
-        className={`${disp} ${border} text-center font-extrabold tabular-nums bg-transparent focus:outline-none disabled:pointer-events-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
-        style={{
-          color: value == null ? 'rgb(var(--texts))' : color,
-          borderColor: value == null ? 'rgb(var(--border))' : color,
-          background: value == null ? 'transparent' : 'rgb(var(--surface))',
-        }}
-      />
-      <button
+      </motion.button>
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.div
+          key={draft}
+          initial={{ scale: 0.7, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.7, opacity: 0 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+          className={`${disp} ${border} grid place-items-center`}
+          style={{
+            borderColor: value == null ? 'rgb(var(--border))' : color,
+            background: value == null ? 'transparent' : 'rgb(var(--surface))',
+          }}
+        >
+          <input
+            type="text"
+            inputMode={allowNeg ? 'text' : 'numeric'}
+            pattern={allowNeg ? '[\\-0-9]*' : '[0-9]*'}
+            maxLength={allowNeg ? 4 : 2}
+            value={draft}
+            onChange={handleInput}
+            onBlur={handleBlur}
+            disabled={disabled}
+            placeholder="–"
+            className="w-full h-full text-center font-extrabold tabular-nums bg-transparent focus:outline-none disabled:pointer-events-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            style={{ color: value == null ? 'rgb(var(--texts))' : color }}
+          />
+        </motion.div>
+      </AnimatePresence>
+      <motion.button
+        whileTap={{ scale: 0.82 }}
+        transition={{ type: 'spring', stiffness: 600, damping: 20 }}
         onClick={() => set((value ?? 0) + 1)}
         disabled={disabled || (value ?? 0) >= max}
         className={`${btn} grid place-items-center border border-border bg-surface text-texts font-bold hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:pointer-events-none transition-colors`}
       >
         +
-      </button>
+      </motion.button>
     </div>
   )
 }

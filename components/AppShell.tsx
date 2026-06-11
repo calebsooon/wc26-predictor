@@ -1,5 +1,6 @@
 'use client'
 
+import { Toaster } from 'sonner'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -91,7 +92,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     router.refresh()
   }
 
-  if (isBare) return <>{children}</>
+  if (isBare) return <>{children}<Toaster position="bottom-center" richColors /></>
 
   const items = SIDEBAR.filter((it) => !it.admin || profile?.is_admin)
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
@@ -200,6 +201,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </div>
       </nav>
+      <Toaster position="bottom-center" richColors />
     </div>
   )
 }

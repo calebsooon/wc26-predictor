@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { getMyLeagues, setActiveLeague, isMoneyLeague, type League } from '@/lib/league'
 import { Card, Button, PageHeader, Skeleton, TrophyIcon, LeagueBadge } from '@/components/ui'
@@ -14,7 +15,6 @@ export default function JoinPage() {
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
 
   async function refresh(uid: string) {
     setLeagues(await getMyLeagues(supabase, uid))
@@ -35,11 +35,11 @@ export default function JoinPage() {
   async function join(e: React.FormEvent) {
     e.preventDefault()
     if (!userId || !code.trim()) return
-    setBusy(true); setMsg(null)
+    setBusy(true)
     const { data, error } = await supabase.rpc('join_league', { p_code: code.trim() })
     setBusy(false)
-    if (error) { setMsg({ type: 'err', text: error.message.replace('Invalid league code', 'That code didn’t match any league.') }); return }
-    setMsg({ type: 'ok', text: 'Joined! Taking you in…' })
+    if (error) { toast.error(error.message.replace('Invalid league code', 'That code didn\'t match any league.')); return }
+    toast.success('Joined! Taking you in…')
     await refresh(userId)
     setCode('')
     if (data) {
@@ -71,7 +71,6 @@ export default function JoinPage() {
             autoCapitalize="characters"
             className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm font-bold tracking-widest text-textp placeholder:text-texts placeholder:font-normal placeholder:tracking-normal focus:outline-none focus:border-primary uppercase"
           />
-          {msg && <p className={`text-sm rounded-lg px-3 py-2 ${msg.type === 'err' ? 'text-error bg-error/10 border border-error/20' : 'text-success bg-primary/10 border border-primary/20'}`}>{msg.text}</p>}
           <Button type="submit" variant="primary" size="lg" className="w-full" disabled={busy || !code.trim()}>
             {busy ? 'Joining…' : 'Join league'}
           </Button>

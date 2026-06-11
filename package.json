@@ -11,9 +11,11 @@
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/supabase-js": "^2.108.0",
+    "framer-motion": "^12.40.0",
     "next": "14.2.35",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "sonner": "^2.0.7"
   },
   "devDependencies": {
     "@types/node": "^20",
