@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
-import { Card, StatCard, SectionHeader, Button, Skeleton, BoltIcon, EmptyState, CalIcon, Pill, CountUp, ScoreStepper, Countdown, ProgressBar, LeagueBadge } from '@/components/ui'
+import { Card, StatCard, SectionHeader, Button, Skeleton, BoltIcon, EmptyState, CalIcon, Pill, CountUp, ScoreStepper, Countdown, ProgressBar, LeagueBadge, ConfettiBurst } from '@/components/ui'
 import { NextPredictCard, LeaderboardTable, type LBRow } from '@/components/football'
 import RulesModal from '@/components/RulesModal'
 import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
@@ -130,6 +131,18 @@ export default function DashboardPage() {
   const exactCount = useMemo(() => Object.values(preds).filter((p) => (p.pts_exact ?? 0) > 0).length, [preds])
   const rankMove = prevRank != null && myRank != null ? prevRank - myRank : null
 
+  // Celebrate a climb since the last snapshot (once per load)
+  const [confetti, setConfetti] = useState(0)
+  const celebratedRef = useRef(false)
+  useEffect(() => {
+    if (celebratedRef.current || loading) return
+    if (rankMove != null && rankMove > 0 && myRank != null) {
+      celebratedRef.current = true
+      setConfetti((c) => c + 1)
+      toast.success(`📈 You climbed ${rankMove} spot${rankMove !== 1 ? 's' : ''} to ${ordinal(myRank)}!`)
+    }
+  }, [rankMove, myRank, loading])
+
   const upcoming = useMemo(() => matches
     .filter((m) => m.real_home_score === null && new Date(m.match_date) > new Date())
     .sort((a, b) => +new Date(a.match_date) - +new Date(b.match_date)), [matches])
@@ -189,6 +202,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-7">
+      <ConfettiBurst trigger={confetti} />
       <div className="flex items-end justify-between flex-wrap gap-3 pb-4 border-b border-border">
         <div>
           <div className="flex items-center gap-2 mb-1.5">

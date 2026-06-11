@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/require-admin'
 import { scorePrediction, type PredictionInput } from '@/lib/scoring'
+import { snapshotLeagueRanks } from '@/lib/snapshot'
 
 const FD_TOKEN = process.env.FOOTBALL_DATA_API_KEY ?? process.env.FOOTBALL_API_TOKEN ?? ''
 const FD_BASE = 'https://api.football-data.org/v4'
@@ -86,5 +87,8 @@ export async function POST() {
     totalScored += updates.length
   }
 
-  return NextResponse.json({ message: `Updated ${toUpdate.length} match result${toUpdate.length !== 1 ? 's' : ''}, scored ${totalScored} prediction${totalScored !== 1 ? 's' : ''}`, updated: toUpdate.length, scored: totalScored })
+  // Snapshot ranks so movement arrows reflect the new results
+  const snapshotted = await snapshotLeagueRanks(supabase)
+
+  return NextResponse.json({ message: `Updated ${toUpdate.length} match result${toUpdate.length !== 1 ? 's' : ''}, scored ${totalScored} prediction${totalScored !== 1 ? 's' : ''}, snapshotted ${snapshotted} rank${snapshotted !== 1 ? 's' : ''}`, updated: toUpdate.length, scored: totalScored, snapshotted })
 }

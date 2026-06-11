@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
 import {
   Card, Pill, Button, ScoreStepper, SectionHeader, Avatar, Skeleton,
-  LockIcon, Countdown, EmptyState,
+  LockIcon, Countdown, EmptyState, ConfettiBurst,
 } from '@/components/ui'
 import { ScoreDisplay } from '@/components/football'
 import { type DBMatch } from '@/lib/match-ui'
@@ -45,6 +46,7 @@ export default function MatchDetailPage() {
   const [others, setOthers] = useState<OtherPred[]>([])
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [revealPredictions, setRevealPredictions] = useState(false)
+  const [confetti, setConfetti] = useState(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
@@ -93,6 +95,10 @@ export default function MatchDetailPage() {
         if (p.pred_total_goals != null) { setPredTotalGoals(p.pred_total_goals as number); setTgManual(true) }
         if (p.pred_goal_diff != null) { setPredGoalDiff(p.pred_goal_diff as number); setGdManual(true) }
         if (p.pred_btts != null) { setPredBtts(p.pred_btts as boolean); setBttsManual(true) }
+        // Celebrate an exact-score call
+        if (dbm.real_home_score != null && dbm.real_home_score === p.pred_home && dbm.real_away_score === p.pred_away) {
+          setConfetti((c) => c + 1)
+        }
       }
 
       const { league, weights: w, memberIds } = await getActiveLeague(supabase, user.id)
@@ -143,7 +149,7 @@ export default function MatchDetailPage() {
   async function submit() {
     if (!userId || h == null || a == null) return
     setSaving(true)
-    await supabase.from('predictions').upsert({
+    const { error } = await supabase.from('predictions').upsert({
       user_id: userId, match_id: id,
       pred_home: h, pred_away: a,
       pred_first_goal_team: firstTeam,
@@ -154,12 +160,15 @@ export default function MatchDetailPage() {
       pred_btts: bttsManual ? predBtts : null,
     }, { onConflict: 'user_id,match_id' })
     setSaving(false)
+    if (error) { toast.error(`Couldn't save: ${error.message}`); return }
+    toast.success(`Prediction locked in — ${home.code} ${h}–${a} ${away.code}`)
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
   }
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
+      <ConfettiBurst trigger={confetti} />
       <button onClick={() => router.back()} className="text-sm font-bold text-texts hover:text-textp flex items-center gap-1">← Back</button>
 
       {/* header */}

@@ -4,13 +4,14 @@ import { Toaster } from 'sonner'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import { createClient } from '@/lib/supabase-browser'
 import { getMyLeagues, setActiveLeague, isMoneyLeague, type League } from '@/lib/league'
 import ThemeToggle from '@/components/ThemeToggle'
+import CommandPalette from '@/components/CommandPalette'
 import {
-  Logo, Avatar, ChevDown, LeagueBadge,
-  HomeIcon, CalIcon, TrophyIcon, GridIcon, TreeIcon, UserIcon, ShieldIcon, UsersIcon, HelpIcon,
+  Logo, Avatar, ChevDown, LeagueBadge, hexToRgbChannels,
+  HomeIcon, CalIcon, TrophyIcon, GridIcon, TreeIcon, UserIcon, ShieldIcon, UsersIcon, HelpIcon, ChartIcon,
 } from '@/components/ui'
 
 interface Profile {
@@ -29,6 +30,7 @@ const SIDEBAR: NavItem[] = [
   { href: '/groups',      label: 'Groups',      icon: GridIcon },
   { href: '/bracket',     label: 'Bracket',     icon: TreeIcon },
   { href: '/squads',      label: 'Squads',      icon: UsersIcon },
+  { href: '/h2h',         label: 'Compare',     icon: ChartIcon },
   { href: '/rules',       label: 'Rules',       icon: HelpIcon },
   { href: '/profile',     label: 'Profile',     icon: UserIcon },
   { href: '/admin',       label: 'Admin',       icon: ShieldIcon, admin: true },
@@ -83,6 +85,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, [isBare, leaguesReady, myLeagues.length, pathname, router])
 
   const activeLeague = myLeagues.find((l) => l.id === profile?.active_league_id) ?? myLeagues[0] ?? null
+  const accentChannels = hexToRgbChannels(activeLeague?.league_labels?.color)
+  const accentStyle = accentChannels ? ({ ['--accent' as string]: accentChannels } as React.CSSProperties) : undefined
 
   async function switchLeague(id: string) {
     const { data: { user } } = await supabase.auth.getUser()
@@ -92,7 +96,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     router.refresh()
   }
 
-  if (isBare) return <>{children}<Toaster position="bottom-center" richColors /></>
+  if (isBare) return <MotionConfig reducedMotion="user">{children}<Toaster position="bottom-center" richColors /></MotionConfig>
 
   const items = SIDEBAR.filter((it) => !it.admin || profile?.is_admin)
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
@@ -103,7 +107,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-bg text-textp">
+    <MotionConfig reducedMotion="user">
+    <div className="min-h-screen bg-bg text-textp" style={accentStyle}>
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-60 border-r border-border bg-surface/50 z-30">
         <Link href="/dashboard" className="h-16 flex items-center gap-2.5 px-5 border-b border-border">
@@ -123,9 +128,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={it.href}
                 href={it.href}
-                className={`w-full flex items-center gap-3 h-11 px-3 rounded-xl font-bold text-sm transition-all ${active ? 'bg-primary/12 text-primary' : 'text-texts hover:text-textp hover:bg-card'}`}
+                className={`w-full flex items-center gap-3 h-11 px-3 rounded-xl font-bold text-sm transition-all ${active ? 'bg-accent/12 text-accent' : 'text-texts hover:text-textp hover:bg-card'}`}
               >
-                <Ic size={20} className={active ? 'text-primary' : ''} />
+                <Ic size={20} className={active ? 'text-accent' : ''} />
                 <span className="flex-1">{it.label}</span>
                 {it.admin && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gold/15 text-gold">ADMIN</span>}
               </Link>
@@ -193,16 +198,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             const active = isActive(it.href)
             return (
               <Link key={it.href} href={it.href} className="flex flex-col items-center justify-center gap-1 relative">
-                {active && <span className="absolute top-0 w-10 h-0.5 rounded-full bg-primary" />}
-                <Ic size={22} className={active ? 'text-primary' : 'text-texts'} />
-                <span className={`text-[10px] font-bold ${active ? 'text-primary' : 'text-texts'}`}>{it.label}</span>
+                {active && <span className="absolute top-0 w-10 h-0.5 rounded-full bg-accent" />}
+                <Ic size={22} className={active ? 'text-accent' : 'text-texts'} />
+                <span className={`text-[10px] font-bold ${active ? 'text-accent' : 'text-texts'}`}>{it.label}</span>
               </Link>
             )
           })}
         </div>
       </nav>
       <Toaster position="bottom-center" richColors />
+      <CommandPalette
+        commands={[
+          ...items.map((it) => ({ id: `nav:${it.href}`, label: it.label, hint: 'Page', run: () => router.push(it.href) })),
+          ...myLeagues.map((l) => ({ id: `lg:${l.id}`, label: `Switch to ${l.name}`, hint: 'League', run: () => switchLeague(l.id) })),
+        ]}
+      />
     </div>
+    </MotionConfig>
   )
 }
 

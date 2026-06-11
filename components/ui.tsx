@@ -56,9 +56,22 @@ export function Modal({
   open, onClose, title, children, maxWidth = 'max-w-lg',
 }: { open: boolean; onClose: () => void; title?: ReactNode; children: ReactNode; maxWidth?: string }) {
   const overlayRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    const focusables = () => Array.from(panelRef.current?.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    ) ?? []).filter((el) => !el.hasAttribute('disabled'))
+    focusables()[0]?.focus()
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { onClose(); return }
+      if (e.key !== 'Tab') return
+      const f = focusables()
+      if (f.length === 0) return
+      const first = f[0], last = f[f.length - 1]
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    }
     window.addEventListener('keydown', onKey)
     document.body.style.overflow = 'hidden'
     return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
@@ -73,7 +86,7 @@ export function Modal({
       role="dialog"
       aria-modal="true"
     >
-      <div className={`w-full ${maxWidth} bg-card border border-border rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]`}>
+      <div ref={panelRef} className={`w-full ${maxWidth} bg-card border border-border rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]`}>
         <div className="flex items-center justify-between gap-3 px-5 h-14 shrink-0 border-b border-border bg-surface">
           <h2 className="font-extrabold text-textp text-[15px] truncate">{title}</h2>
           <button onClick={onClose} aria-label="Close" className="text-texts hover:text-textp p-1 -mr-1 shrink-0">✕</button>
@@ -163,6 +176,13 @@ function hexAlpha(hex: string, alpha: number): string {
   if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex
   return hex + Math.round(alpha * 255).toString(16).padStart(2, '0')
 }
+
+/** "#EAB308" → "234 179 8" (space-separated RGB channels for CSS vars). Null if invalid. */
+export function hexToRgbChannels(hex?: string | null): string | null {
+  if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return null
+  const n = parseInt(hex.slice(1), 16)
+  return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`
+}
 export function LeagueBadge({
   name, color, money = false, className = '',
 }: { name?: string | null; color?: string | null; money?: boolean; className?: string }) {
@@ -175,6 +195,31 @@ export function LeagueBadge({
     >
       {label}{money && ' 💰'}
     </span>
+  )
+}
+
+/* ---------- ConfettiBurst (decorative; fires when `trigger` increments) ---------- */
+export function ConfettiBurst({ trigger }: { trigger: number }) {
+  if (!trigger) return null
+  const colors = ['#22C55E', '#EAB308', '#3B82F6', '#EF4444', '#A855F7', '#F97316']
+  return (
+    <div key={trigger} aria-hidden className="pointer-events-none fixed inset-0 z-[60] overflow-hidden">
+      {Array.from({ length: 44 }).map((_, i) => {
+        const angle = (Math.PI * (Math.random() - 0.5)) - Math.PI / 2 // upward-ish
+        const dist = 140 + Math.random() * 320
+        const dx = Math.cos(angle) * dist
+        const dy = Math.sin(angle) * dist
+        return (
+          <motion.span
+            key={i}
+            initial={{ opacity: 1, x: 0, y: 0, rotate: 0 }}
+            animate={{ opacity: [1, 1, 0], x: dx, y: [0, dy, dy + 380], rotate: Math.random() * 720 - 360 }}
+            transition={{ duration: 1.3 + Math.random() * 0.7, ease: 'easeOut', delay: Math.random() * 0.08 }}
+            style={{ position: 'absolute', left: '50%', top: '42%', width: 8, height: 12, borderRadius: 2, background: colors[i % colors.length] }}
+          />
+        )
+      })}
+    </div>
   )
 }
 
@@ -356,6 +401,7 @@ export function ScoreStepper({
         transition={{ type: 'spring', stiffness: 600, damping: 20 }}
         onClick={() => set((value ?? 0) - 1)}
         disabled={disabled || (value ?? 0) <= min}
+        aria-label="Decrease"
         className={`${btn} grid place-items-center border border-border bg-surface text-texts font-bold hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:pointer-events-none transition-colors`}
       >
         −
@@ -373,6 +419,7 @@ export function ScoreStepper({
       >
         <input
           type="text"
+          aria-label="Score"
           inputMode={allowNeg ? 'text' : 'numeric'}
           pattern={allowNeg ? '[\\-0-9]*' : '[0-9]*'}
           maxLength={allowNeg ? 4 : 2}
@@ -390,6 +437,7 @@ export function ScoreStepper({
         transition={{ type: 'spring', stiffness: 600, damping: 20 }}
         onClick={() => set((value ?? 0) + 1)}
         disabled={disabled || (value ?? 0) >= max}
+        aria-label="Increase"
         className={`${btn} grid place-items-center border border-border bg-surface text-texts font-bold hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:pointer-events-none transition-colors`}
       >
         +

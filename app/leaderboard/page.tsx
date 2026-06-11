@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { PageHeader, Tabs, Card, Skeleton, EmptyState, TrophyIcon, Avatar, LeagueBadge, Pill } from '@/components/ui'
 import { LeaderboardTable, type LBRow } from '@/components/football'
@@ -60,7 +60,7 @@ export default function LeaderboardPage() {
   const supabase = createClient()
   const [rows, setRows] = useState<PredRow[]>([])
   const [members, setMembers] = useState<ProfileLite[]>([])
-  const [memberIds, setMemberIds] = useState<string[]>([])
+  const memberIdsRef = useRef<string[]>([])
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [leagueName, setLeagueName] = useState<string>('')
   const [leagueLabel, setLeagueLabel] = useState<LeagueLabel | null>(null)
@@ -83,7 +83,7 @@ export default function LeaderboardPage() {
     const { league, weights: w, memberIds: ids, memberProfiles } = await getActiveLeague(supabase, uid)
     setWeights(w)
     setMembers(memberProfiles)
-    setMemberIds(ids)
+    memberIdsRef.current = ids
     setLeagueName(league?.name ?? '')
     setLeagueLabel(league?.league_labels ?? null)
     setIsMoney(isMoneyLeague(league))
@@ -112,17 +112,17 @@ export default function LeaderboardPage() {
       setLoading(false)
     }
     load()
-    const channel = supabase.channel('lb').on('postgres_changes', { event: '*', schema: 'public', table: 'predictions' }, () => { if (memberIds.length) fetchRows(memberIds) }).subscribe()
+    const channel = supabase.channel('lb').on('postgres_changes', { event: '*', schema: 'public', table: 'predictions' }, () => { if (memberIdsRef.current.length) fetchRows(memberIdsRef.current) }).subscribe()
     return () => { supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Load picks data when picks tab is activated
   useEffect(() => {
-    if (view !== 'picks' || !revealPicks || memberIds.length === 0) return
+    if (view !== 'picks' || !revealPicks || members.length === 0) return
     loadPicks()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, revealPicks, memberIds])
+  }, [view, revealPicks, members])
 
   async function loadPicks() {
     setPicksLoading(true)
@@ -140,7 +140,7 @@ export default function LeaderboardPage() {
         .from('predictions')
         .select('match_id, user_id, pred_home, pred_away, points_awarded')
         .in('match_id', matchIds)
-        .in('user_id', memberIds)
+        .in('user_id', memberIdsRef.current)
       setPickPreds((preds ?? []) as PickPred[])
     }
     setPicksLoading(false)
@@ -189,6 +189,8 @@ export default function LeaderboardPage() {
   const podium = board.slice(0, 3)
   const hasSnapshots = prevRanks.size > 0
   const gwLabel = tab === 'all' ? 'Overall' : (GW_NAMES[parseInt(tab)] ?? tab)
+  const myIdx = board.findIndex((r) => r.you)
+  const srStatus = myIdx >= 0 ? `You are ranked ${myIdx + 1} of ${board.length}${leagueName ? ` in ${leagueName}` : ''} with ${board[myIdx].pts} points.` : ''
 
   if (loading) {
     return <div className="space-y-5"><Skeleton className="h-9 w-44" /><Skeleton className="h-10 rounded-xl" /><Skeleton className="h-28 rounded-xl" /><Skeleton className="h-72 rounded-xl" /></div>
@@ -202,6 +204,8 @@ export default function LeaderboardPage() {
         sub={view === 'picks' ? 'Everyone\'s pregame picks for upcoming matches' : tab === 'all' ? (isMoney ? 'Overall season standings + prize pool' : 'Overall season standings') : gwLabel}
         action={leagueName ? <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-textp">{leagueName}<LeagueBadge name={leagueLabel?.name} color={leagueLabel?.color} money={isMoney} /></span> : undefined}
       />
+
+      <p className="sr-only" role="status" aria-live="polite">{srStatus}</p>
 
       {myLeagues.length > 1 && (
         <div className="flex gap-2 overflow-x-auto -mx-4 px-4 no-scrollbar pb-0.5">
