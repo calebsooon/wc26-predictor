@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { motion } from 'framer-motion'
 import {
@@ -50,7 +51,6 @@ export default function ProfilePage() {
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -121,17 +121,17 @@ export default function ProfilePage() {
 
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; if (!file || !profile) return
-    setUploading(true); setMsg(null)
+    setUploading(true)
     const ext = file.name.split('.').pop()
     const path = `${profile.id}/avatar.${ext}`
     const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type })
-    if (upErr) { setMsg({ type: 'err', text: `Upload failed: ${upErr.message}` }); setUploading(false); return }
+    if (upErr) { toast.error(`Upload failed: ${upErr.message}`); setUploading(false); return }
     const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
     const busted = `${publicUrl}?t=${Date.now()}`
     const { error } = await supabase.from('profiles').update({ avatar_url: busted }).eq('id', profile.id)
-    if (error) { setMsg({ type: 'err', text: `DB update failed: ${error.message}` }); setUploading(false); return }
+    if (error) { toast.error(`DB update failed: ${error.message}`); setUploading(false); return }
     setAvatarUrl(busted)
-    setMsg({ type: 'ok', text: 'Avatar updated! Refreshing…' })
+    toast.success('Avatar updated!')
     setUploading(false)
     // Refresh so AppShell refetches the new avatar_url for the sidebar / mobile header
     setTimeout(() => router.refresh(), 800)
@@ -140,10 +140,10 @@ export default function ProfilePage() {
   async function saveUsername() {
     if (!profile) return
     const t = username.trim(); if (!t) return
-    setSaving(true); setMsg(null)
+    setSaving(true)
     const { error } = await supabase.from('profiles').update({ username: t }).eq('id', profile.id)
     setSaving(false)
-    setMsg(error ? { type: 'err', text: error.message } : { type: 'ok', text: 'Username saved!' })
+    if (error) toast.error(error.message); else toast.success('Username saved!')
   }
 
   async function logout() { await supabase.auth.signOut(); router.push('/login') }
@@ -296,7 +296,6 @@ export default function ProfilePage() {
             className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-textp placeholder:text-texts focus:outline-none focus:border-primary" />
           <Button onClick={saveUsername} disabled={saving || !username.trim()}>{saving ? 'Saving…' : 'Save'}</Button>
         </div>
-        {msg && <p className={`mt-3 text-sm rounded-lg px-3 py-2 ${msg.type === 'ok' ? 'bg-primary/10 text-primary' : 'bg-error/10 text-error'}`}>{msg.text}</p>}
       </Card>
 
       <Button variant="danger" className="w-full" onClick={logout}>Log out</Button>

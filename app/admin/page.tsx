@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
 import {
@@ -39,7 +40,6 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
   const [scorerOpen, setScorerOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState<string | null>(null)
 
   const hasScore = m.real_home_score !== null && m.real_away_score !== null
   const isKnockout = !m.group_name
@@ -57,19 +57,19 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
   }
 
   async function save() {
-    if (h == null || a == null) { setMsg('Both scores required'); return }
-    setSaving(true); setMsg(null)
+    if (h == null || a == null) { toast.error('Both scores required'); return }
+    setSaving(true)
     const { error } = await supabase.from('matches').update({
       real_home_score: h, real_away_score: a, is_locked: true,
       first_goal_team: fgt, first_goal_player_id: scorerId,
       ...(isKnockout ? { match_winner: matchWinner } : {}),
     }).eq('id', m.id)
-    if (error) { setMsg(error.message); setSaving(false); return }
+    if (error) { toast.error(error.message); setSaving(false); return }
     const res = await fetch('/api/score-match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ match_id: m.id }) })
     setSaving(false)
-    if (!res.ok) { setMsg((await res.json().catch(() => ({}))).error ?? 'Scoring failed'); return }
+    if (!res.ok) { toast.error((await res.json().catch(() => ({}))).error ?? 'Scoring failed'); return }
     onSaved({ ...m, real_home_score: h, real_away_score: a, is_locked: true, first_goal_team: fgt, first_goal_player_id: scorerId, match_winner: matchWinner })
-    setMsg('Saved ✓')
+    toast.success(`${home.name} ${h}–${a} ${away.name} saved & scored`)
   }
 
   const scorerName = players.find((p) => p.id === scorerId)?.name ?? ''
@@ -155,7 +155,6 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
       )}
 
       <div className="flex items-center justify-end gap-2 mt-3">
-        {msg && <span className={`text-xs ${msg.includes('✓') ? 'text-primary' : 'text-error'}`}>{msg}</span>}
         {hasScore && <Pill tone="green">{m.real_home_score}–{m.real_away_score}</Pill>}
         <Button size="sm" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save & score'}</Button>
       </div>
@@ -165,21 +164,23 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
 
 function AdminActions() {
   const [busy, setBusy] = useState<string | null>(null)
-  const [msgs, setMsgs] = useState<Record<string, string>>({})
 
-  async function call(key: string, url: string, body?: object) {
-    setBusy(key); setMsgs((m) => ({ ...m, [key]: '' }))
+  async function call(key: string, label: string, url: string, body?: object) {
+    setBusy(key)
+    const tid = toast.loading(`Running: ${label}…`)
     try {
       const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
       const json = await res.json().catch(() => ({}))
-      setMsgs((m) => ({ ...m, [key]: res.ok ? JSON.stringify(json) : (json.error ?? 'Error') }))
+      if (res.ok) toast.success(json.message ?? `${label} done`, { id: tid })
+      else toast.error(json.error ?? 'Error', { id: tid })
     } catch (e) {
-      setMsgs((m) => ({ ...m, [key]: String(e) }))
+      toast.error(String(e), { id: tid })
     }
     setBusy(null)
   }
 
   const actions = [
+    { key: 'fetch', label: 'Auto-fetch results', sub: 'Pull finished scores from football-data.org and auto-score predictions', url: '/api/fetch-results' },
     { key: 'snapshot', label: 'Snapshot leaderboard', sub: 'Records current rank positions for movement arrows', url: '/api/snapshot-ranks' },
     { key: 'groups', label: 'Score group predictions', sub: 'Awards points for correct group order picks (all complete groups)', url: '/api/score-groups' },
     { key: 'tournament', label: 'Score tournament picks', sub: 'Awards points for champion / finalist / semi / quarter picks', url: '/api/score-tournament' },
@@ -195,9 +196,8 @@ function AdminActions() {
             <div className="min-w-0">
               <p className="text-sm font-bold text-textp truncate">{a.label}</p>
               <p className="text-[11px] text-texts truncate">{a.sub}</p>
-              {msgs[a.key] && <p className="text-[11px] text-primary mt-0.5 font-mono truncate">{msgs[a.key]}</p>}
             </div>
-            <Button size="sm" variant="outline" onClick={() => call(a.key, a.url)} disabled={busy === a.key} className="shrink-0">
+            <Button size="sm" variant="outline" onClick={() => call(a.key, a.label, a.url)} disabled={busy === a.key} className="shrink-0">
               {busy === a.key ? '…' : 'Run'}
             </Button>
           </div>
@@ -215,14 +215,14 @@ function ScoringEditor({ league, onClose }: { league: LeagueAdminRow; onClose: (
   const supabase = createClient()
   const [w, setW] = useState<ScoringWeights>(() => resolveWeights(league.scoring))
   const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState<string | null>(null)
   const groups = ['Match', 'Group', 'Tournament'] as const
 
   async function save() {
-    setSaving(true); setMsg(null)
+    setSaving(true)
     const { error } = await supabase.from('leagues').update({ scoring: w }).eq('id', league.id)
     setSaving(false)
-    setMsg(error ? error.message : 'Saved — leaderboards recompute on next load.')
+    if (error) toast.error(error.message)
+    else toast.success('Scoring weights saved')
   }
 
   return (
@@ -244,7 +244,6 @@ function ScoringEditor({ league, onClose }: { league: LeagueAdminRow; onClose: (
         <Button size="sm" variant="primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save weights'}</Button>
         <Button size="sm" variant="ghost" onClick={() => setW({ ...DEFAULT_WEIGHTS })}>Reset to default</Button>
         <Button size="sm" variant="ghost" onClick={onClose}>Close</Button>
-        {msg && <span className="text-[11px] text-primary font-medium">{msg}</span>}
       </div>
     </div>
   )
@@ -264,7 +263,6 @@ function LeagueManage({
   const [name, setName] = useState(league.name)
   const [code, setCode] = useState(league.join_code)
   const [memberSearch, setMemberSearch] = useState('')
-  const [msg, setMsg] = useState<string | null>(null)
 
   const nameById = useMemo(() => new Map(profiles.map((p) => [p.id, p.username ?? '?'])), [profiles])
   const otherLeagues = leagues.filter((l) => l.id !== league.id)
@@ -273,23 +271,22 @@ function LeagueManage({
 
   async function patch(fields: Record<string, unknown>, note: string) {
     const { error } = await supabase.from('leagues').update(fields).eq('id', league.id)
-    setMsg(error ? error.message : note)
-    if (!error) await onChanged()
+    if (error) toast.error(error.message); else { toast.success(note); await onChanged() }
   }
   async function addMember(uid: string) {
     const { error } = await supabase.from('league_members').insert({ league_id: league.id, user_id: uid })
-    setMsg(error ? error.message : 'Member added.'); if (!error) await onChanged()
+    if (error) toast.error(error.message); else { toast.success('Member added'); await onChanged() }
   }
   async function removeMember(uid: string) {
     const { error } = await supabase.from('league_members').delete().eq('league_id', league.id).eq('user_id', uid)
-    setMsg(error ? error.message : 'Member removed.'); if (!error) await onChanged()
+    if (error) toast.error(error.message); else { toast.success('Member removed'); await onChanged() }
   }
   async function moveMember(uid: string, toLeague: string) {
     if (!toLeague) return
     const { error: e1 } = await supabase.from('league_members').insert({ league_id: toLeague, user_id: uid })
-    if (e1 && !e1.message.toLowerCase().includes('duplicate')) { setMsg(e1.message); return }
+    if (e1 && !e1.message.toLowerCase().includes('duplicate')) { toast.error(e1.message); return }
     const { error: e2 } = await supabase.from('league_members').delete().eq('league_id', league.id).eq('user_id', uid)
-    setMsg(e2 ? e2.message : 'Member moved.'); if (!e2) await onChanged()
+    if (e2) toast.error(e2.message); else { toast.success('Member moved'); await onChanged() }
   }
 
   const inputCls = 'rounded-lg border border-border bg-surface px-3 py-2 text-sm text-textp placeholder:text-texts focus:outline-none focus:border-primary'
@@ -388,7 +385,6 @@ function LeagueManage({
         )}
       </div>
 
-      {msg && <p className="text-[12px] text-primary font-medium">{msg}</p>}
     </div>
   )
 }
@@ -399,17 +395,16 @@ function UserLeagueAssign({
   const supabase = createClient()
   const [userId, setUserId] = useState('')
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState<string | null>(null)
 
   async function toggle(leagueId: string, isMember: boolean) {
     if (!userId) return
-    setBusy(true); setMsg(null)
+    setBusy(true)
     const { error } = isMember
       ? await supabase.from('league_members').delete().eq('league_id', leagueId).eq('user_id', userId)
       : await supabase.from('league_members').insert({ league_id: leagueId, user_id: userId })
     setBusy(false)
-    setMsg(error ? error.message : 'Updated.')
-    if (!error) await onChanged()
+    if (error) toast.error(error.message)
+    else { toast.success('League membership updated'); await onChanged() }
   }
 
   return (
@@ -444,7 +439,6 @@ function UserLeagueAssign({
           {leagues.length === 0 && <p className="text-[13px] text-texts">No leagues yet.</p>}
         </div>
       )}
-      {msg && <p className="text-[12px] text-primary font-medium">{msg}</p>}
     </div>
   )
 }
@@ -454,18 +448,16 @@ function LabelManager({ labels, onChanged }: { labels: LabelRow[]; onChanged: ()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [color, setColor] = useState('#22C55E')
-  const [msg, setMsg] = useState<string | null>(null)
 
   async function create() {
     if (!name.trim()) return
     const { error } = await supabase.from('league_labels').insert({ name: name.trim(), color })
-    setMsg(error ? error.message : 'Label created.')
-    if (!error) { setName(''); await onChanged() }
+    if (error) toast.error(error.message)
+    else { toast.success('Label created'); setName(''); await onChanged() }
   }
   async function del(id: string) {
     const { error } = await supabase.from('league_labels').delete().eq('id', id)
-    setMsg(error ? error.message : 'Label deleted.')
-    if (!error) await onChanged()
+    if (error) toast.error(error.message); else { toast.success('Label deleted'); await onChanged() }
   }
 
   return (
@@ -490,7 +482,6 @@ function LabelManager({ labels, onChanged }: { labels: LabelRow[]; onChanged: ()
             <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-9 w-12 rounded-lg border border-border bg-surface cursor-pointer" title="Label colour" />
             <Button size="sm" variant="surface" onClick={create} disabled={!name.trim()}>Add label</Button>
           </div>
-          {msg && <p className="text-[12px] text-primary font-medium">{msg}</p>}
         </div>
       )}
     </div>
@@ -506,7 +497,6 @@ function LeagueAdmin() {
   const [prizePool, setPrizePool] = useState(false)
   const [labelId, setLabelId] = useState('')
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)   // scoring editor
   const [managing, setManaging] = useState<string | null>(null) // manage panel
   const [assignOpen, setAssignOpen] = useState(false)           // per-user assignment
@@ -533,10 +523,9 @@ function LeagueAdmin() {
   }, [])
 
   async function create() {
-    if (!name.trim()) { setMsg('Name required'); return }
-    setBusy(true); setMsg(null)
+    if (!name.trim()) { toast.error('Name required'); return }
+    setBusy(true)
     const { data: { user } } = await supabase.auth.getUser()
-    // Retry on the (rare) unique-code collision
     for (let attempt = 0; attempt < 5; attempt++) {
       const code = randomCode()
       const { error } = await supabase.from('leagues').insert({
@@ -544,8 +533,8 @@ function LeagueAdmin() {
         type: prizePool ? 'money' : 'points', prize_pool: prizePool,
         label_id: labelId || null,
       })
-      if (!error) { setName(''); setMsg(`Created “${name.trim()}” · code ${code}`); await load(); break }
-      if (!error.message.toLowerCase().includes('duplicate')) { setMsg(error.message); break }
+      if (!error) { setName(''); toast.success(`League “${name.trim()}” created · code ${code}`); await load(); break }
+      if (!error.message.toLowerCase().includes('duplicate')) { toast.error(error.message); break }
     }
     setBusy(false)
   }
@@ -577,8 +566,6 @@ function LeagueAdmin() {
         <Button size="sm" variant={prizePool ? 'gold' : 'surface'} onClick={() => setPrizePool((p) => !p)}>Prize pool: {prizePool ? 'On' : 'Off'}</Button>
         <Button size="sm" variant="primary" onClick={create} disabled={busy || !name.trim()}>{busy ? '…' : 'Create'}</Button>
       </div>
-      {msg && <p className="text-[12px] text-primary mt-2 font-medium">{msg}</p>}
-
       <div className="mt-4 divide-y divide-border/60">
         {leagues.map((l) => (
           <div key={l.id} className="py-2.5">
