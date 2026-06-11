@@ -120,20 +120,20 @@ export function NextPredictCard({
         {missing ? <Pill tone="red">● Missing</Pill> : <Pill tone="blue">✓ Submitted</Pill>}
       </div>
 
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex flex-col items-center gap-1.5 flex-1">
-          <span className="text-[34px] leading-none">{home.flag}</span>
-          <span className="text-xs font-bold text-textp group-hover/card:text-primary transition-colors">{home.code}</span>
+      <div className="flex items-center gap-2">
+        <div className="flex flex-col items-center gap-1 w-10 shrink-0">
+          <span className="text-[28px] leading-none">{home.flag}</span>
+          <span className="text-[11px] font-bold text-textp group-hover/card:text-primary transition-colors">{home.code}</span>
         </div>
         {/* Steppers must not trigger card navigation */}
-        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1 flex-1 justify-center min-w-0" onClick={(e) => e.stopPropagation()}>
           <ScoreStepper value={pred.h} onChange={(v) => onChange('h', v)} compact />
           <span className="text-texts font-bold px-0.5">:</span>
           <ScoreStepper value={pred.a} onChange={(v) => onChange('a', v)} compact />
         </div>
-        <div className="flex flex-col items-center gap-1.5 flex-1">
-          <span className="text-[34px] leading-none">{away.flag}</span>
-          <span className="text-xs font-bold text-textp group-hover/card:text-primary transition-colors">{away.code}</span>
+        <div className="flex flex-col items-center gap-1 w-10 shrink-0">
+          <span className="text-[28px] leading-none">{away.flag}</span>
+          <span className="text-[11px] font-bold text-textp group-hover/card:text-primary transition-colors">{away.code}</span>
         </div>
       </div>
 
