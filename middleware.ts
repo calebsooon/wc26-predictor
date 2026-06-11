@@ -23,6 +23,8 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|auth/callback).*)',
+    // Exclude Next internals, auth callback, and public metadata (manifest/icons)
+    // so the PWA manifest and favicon load without an auth redirect.
+    '/((?!_next/static|_next/image|favicon.ico|auth/callback|manifest.webmanifest|icon|apple-icon|sitemap.xml|robots.txt).*)',
   ],
 }
