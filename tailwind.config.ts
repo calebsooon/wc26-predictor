@@ -25,6 +25,7 @@ const config: Config = {
         card: token("--card"),
         border: token("--border"),
         primary: token("--primary"),
+        accent: token("--accent"),   // active league's label colour (falls back to primary)
         gold: token("--gold"),
         blue: token("--blue"),
         textp: token("--textp"),

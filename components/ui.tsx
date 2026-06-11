@@ -176,6 +176,13 @@ function hexAlpha(hex: string, alpha: number): string {
   if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex
   return hex + Math.round(alpha * 255).toString(16).padStart(2, '0')
 }
+
+/** "#EAB308" → "234 179 8" (space-separated RGB channels for CSS vars). Null if invalid. */
+export function hexToRgbChannels(hex?: string | null): string | null {
+  if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return null
+  const n = parseInt(hex.slice(1), 16)
+  return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`
+}
 export function LeagueBadge({
   name, color, money = false, className = '',
 }: { name?: string | null; color?: string | null; money?: boolean; className?: string }) {
@@ -188,6 +195,31 @@ export function LeagueBadge({
     >
       {label}{money && ' 💰'}
     </span>
+  )
+}
+
+/* ---------- ConfettiBurst (decorative; fires when `trigger` increments) ---------- */
+export function ConfettiBurst({ trigger }: { trigger: number }) {
+  if (!trigger) return null
+  const colors = ['#22C55E', '#EAB308', '#3B82F6', '#EF4444', '#A855F7', '#F97316']
+  return (
+    <div key={trigger} aria-hidden className="pointer-events-none fixed inset-0 z-[60] overflow-hidden">
+      {Array.from({ length: 44 }).map((_, i) => {
+        const angle = (Math.PI * (Math.random() - 0.5)) - Math.PI / 2 // upward-ish
+        const dist = 140 + Math.random() * 320
+        const dx = Math.cos(angle) * dist
+        const dy = Math.sin(angle) * dist
+        return (
+          <motion.span
+            key={i}
+            initial={{ opacity: 1, x: 0, y: 0, rotate: 0 }}
+            animate={{ opacity: [1, 1, 0], x: dx, y: [0, dy, dy + 380], rotate: Math.random() * 720 - 360 }}
+            transition={{ duration: 1.3 + Math.random() * 0.7, ease: 'easeOut', delay: Math.random() * 0.08 }}
+            style={{ position: 'absolute', left: '50%', top: '42%', width: 8, height: 12, borderRadius: 2, background: colors[i % colors.length] }}
+          />
+        )
+      })}
+    </div>
   )
 }
 

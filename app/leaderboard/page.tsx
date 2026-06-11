@@ -127,6 +127,8 @@ export default function LeaderboardPage() {
   const podium = board.slice(0, 3)
   const hasSnapshots = prevRanks.size > 0
   const gwLabel = tab === 'all' ? 'Overall' : (GW_NAMES[parseInt(tab)] ?? tab)
+  const myIdx = board.findIndex((r) => r.you)
+  const srStatus = myIdx >= 0 ? `You are ranked ${myIdx + 1} of ${board.length}${leagueName ? ` in ${leagueName}` : ''} with ${board[myIdx].pts} points.` : ''
 
   if (loading) {
     return <div className="space-y-5"><Skeleton className="h-9 w-44" /><Skeleton className="h-10 rounded-xl" /><Skeleton className="h-28 rounded-xl" /><Skeleton className="h-72 rounded-xl" /></div>
@@ -140,6 +142,8 @@ export default function LeaderboardPage() {
         sub={tab === 'all' ? (isMoney ? 'Overall season standings + prize pool' : 'Overall season standings') : gwLabel}
         action={leagueName ? <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-textp">{leagueName}<LeagueBadge name={leagueLabel?.name} color={leagueLabel?.color} money={isMoney} /></span> : undefined}
       />
+
+      <p className="sr-only" role="status" aria-live="polite">{srStatus}</p>
 
       {myLeagues.length > 1 && (
         <div className="flex gap-2 overflow-x-auto -mx-4 px-4 no-scrollbar pb-0.5">

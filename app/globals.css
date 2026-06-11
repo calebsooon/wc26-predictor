@@ -5,11 +5,14 @@
 /* Keyboard focus ring (mouse clicks don't trigger :focus-visible) */
 @layer base {
   :focus-visible {
-    outline: 2px solid rgb(var(--primary));
+    outline: 2px solid rgb(var(--accent));
     outline-offset: 2px;
     border-radius: 6px;
   }
 }
+
+/* Active league accent — overridden per-league on the app shell; defaults to primary */
+:root { --accent: var(--primary); }
 
 /*
  * MatchDay tokens as space-separated RGB channels.
