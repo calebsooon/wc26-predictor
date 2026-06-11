@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { PageHeader, Tabs, Card, Skeleton, EmptyState, TrophyIcon, Avatar, LeagueBadge, Pill } from '@/components/ui'
+import { PageHeader, Tabs, Card, Skeleton, EmptyState, TrophyIcon, Avatar, LeagueBadge, Pill, ChipRow } from '@/components/ui'
 import { LeaderboardTable, type LBRow } from '@/components/football'
 import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
 import { getActiveLeague, getMyLeagues, setActiveLeague, isMoneyLeague, type League, type LeagueLabel } from '@/lib/league'
@@ -338,20 +338,11 @@ function PicksView({
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-2">
-        <button
-          onClick={() => setFilter('upcoming')}
-          className={`px-3 h-8 rounded-full border text-[13px] font-bold transition-colors ${filter === 'upcoming' ? 'border-primary bg-primary/12 text-primary' : 'border-border bg-surface text-texts hover:text-textp'}`}
-        >
-          Upcoming
-        </button>
-        <button
-          onClick={() => setFilter('all')}
-          className={`px-3 h-8 rounded-full border text-[13px] font-bold transition-colors ${filter === 'all' ? 'border-primary bg-primary/12 text-primary' : 'border-border bg-surface text-texts hover:text-textp'}`}
-        >
-          All
-        </button>
-      </div>
+      <ChipRow
+        chips={[{ key: 'upcoming', label: 'Upcoming' }, { key: 'all', label: 'All' }]}
+        value={filter}
+        onChange={(v) => setFilter(v as 'upcoming' | 'all')}
+      />
 
       {displayed.map((m) => {
         const home = getTeam(m.home_team)
