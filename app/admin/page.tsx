@@ -41,6 +41,7 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
   const [scorerOpen, setScorerOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
+  const [scoringFailed, setScoringFailed] = useState(false)
 
   const hasScore = m.real_home_score !== null && m.real_away_score !== null
   const isKnockout = !m.group_name
@@ -58,9 +59,24 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
     }
   }
 
+  async function scoreOnly() {
+    setSaving(true)
+    setScoringFailed(false)
+    const res = await fetch('/api/score-match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ match_id: m.id }) })
+    setSaving(false)
+    if (!res.ok) {
+      setScoringFailed(true)
+      toast.error((await res.json().catch(() => ({}))).error ?? 'Retry failed — check API logs')
+      return
+    }
+    onSaved({ ...m, real_home_score: h, real_away_score: a, is_locked: true, first_goal_team: fgt, first_goal_player_id: scorerId, match_winner: matchWinner })
+    toast.success(`${home.name} ${h}–${a} ${away.name} re-scored`)
+  }
+
   async function save() {
     if (h == null || a == null) { toast.error('Both scores required'); return }
     setSaving(true)
+    setScoringFailed(false)
     const { error } = await supabase.from('matches').update({
       real_home_score: h, real_away_score: a, is_locked: true,
       first_goal_team: fgt, first_goal_player_id: scorerId,
@@ -69,7 +85,11 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
     if (error) { toast.error(error.message); setSaving(false); return }
     const res = await fetch('/api/score-match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ match_id: m.id }) })
     setSaving(false)
-    if (!res.ok) { toast.error((await res.json().catch(() => ({}))).error ?? 'Scoring failed'); return }
+    if (!res.ok) {
+      setScoringFailed(true)
+      toast.error('Match saved but scoring failed — use "Retry scoring" to fix')
+      return
+    }
     onSaved({ ...m, real_home_score: h, real_away_score: a, is_locked: true, first_goal_team: fgt, first_goal_player_id: scorerId, match_winner: matchWinner })
     toast.success(`${home.name} ${h}–${a} ${away.name} saved & scored`)
   }
@@ -158,6 +178,11 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
 
       <div className="flex items-center justify-end gap-2 mt-3">
         {hasScore && <Pill tone="green">{m.real_home_score}–{m.real_away_score}</Pill>}
+        {scoringFailed && (
+          <Button size="sm" variant="outline" onClick={scoreOnly} disabled={saving}>
+            {saving ? '…' : 'Retry scoring'}
+          </Button>
+        )}
         <Button size="sm" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save & score'}</Button>
       </div>
     </Card>
