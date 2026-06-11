@@ -253,7 +253,7 @@ export default function DashboardPage() {
           {next.length === 0 ? (
             !hero && <EmptyState icon={<CalIcon size={22} />} title="No upcoming matches" desc="Fixtures will appear here as kickoff approaches." />
           ) : (
-            <div className="grid md:grid-cols-2 gap-3">
+            <div className="grid xl:grid-cols-2 gap-3">
               {next.map((m) => (
                 <NextPredictCard
                   key={m.id}
