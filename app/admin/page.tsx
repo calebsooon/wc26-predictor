@@ -207,7 +207,8 @@ function AdminActions() {
   )
 }
 
-interface LeagueAdminRow { id: string; name: string; type: 'money' | 'points'; join_code: string; scoring: unknown; members: number }
+interface LeagueAdminRow { id: string; name: string; type: 'money' | 'points'; join_code: string; scoring: unknown; bracket_enabled: boolean; memberIds: string[] }
+interface AdminProfile { id: string; username: string | null }
 
 function ScoringEditor({ league, onClose }: { league: LeagueAdminRow; onClose: () => void }) {
   const supabase = createClient()
@@ -255,23 +256,146 @@ function randomCode() {
   return s
 }
 
+function LeagueManage({
+  league, leagues, profiles, onChanged,
+}: { league: LeagueAdminRow; leagues: LeagueAdminRow[]; profiles: AdminProfile[]; onChanged: () => Promise<void> | void }) {
+  const supabase = createClient()
+  const [name, setName] = useState(league.name)
+  const [code, setCode] = useState(league.join_code)
+  const [memberSearch, setMemberSearch] = useState('')
+  const [msg, setMsg] = useState<string | null>(null)
+
+  const nameById = useMemo(() => new Map(profiles.map((p) => [p.id, p.username ?? '?'])), [profiles])
+  const otherLeagues = leagues.filter((l) => l.id !== league.id)
+  const members = league.memberIds
+  const addable = profiles.filter((p) => !members.includes(p.id) && (p.username ?? '').toLowerCase().includes(memberSearch.toLowerCase())).slice(0, 8)
+
+  async function patch(fields: Record<string, unknown>, note: string) {
+    const { error } = await supabase.from('leagues').update(fields).eq('id', league.id)
+    setMsg(error ? error.message : note)
+    if (!error) await onChanged()
+  }
+  async function addMember(uid: string) {
+    const { error } = await supabase.from('league_members').insert({ league_id: league.id, user_id: uid })
+    setMsg(error ? error.message : 'Member added.'); if (!error) await onChanged()
+  }
+  async function removeMember(uid: string) {
+    const { error } = await supabase.from('league_members').delete().eq('league_id', league.id).eq('user_id', uid)
+    setMsg(error ? error.message : 'Member removed.'); if (!error) await onChanged()
+  }
+  async function moveMember(uid: string, toLeague: string) {
+    if (!toLeague) return
+    const { error: e1 } = await supabase.from('league_members').insert({ league_id: toLeague, user_id: uid })
+    if (e1 && !e1.message.toLowerCase().includes('duplicate')) { setMsg(e1.message); return }
+    const { error: e2 } = await supabase.from('league_members').delete().eq('league_id', league.id).eq('user_id', uid)
+    setMsg(e2 ? e2.message : 'Member moved.'); if (!e2) await onChanged()
+  }
+
+  const inputCls = 'rounded-lg border border-border bg-surface px-3 py-2 text-sm text-textp placeholder:text-texts focus:outline-none focus:border-primary'
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border space-y-4">
+      {/* settings */}
+      <div className="grid sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-texts mb-1">Name</label>
+          <div className="flex gap-2">
+            <input value={name} onChange={(e) => setName(e.target.value)} className={`flex-1 ${inputCls}`} />
+            <Button size="sm" variant="surface" onClick={() => patch({ name: name.trim() }, 'Name saved.')} disabled={!name.trim() || name.trim() === league.name}>Save</Button>
+          </div>
+        </div>
+        <div>
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-texts mb-1">Join code</label>
+          <div className="flex gap-2">
+            <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} className={`flex-1 font-mono tracking-widest uppercase ${inputCls}`} />
+            <Button size="sm" variant="surface" onClick={() => patch({ join_code: code.trim().toUpperCase() }, 'Code saved.')} disabled={!code.trim() || code.trim().toUpperCase() === league.join_code}>Save</Button>
+            <Button size="sm" variant="ghost" onClick={() => { const c = randomCode(); setCode(c); patch({ join_code: c }, `New code ${c}.`) }}>↻</Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-texts">Type</span>
+          <ChipRow chips={[{ key: 'points', label: 'Points' }, { key: 'money', label: 'Money' }]} value={league.type} onChange={(v) => patch({ type: v }, 'Type updated.')} />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-texts">Bracket game</span>
+          <Button size="sm" variant={league.bracket_enabled ? 'primary' : 'surface'} onClick={() => patch({ bracket_enabled: !league.bracket_enabled }, league.bracket_enabled ? 'Bracket disabled.' : 'Bracket enabled.')}>
+            {league.bracket_enabled ? 'On' : 'Off'}
+          </Button>
+        </div>
+      </div>
+
+      {/* members */}
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-texts mb-1.5">Members ({members.length})</p>
+        <div className="space-y-1.5 max-h-56 overflow-y-auto">
+          {members.map((uid) => (
+            <div key={uid} className="flex items-center gap-2">
+              <span className="flex-1 text-[13px] font-semibold text-textp truncate">{nameById.get(uid) ?? uid}</span>
+              {otherLeagues.length > 0 && (
+                <select
+                  defaultValue=""
+                  onChange={(e) => { moveMember(uid, e.target.value); e.currentTarget.value = '' }}
+                  className="text-[12px] rounded-md border border-border bg-surface px-2 py-1 text-texts focus:outline-none"
+                >
+                  <option value="" disabled>Move to…</option>
+                  {otherLeagues.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              )}
+              <Button size="sm" variant="ghost" onClick={() => removeMember(uid)}>Remove</Button>
+            </div>
+          ))}
+          {members.length === 0 && <p className="text-[13px] text-texts">No members yet.</p>}
+        </div>
+      </div>
+
+      {/* add member */}
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-texts mb-1.5">Add member</p>
+        <input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder="Search players…" className={`w-full ${inputCls}`} />
+        {memberSearch && (
+          <div className="mt-1.5 space-y-1">
+            {addable.map((p) => (
+              <div key={p.id} className="flex items-center gap-2">
+                <span className="flex-1 text-[13px] text-textp truncate">{p.username ?? p.id}</span>
+                <Button size="sm" variant="surface" onClick={() => addMember(p.id)}>Add</Button>
+              </div>
+            ))}
+            {addable.length === 0 && <p className="text-[13px] text-texts">No matching players.</p>}
+          </div>
+        )}
+      </div>
+
+      {msg && <p className="text-[12px] text-primary font-medium">{msg}</p>}
+    </div>
+  )
+}
+
 function LeagueAdmin() {
   const supabase = createClient()
   const [leagues, setLeagues] = useState<LeagueAdminRow[]>([])
+  const [profiles, setProfiles] = useState<AdminProfile[]>([])
   const [name, setName] = useState('')
   const [type, setType] = useState<'money' | 'points'>('points')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
-  const [editing, setEditing] = useState<string | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)   // scoring editor
+  const [managing, setManaging] = useState<string | null>(null) // manage panel
 
   async function load() {
-    const [{ data: ls }, { data: ms }] = await Promise.all([
-      supabase.from('leagues').select('id, name, type, join_code, scoring').order('created_at'),
-      supabase.from('league_members').select('league_id'),
+    const [{ data: ls }, { data: ms }, { data: ps }] = await Promise.all([
+      supabase.from('leagues').select('id, name, type, join_code, scoring, bracket_enabled').order('created_at'),
+      supabase.from('league_members').select('league_id, user_id'),
+      supabase.from('profiles').select('id, username').order('username'),
     ])
-    const counts = new Map<string, number>()
-    for (const m of (ms ?? []) as { league_id: string }[]) counts.set(m.league_id, (counts.get(m.league_id) ?? 0) + 1)
-    setLeagues(((ls ?? []) as Omit<LeagueAdminRow, 'members'>[]).map((l) => ({ ...l, members: counts.get(l.id) ?? 0 })))
+    const byLeague = new Map<string, string[]>()
+    for (const m of (ms ?? []) as { league_id: string; user_id: string }[]) {
+      const arr = byLeague.get(m.league_id) ?? []; arr.push(m.user_id); byLeague.set(m.league_id, arr)
+    }
+    setProfiles((ps ?? []) as AdminProfile[])
+    setLeagues(((ls ?? []) as Omit<LeagueAdminRow, 'memberIds'>[]).map((l) => ({ ...l, memberIds: byLeague.get(l.id) ?? [] })))
   }
 
   useEffect(() => {
@@ -310,15 +434,20 @@ function LeagueAdmin() {
       <div className="mt-4 divide-y divide-border/60">
         {leagues.map((l) => (
           <div key={l.id} className="py-2.5">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
               <Pill tone={l.type === 'money' ? 'gold' : 'green'}>{l.type === 'money' ? 'Money' : 'Points'}</Pill>
-              <span className="flex-1 font-bold text-sm text-textp truncate">{l.name}</span>
-              <span className="text-[11px] text-texts font-medium">{l.members} member{l.members !== 1 ? 's' : ''}</span>
+              <span className="flex-1 min-w-[120px] font-bold text-sm text-textp truncate">{l.name}</span>
+              {!l.bracket_enabled && <Pill tone="default">Bracket off</Pill>}
+              <span className="text-[11px] text-texts font-medium">{l.memberIds.length} member{l.memberIds.length !== 1 ? 's' : ''}</span>
               <span className="font-mono text-[13px] font-extrabold tracking-widest text-textp bg-surface border border-border rounded px-2 py-0.5">{l.join_code}</span>
-              <Button size="sm" variant="ghost" onClick={() => setEditing(editing === l.id ? null : l.id)}>
+              <Button size="sm" variant="ghost" onClick={() => { setManaging(managing === l.id ? null : l.id); setEditing(null) }}>
+                {managing === l.id ? 'Hide' : 'Manage'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => { setEditing(editing === l.id ? null : l.id); setManaging(null) }}>
                 {editing === l.id ? 'Hide' : 'Scoring'}
               </Button>
             </div>
+            {managing === l.id && <LeagueManage league={l} leagues={leagues} profiles={profiles} onChanged={load} />}
             {editing === l.id && <ScoringEditor league={l} onClose={() => setEditing(null)} />}
           </div>
         ))}

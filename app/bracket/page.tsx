@@ -6,8 +6,8 @@ import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam, TEAMS } from '@/lib/teams'
 import MatchModal, { type ModalMatch } from '@/components/MatchModal'
-import { PageHeader, Card, Tabs, Skeleton, EmptyState, TreeIcon, Pill, Button, SectionHeader, SearchIcon } from '@/components/ui'
-import { TOURNAMENT_POINTS } from '@/lib/scoring'
+import { PageHeader, Card, Tabs, Skeleton, EmptyState, TreeIcon, Pill, Button, SectionHeader, SearchIcon, LockIcon } from '@/components/ui'
+import { getActiveLeague } from '@/lib/league'
 
 interface Match {
   id: string
@@ -27,11 +27,10 @@ interface TournamentPick {
   runner_up: string | null
   semi: string[]
   quarter: string[]
-  pts_champion: number | null
-  pts_runner_up: number | null
-  pts_semi: number | null
-  pts_quarter: number | null
 }
+
+type Phase = 'pre' | 'r32'
+const EMPTY_PICK: TournamentPick = { champion: null, runner_up: null, semi: [], quarter: [] }
 
 const ROUND_IDS = {
   R32: '00000000-0000-0000-0000-000000000002',
@@ -148,17 +147,28 @@ function TeamPicker({ value, onChange, exclude = [], placeholder = 'Pick a team�
   )
 }
 
-/* ---------- tournament picks tab ---------- */
-function TournamentPicksTab({ userId, r32Locked }: { userId: string | null; r32Locked: boolean }) {
+/* ---------- one phase of for-fun bracket picks (no points) ---------- */
+function PhasePicks({
+  userId, phase, title, sub, locked, openYet, lockedNote, waitingNote,
+}: {
+  userId: string | null
+  phase: Phase
+  title: string
+  sub: string
+  locked: boolean
+  openYet: boolean
+  lockedNote: string
+  waitingNote: string
+}) {
   const supabase = createClient()
-  const [pick, setPick] = useState<TournamentPick>({ champion: null, runner_up: null, semi: [], quarter: [], pts_champion: null, pts_runner_up: null, pts_semi: null, pts_quarter: null })
+  const [pick, setPick] = useState<TournamentPick>(EMPTY_PICK)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   useEffect(() => {
     if (!userId) { setLoading(false); return }
-    supabase.from('tournament_predictions').select('*').eq('user_id', userId).maybeSingle()
+    supabase.from('tournament_predictions').select('champion, runner_up, semi, quarter').eq('user_id', userId).eq('phase', phase).maybeSingle()
       .then(({ data }) => {
         if (data) {
           const d = data as Record<string, unknown>
@@ -167,163 +177,124 @@ function TournamentPicksTab({ userId, r32Locked }: { userId: string | null; r32L
             runner_up: (d.runner_up as string) ?? null,
             semi: (d.semi as string[]) ?? [],
             quarter: (d.quarter as string[]) ?? [],
-            pts_champion: (d.pts_champion as number) ?? null,
-            pts_runner_up: (d.pts_runner_up as number) ?? null,
-            pts_semi: (d.pts_semi as number) ?? null,
-            pts_quarter: (d.pts_quarter as number) ?? null,
           })
         }
         setLoading(false)
       })
-  }, [userId])
+  }, [userId, phase])
 
   async function save() {
     if (!userId) return
     setSaving(true); setMsg(null)
     const { error } = await supabase.from('tournament_predictions').upsert(
-      { user_id: userId, champion: pick.champion, runner_up: pick.runner_up, semi: pick.semi, quarter: pick.quarter, updated_at: new Date().toISOString() },
-      { onConflict: 'user_id' },
+      { user_id: userId, phase, champion: pick.champion, runner_up: pick.runner_up, semi: pick.semi, quarter: pick.quarter, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,phase' },
     )
     setSaving(false)
-    setMsg(error ? { ok: false, text: error.message } : { ok: true, text: 'Tournament picks saved!' })
+    setMsg(error ? { ok: false, text: error.message } : { ok: true, text: 'Picks saved!' })
     setTimeout(() => setMsg(null), 3000)
   }
 
   const setSemi = (i: number, code: string | null) => setPick((p) => {
     const next = [...p.semi]
-    if (code === null) next.splice(i, 1)
-    else { next[i] = code }
+    if (code === null) next.splice(i, 1); else next[i] = code
     return { ...p, semi: next.filter(Boolean) }
   })
-
   const setQuarter = (i: number, code: string | null) => setPick((p) => {
     const next = [...p.quarter]
-    if (code === null) next.splice(i, 1)
-    else { next[i] = code }
+    if (code === null) next.splice(i, 1); else next[i] = code
     return { ...p, quarter: next.filter(Boolean) }
   })
 
   const allTaken = [pick.champion, pick.runner_up, ...pick.semi, ...pick.quarter].filter(Boolean) as string[]
 
-  const scored = pick.pts_champion !== null || pick.pts_runner_up !== null || pick.pts_semi !== null || pick.pts_quarter !== null
-  const totalEarned = (pick.pts_champion ?? 0) + (pick.pts_runner_up ?? 0) + (pick.pts_semi ?? 0) + (pick.pts_quarter ?? 0)
+  if (!openYet) {
+    return (
+      <Card className="p-5">
+        <SectionHeader title={title} sub={sub} />
+        <div className="mt-3 flex items-center gap-2 text-sm text-texts"><LockIcon size={16} /> {waitingNote}</div>
+      </Card>
+    )
+  }
 
-  if (loading) return <div className="space-y-3"><Skeleton className="h-12 rounded-xl" /><Skeleton className="h-12 rounded-xl" /></div>
-
-  const stages = [
-    { key: 'champion', label: 'Tournament Champion', pts: TOURNAMENT_POINTS.champion, count: 1 },
-    { key: 'runner_up', label: 'Runner-Up', pts: TOURNAMENT_POINTS.runner_up, count: 1 },
-    { key: 'semi', label: 'Semi-Finalists', pts: TOURNAMENT_POINTS.semi, count: 2 },
-    { key: 'quarter', label: 'Quarter-Finalists', pts: TOURNAMENT_POINTS.quarter, count: 4 },
-  ]
+  if (loading) return <Card className="p-5"><Skeleton className="h-12 rounded-xl" /></Card>
 
   return (
+    <Card className="p-5">
+      <SectionHeader
+        title={title}
+        sub={locked ? lockedNote : sub}
+        action={<Pill tone="default">Just for fun</Pill>}
+      />
+
+      <div className="space-y-5 mt-4">
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-texts mb-1.5">🏆 Champion</label>
+          <TeamPicker value={pick.champion} onChange={(c) => setPick((p) => ({ ...p, champion: c }))} exclude={allTaken.filter((t) => t !== pick.champion)} placeholder="Pick tournament winner…" disabled={locked} />
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-texts mb-1.5">🥈 Runner-Up</label>
+          <TeamPicker value={pick.runner_up} onChange={(c) => setPick((p) => ({ ...p, runner_up: c }))} exclude={allTaken.filter((t) => t !== pick.runner_up)} placeholder="Pick finalist…" disabled={locked} />
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-texts mb-1.5">🏅 Semi-Finalists</label>
+          <div className="grid grid-cols-2 gap-2">
+            {[0, 1].map((i) => (
+              <TeamPicker key={i} value={pick.semi[i] ?? null} onChange={(c) => setSemi(i, c)} exclude={allTaken.filter((t) => t !== pick.semi[i])} placeholder={`Semi #${i + 1}…`} disabled={locked} />
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-texts mb-1.5">🎖 Quarter-Finalists</label>
+          <div className="grid grid-cols-2 gap-2">
+            {[0, 1, 2, 3].map((i) => (
+              <TeamPicker key={i} value={pick.quarter[i] ?? null} onChange={(c) => setQuarter(i, c)} exclude={allTaken.filter((t) => t !== pick.quarter[i])} placeholder={`Quarter #${i + 1}…`} disabled={locked} />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {!locked && (
+        <div className="flex items-center justify-end gap-3 mt-5 pt-4 border-t border-border/60">
+          {msg && <span className={`text-sm font-semibold ${msg.ok ? 'text-primary' : 'text-error'}`}>{msg.text}</span>}
+          <Button onClick={save} disabled={saving || !userId}>{saving ? 'Saving…' : 'Save picks'}</Button>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/* ---------- tournament picks tab — two for-fun phases, no points ---------- */
+function TournamentPicksTab({
+  userId, phase1Locked, phase2Open, phase2Locked,
+}: { userId: string | null; phase1Locked: boolean; phase2Open: boolean; phase2Locked: boolean }) {
+  return (
     <div className="space-y-5">
-      <Card className="p-5">
-        <SectionHeader
-          title="Tournament Picks"
-          sub={r32Locked ? 'Knockout has started — picks are locked.' : 'Pick the teams that go furthest. Locked when Round of 32 kicks off.'}
-          action={<div className="flex items-center gap-2">{scored && <Pill tone="gold">+{totalEarned} pts</Pill>}<Pill tone="default">For fun · no effect on standings</Pill></div>}
-        />
-
-        <div className="space-y-5 mt-4">
-          {/* Champion */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-texts">🏆 Champion <span className="text-gold normal-case">+{TOURNAMENT_POINTS.champion}</span></label>
-              {pick.pts_champion !== null && <Pill tone={pick.pts_champion > 0 ? 'green' : 'red'}>+{pick.pts_champion}</Pill>}
-            </div>
-            <TeamPicker
-              value={pick.champion}
-              onChange={(c) => setPick((p) => ({ ...p, champion: c }))}
-              exclude={allTaken.filter((t) => t !== pick.champion)}
-              placeholder="Pick tournament winner…"
-              disabled={r32Locked}
-            />
-          </div>
-
-          {/* Runner-up */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-texts">🥈 Runner-Up <span className="text-blue normal-case">+{TOURNAMENT_POINTS.runner_up}</span></label>
-              {pick.pts_runner_up !== null && <Pill tone={pick.pts_runner_up > 0 ? 'green' : 'red'}>+{pick.pts_runner_up}</Pill>}
-            </div>
-            <TeamPicker
-              value={pick.runner_up}
-              onChange={(c) => setPick((p) => ({ ...p, runner_up: c }))}
-              exclude={allTaken.filter((t) => t !== pick.runner_up)}
-              placeholder="Pick finalist…"
-              disabled={r32Locked}
-            />
-          </div>
-
-          {/* Semi-finalists */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-texts">🏅 Semi-Finalists <span className="text-primary normal-case">+{TOURNAMENT_POINTS.semi} each</span></label>
-              {pick.pts_semi !== null && <Pill tone={pick.pts_semi > 0 ? 'green' : 'red'}>+{pick.pts_semi}</Pill>}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {[0, 1].map((i) => (
-                <TeamPicker key={i}
-                  value={pick.semi[i] ?? null}
-                  onChange={(c) => setSemi(i, c)}
-                  exclude={allTaken.filter((t) => t !== pick.semi[i])}
-                  placeholder={`Semi #${i + 1}…`}
-                  disabled={r32Locked}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Quarter-finalists */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-bold uppercase tracking-wider text-texts">🎖 Quarter-Finalists <span className="text-texts normal-case">+{TOURNAMENT_POINTS.quarter} each</span></label>
-              {pick.pts_quarter !== null && <Pill tone={pick.pts_quarter > 0 ? 'green' : 'red'}>+{pick.pts_quarter}</Pill>}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {[0, 1, 2, 3].map((i) => (
-                <TeamPicker key={i}
-                  value={pick.quarter[i] ?? null}
-                  onChange={(c) => setQuarter(i, c)}
-                  exclude={allTaken.filter((t) => t !== pick.quarter[i])}
-                  placeholder={`Quarter #${i + 1}…`}
-                  disabled={r32Locked}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {!r32Locked && (
-          <div className="flex items-center justify-end gap-3 mt-5 pt-4 border-t border-border/60">
-            {msg && <span className={`text-sm font-semibold ${msg.ok ? 'text-primary' : 'text-error'}`}>{msg.text}</span>}
-            <Button onClick={save} disabled={saving || !userId}>
-              {saving ? 'Saving…' : 'Save picks'}
-            </Button>
-          </div>
-        )}
-
-        <div className="mt-4 pt-4 border-t border-border/60">
-          <p className="text-[11px] text-texts leading-relaxed">
-            Max possible: Champion {TOURNAMENT_POINTS.champion} + Runner-up {TOURNAMENT_POINTS.runner_up} + 2× Semi {TOURNAMENT_POINTS.semi * 2} + 4× Quarter {TOURNAMENT_POINTS.quarter * 4} = <span className="font-bold text-textp">{TOURNAMENT_POINTS.champion + TOURNAMENT_POINTS.runner_up + TOURNAMENT_POINTS.semi * 2 + TOURNAMENT_POINTS.quarter * 4} pts</span> · <span className="font-bold">for fun only — does not affect standings or prizes</span>
-          </p>
-        </div>
-      </Card>
-
-      {/* scoring rules reference */}
-      <Card className="p-4">
-        <SectionHeader title="How tournament picks are scored" />
-        <div className="space-y-2 mt-3">
-          {stages.map((s) => (
-            <div key={s.key} className="flex items-center justify-between">
-              <span className="text-sm text-texts">{s.label}</span>
-              <span className="text-sm font-extrabold tabular-nums text-primary">+{s.pts}{s.count > 1 ? ` × ${s.count}` : ''}</span>
-            </div>
-          ))}
-        </div>
-      </Card>
+      <div className="px-1">
+        <p className="text-[12px] text-texts font-medium leading-relaxed">
+          🎈 The bracket game is <span className="font-bold text-textp">just for fun</span> — it has no effect on points, standings or prizes. Make a pre-tournament call, then re-pick once the group stage is done.
+        </p>
+      </div>
+      <PhasePicks
+        userId={userId}
+        phase="pre"
+        title="Phase 1 · Pre-tournament"
+        sub="Call it before a ball is kicked. Locks at the first match kickoff."
+        locked={phase1Locked}
+        openYet
+        lockedNote="The tournament has started — Phase 1 picks are locked."
+        waitingNote=""
+      />
+      <PhasePicks
+        userId={userId}
+        phase="r32"
+        title="Phase 2 · After the group stage"
+        sub="A second chance once the Round of 32 is set. Locks at the first Round-of-16 kickoff."
+        locked={phase2Locked}
+        openYet={phase2Open}
+        lockedNote="Round of 16 has started — Phase 2 picks are locked."
+        waitingNote="Opens once the group stage wraps up and the Round of 32 is confirmed."
+      />
     </div>
   )
 }
@@ -336,13 +307,23 @@ function BracketPageInner() {
   const [selected, setSelected] = useState<ModalMatch | null>(null)
   const [tab, setTab] = useState(searchParams.get('tab') === 'picks' ? 'picks' : 'bracket')
   const [userId, setUserId] = useState<string | null>(null)
+  const [bracketEnabled, setBracketEnabled] = useState(true)
+  const [firstKickoff, setFirstKickoff] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       setUserId(user?.id ?? null)
-      const { data } = await supabase.from('matches').select('*, rounds(name, order)').in('round_id', Object.values(ROUND_IDS)).order('match_date', { ascending: true })
+      const [{ data }, { data: firstMatch }] = await Promise.all([
+        supabase.from('matches').select('*, rounds(name, order)').in('round_id', Object.values(ROUND_IDS)).order('match_date', { ascending: true }),
+        supabase.from('matches').select('match_date').order('match_date', { ascending: true }).limit(1).maybeSingle(),
+      ])
       setMatches((data ?? []) as unknown as Match[])
+      setFirstKickoff((firstMatch as { match_date: string } | null)?.match_date ?? null)
+      if (user) {
+        const { league } = await getActiveLeague(supabase, user.id)
+        setBracketEnabled(league?.bracket_enabled !== false)
+      }
       setLoading(false)
     }
     load()
@@ -360,23 +341,28 @@ function BracketPageInner() {
   const r16Over = qf.some((m) => m.home_team !== 'TBC')
   const qfOver = sf.some((m) => m.home_team !== 'TBC')
   const sfOver = fin.some((m) => m.home_team !== 'TBC')
-  const r32Locked = r32.some((m) => m.is_locked || new Date(m.match_date) <= new Date())
+
+  // For-fun bracket phase windows (auto from fixtures)
+  const phase1Locked = firstKickoff != null && new Date(firstKickoff) <= new Date()
+  const phase2Open = groupStageOver
+  const phase2Locked = r16.some((m) => m.is_locked || new Date(m.match_date) <= new Date())
 
   const openModal = (m: Match) => setSelected({ ...m, round_name: (m.rounds as { name: string })?.name ?? '' })
 
   if (loading) return <div className="space-y-5"><Skeleton className="h-9 w-44" /><Skeleton className="h-12 w-full" /><Skeleton className="h-96 rounded-xl" /></div>
 
+  const tabs = bracketEnabled
+    ? [{ key: 'bracket', label: 'Bracket' }, { key: 'picks', label: 'Bracket Game' }]
+    : [{ key: 'bracket', label: 'Bracket' }]
+  const activeTab = bracketEnabled ? tab : 'bracket'
+
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Knockout" title="Bracket" sub="Round of 32 onward · tap any match for details." />
 
-      <Tabs
-        tabs={[{ key: 'bracket', label: 'Bracket' }, { key: 'picks', label: 'My Tournament Picks' }]}
-        value={tab}
-        onChange={setTab}
-      />
+      <Tabs tabs={tabs} value={activeTab} onChange={setTab} />
 
-      {tab === 'bracket' ? (
+      {activeTab === 'bracket' ? (
         !groupStageOver ? (
           <EmptyState icon={<TreeIcon size={22} />} title="Group stage still underway" desc="The bracket unlocks once the Round of 32 teams are confirmed." />
         ) : (
@@ -394,7 +380,7 @@ function BracketPageInner() {
           </Card>
         )
       ) : (
-        <TournamentPicksTab userId={userId} r32Locked={r32Locked} />
+        <TournamentPicksTab userId={userId} phase1Locked={phase1Locked} phase2Open={phase2Open} phase2Locked={phase2Locked} />
       )}
 
       {selected && <MatchModal match={selected} onClose={() => setSelected(null)} />}

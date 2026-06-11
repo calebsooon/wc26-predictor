@@ -18,6 +18,7 @@ export interface League {
   type: LeagueType
   join_code?: string | null
   scoring?: unknown
+  bracket_enabled?: boolean
 }
 
 export interface ActiveLeague {
@@ -57,7 +58,7 @@ export async function getActiveLeague(supabase: SupabaseClient, userId: string):
   if (!activeId) return { league: null, weights: DEFAULT_WEIGHTS, memberIds: [], memberProfiles: [] }
 
   const [{ data: leagueRow }, { data: members }] = await Promise.all([
-    supabase.from('leagues').select('id, name, type, join_code, scoring').eq('id', activeId).maybeSingle(),
+    supabase.from('leagues').select('id, name, type, join_code, scoring, bracket_enabled').eq('id', activeId).maybeSingle(),
     supabase.from('league_members').select('user_id, profiles(id, username, avatar_url)').eq('league_id', activeId),
   ])
 

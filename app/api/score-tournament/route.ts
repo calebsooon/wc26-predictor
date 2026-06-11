@@ -63,7 +63,7 @@ export async function POST() {
   if (!preds || preds.length === 0) return NextResponse.json({ updated: 0 })
 
   const updates = (preds as Record<string, unknown>[]).map((pred) => {
-    const u: Record<string, unknown> = { user_id: pred.user_id }
+    const u: Record<string, unknown> = { user_id: pred.user_id, phase: pred.phase ?? 'pre' }
     if (champion !== null) u.pts_champion = pred.champion === champion ? TOURNAMENT_POINTS.champion : 0
     if (runner_up !== null) u.pts_runner_up = pred.runner_up === runner_up ? TOURNAMENT_POINTS.runner_up : 0
     if (actualSemis.size > 0) {
@@ -77,7 +77,7 @@ export async function POST() {
     return u
   })
 
-  const { error: uErr } = await supabase.from('tournament_predictions').upsert(updates, { onConflict: 'user_id' })
+  const { error: uErr } = await supabase.from('tournament_predictions').upsert(updates, { onConflict: 'user_id,phase' })
   if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 })
 
   return NextResponse.json({

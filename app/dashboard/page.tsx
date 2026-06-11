@@ -40,6 +40,7 @@ export default function DashboardPage() {
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [isMoney, setIsMoney] = useState(false)
   const [leagueName, setLeagueName] = useState('')
+  const [bracketEnabled, setBracketEnabled] = useState(true)
   const [rulesOpen, setRulesOpen] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -74,6 +75,7 @@ export default function DashboardPage() {
       setWeights(w)
       setIsMoney(league?.type === 'money')
       setLeagueName(league?.name ?? '')
+      setBracketEnabled(league?.bracket_enabled !== false)
 
       const ids = memberIds.length ? memberIds : [user.id]
       const { data: scored } = await supabase.from('predictions')
@@ -98,8 +100,8 @@ export default function DashboardPage() {
         .not('gw_number', 'is', null)
       setGwMatchRows((gwMatches ?? []) as unknown as MatchGWRow[])
 
-      const { data: tp } = await supabase.from('tournament_predictions').select('user_id').eq('user_id', user.id).maybeSingle()
-      setHasTournamentPick(!!tp)
+      const { data: tp } = await supabase.from('tournament_predictions').select('user_id').eq('user_id', user.id).limit(1)
+      setHasTournamentPick(!!(tp && tp.length))
 
       // Latest rank snapshot for this user in this league → My Rank trend arrow
       const { data: snap } = league ? await supabase
@@ -200,11 +202,11 @@ export default function DashboardPage() {
         <Link href="/predictions"><Button variant="primary" icon={<BoltIcon size={16} />}>Make predictions</Button></Link>
       </div>
 
-      {!hasTournamentPick && (
+      {bracketEnabled && !hasTournamentPick && (
         <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-gold/[0.07] border border-gold/20">
           <div>
-            <p className="text-sm font-bold text-textp">Make your tournament picks</p>
-            <p className="text-xs text-texts mt-0.5">Pick champion, finalists and more before the knockout rounds start.</p>
+            <p className="text-sm font-bold text-textp">Play the bracket game</p>
+            <p className="text-xs text-texts mt-0.5">Call the champion, finalists and more — just for fun, no effect on points.</p>
           </div>
           <Link href="/bracket?tab=picks" className="shrink-0">
             <Pill tone="gold">Pick now →</Pill>

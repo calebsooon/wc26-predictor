@@ -7,7 +7,7 @@ import {
   PageHeader, Card, StatCard, Button, Avatar, ProgressBar, Skeleton, Pill, SectionHeader, EmptyState, TrophyIcon,
 } from '@/components/ui'
 import { getTeam } from '@/lib/teams'
-import { TOURNAMENT_POINTS, weightedMatchPoints, weightedGroupPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
+import { weightedMatchPoints, weightedGroupPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { getActiveLeague } from '@/lib/league'
 
 interface Profile { id: string; username: string; avatar_url: string | null; is_admin: boolean }
@@ -65,7 +65,7 @@ export default function ProfilePage() {
         .eq('user_id', user.id).not('points_awarded', 'is', null)
       setPreds((mine ?? []) as unknown as ScoredPred[])
 
-      const { data: tp } = await supabase.from('tournament_predictions').select('*').eq('user_id', user.id).maybeSingle()
+      const { data: tp } = await supabase.from('tournament_predictions').select('*').eq('user_id', user.id).eq('phase', 'pre').maybeSingle()
       if (tp) setTournamentPred(tp as unknown as TournamentPred)
 
       const { data: gp } = await supabase.from('group_predictions').select('group_name, ranked_codes, points_awarded').eq('user_id', user.id).order('group_name')
@@ -210,30 +210,23 @@ export default function ProfilePage() {
         </div>
       </Card>
 
-      {/* tournament picks */}
+      {/* tournament picks — for fun, no points */}
       <Card className="p-5">
-        <SectionHeader title="Tournament picks" sub="Your pre-knockout champion and finalist selections." />
+        <SectionHeader title="Bracket game picks" sub="Your for-fun champion and finalist calls — no effect on points." />
         {!tournamentPred || (!tournamentPred.champion && !tournamentPred.runner_up && !tournamentPred.semi?.length && !tournamentPred.quarter?.length) ? (
-          <EmptyState icon={<TrophyIcon size={20} />} title="No tournament picks" desc="Go to Bracket → My Tournament Picks to make your selections." />
+          <EmptyState icon={<TrophyIcon size={20} />} title="No bracket picks" desc="Go to Bracket → Bracket Game to make your selections." />
         ) : (
           <div className="space-y-3 mt-3">
             {[
-              { label: '🏆 Champion', value: tournamentPred.champion, pts: tournamentPred.pts_champion != null ? (tournamentPred.pts_champion > 0 ? weights.champion : 0) : null, max: weights.champion },
-              { label: '🥈 Runner-Up', value: tournamentPred.runner_up, pts: tournamentPred.pts_runner_up != null ? (tournamentPred.pts_runner_up > 0 ? weights.runnerUp : 0) : null, max: weights.runnerUp },
+              { label: '🏆 Champion', value: tournamentPred.champion },
+              { label: '🥈 Runner-Up', value: tournamentPred.runner_up },
             ].map((row) => row.value && (
-              <div key={row.label} className="flex items-center justify-between p-2.5 rounded-lg bg-surface border border-border">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-lg">{getTeam(row.value).flag}</span>
-                  <div>
-                    <p className="text-[11px] text-texts font-bold uppercase tracking-wider">{row.label}</p>
-                    <p className="text-sm font-bold text-textp">{getTeam(row.value).name}</p>
-                  </div>
+              <div key={row.label} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-surface border border-border">
+                <span className="text-lg">{getTeam(row.value).flag}</span>
+                <div>
+                  <p className="text-[11px] text-texts font-bold uppercase tracking-wider">{row.label}</p>
+                  <p className="text-sm font-bold text-textp">{getTeam(row.value).name}</p>
                 </div>
-                {row.pts !== null ? (
-                  <Pill tone={row.pts > 0 ? 'green' : 'red'}>+{row.pts}</Pill>
-                ) : (
-                  <span className="text-xs text-texts">+{row.max} possible</span>
-                )}
               </div>
             ))}
             {tournamentPred.semi?.length > 0 && (
@@ -246,7 +239,6 @@ export default function ProfilePage() {
                     </div>
                   ))}
                 </div>
-                {tournamentPred.pts_semi !== null && <Pill tone={tournamentPred.pts_semi > 0 ? 'green' : 'red'} className="mt-2">+{Math.round((tournamentPred.pts_semi ?? 0) / TOURNAMENT_POINTS.semi) * weights.semi}</Pill>}
               </div>
             )}
             {tournamentPred.quarter?.length > 0 && (
@@ -259,7 +251,6 @@ export default function ProfilePage() {
                     </div>
                   ))}
                 </div>
-                {tournamentPred.pts_quarter !== null && <Pill tone={tournamentPred.pts_quarter > 0 ? 'green' : 'red'} className="mt-2">+{Math.round((tournamentPred.pts_quarter ?? 0) / TOURNAMENT_POINTS.quarter) * weights.quarter}</Pill>}
               </div>
             )}
           </div>
