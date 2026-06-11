@@ -61,7 +61,7 @@ export default function ProfilePage() {
 
       const { data: mine } = await supabase
         .from('predictions')
-        .select('points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer')
+        .select('points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
         .eq('user_id', user.id).not('points_awarded', 'is', null)
       setPreds((mine ?? []) as unknown as ScoredPred[])
 
@@ -77,7 +77,7 @@ export default function ProfilePage() {
       const ids = memberIds.length ? memberIds : [user.id]
       const { data: all } = await supabase
         .from('predictions')
-        .select('user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer')
+        .select('user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
         .not('points_awarded', 'is', null)
         .in('user_id', ids)
       const agg = new Map<string, number>()

@@ -5,11 +5,11 @@ import { createClient } from '@/lib/supabase-browser'
 import { PageHeader, Tabs, Card, Skeleton, EmptyState, TrophyIcon, Avatar, Pill } from '@/components/ui'
 import { LeaderboardTable, type LBRow } from '@/components/football'
 import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
-import { getActiveLeague } from '@/lib/league'
+import { getActiveLeague, getMyLeagues, setActiveLeague, type League } from '@/lib/league'
 import { DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { GW_NAMES, GW_SHORT, GW_PRIZES, OVERALL_PRIZES, formatPrize, prizeTone } from '@/lib/prizes'
 
-const PRED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer, profiles(username, avatar_url), matches(gw_number)'
+const PRED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, profiles(username, avatar_url), matches(gw_number)'
 
 interface PredRow {
   user_id: string
@@ -39,25 +39,39 @@ export default function LeaderboardPage() {
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [leagueName, setLeagueName] = useState<string>('')
   const [isMoney, setIsMoney] = useState(false)
+  const [myLeagues, setMyLeagues] = useState<League[]>([])
+  const [activeLeagueId, setActiveLeagueId] = useState<string | null>(null)
   const [prevRanks, setPrevRanks] = useState<Map<string, number>>(new Map())
   const [userId, setUserId] = useState<string | null>(null)
   const [tab, setTab] = useState('all')
   const [loading, setLoading] = useState(true)
+
+  async function applyLeague(uid: string) {
+    const { league, weights: w, memberIds: ids, memberProfiles } = await getActiveLeague(supabase, uid)
+    setWeights(w)
+    setMembers(memberProfiles)
+    setMemberIds(ids)
+    setLeagueName(league?.name ?? '')
+    setIsMoney(league?.type === 'money')
+    setActiveLeagueId(league?.id ?? null)
+    await Promise.all([fetchRows(ids), fetchSnaps(league?.id ?? null)])
+  }
+
+  async function switchLeague(id: string) {
+    if (!userId || id === activeLeagueId) return
+    await setActiveLeague(supabase, userId, id)
+    setLoading(true)
+    await applyLeague(userId)
+    setLoading(false)
+  }
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setLoading(false); return }
       setUserId(user.id)
-
-      const { league, weights: w, memberIds: ids, memberProfiles } = await getActiveLeague(supabase, user.id)
-      setWeights(w)
-      setMembers(memberProfiles)
-      setMemberIds(ids)
-      setLeagueName(league?.name ?? '')
-      setIsMoney(league?.type === 'money')
-
-      await Promise.all([fetchRows(ids), fetchSnaps(league?.id ?? null)])
+      setMyLeagues(await getMyLeagues(supabase, user.id))
+      await applyLeague(user.id)
       setLoading(false)
     }
     load()
@@ -124,6 +138,24 @@ export default function LeaderboardPage() {
         sub={tab === 'all' ? (isMoney ? 'Overall season standings + prize pool' : 'Overall season standings') : gwLabel}
         action={leagueName ? <Pill tone={isMoney ? 'gold' : 'green'}>{leagueName}{isMoney ? ' · 💰' : ''}</Pill> : undefined}
       />
+
+      {myLeagues.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto -mx-4 px-4 no-scrollbar pb-0.5">
+          {myLeagues.map((l) => {
+            const active = l.id === activeLeagueId
+            return (
+              <button
+                key={l.id}
+                onClick={() => switchLeague(l.id)}
+                className={`shrink-0 flex items-center gap-1.5 px-3 h-9 rounded-full border text-[13px] font-bold transition-colors ${active ? 'border-primary bg-primary/12 text-primary' : 'border-border bg-surface text-texts hover:text-textp'}`}
+              >
+                {l.name}
+                <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${l.type === 'money' ? 'bg-gold/20 text-gold' : 'bg-primary/15 text-primary'}`}>{l.type === 'money' ? '$' : 'PTS'}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       <div className="overflow-x-auto -mx-4 px-4">
         <Tabs tabs={GW_TABS} value={tab} onChange={setTab} />

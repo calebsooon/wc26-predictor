@@ -38,7 +38,7 @@ export default function FixturesPage() {
 
       const { data: myData } = await supabase
         .from('predictions')
-        .select('match_id, pred_home, pred_away, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer')
+        .select('match_id, pred_home, pred_away, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
         .eq('user_id', user.id)
       const map: Record<string, MyPred> = {}
       for (const p of myData ?? []) map[(p as { match_id: string }).match_id] = p as unknown as MyPred

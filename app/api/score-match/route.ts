@@ -36,7 +36,7 @@ export async function POST(request: Request) {
 
   const { data: predictions, error: predsErr } = await supabase
     .from('predictions')
-    .select('id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff')
+    .select('id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff, pred_btts, pred_no_scorer')
     .eq('match_id', match_id)
   if (predsErr) return NextResponse.json({ error: predsErr.message }, { status: 500 })
   if (!predictions || predictions.length === 0) return NextResponse.json({ match_id, scored: 0 })
@@ -50,8 +50,8 @@ export async function POST(request: Request) {
       pred_away: (p as { pred_away: number }).pred_away,
       points_awarded: b.total,
       pts_outcome: b.outcome, pts_exact: b.exact, pts_goal_diff: b.goalDiff,
-      pts_total_goals: b.totalGoals, pts_btts: b.btts, pts_first_team: b.firstTeam,
-      pts_first_scorer: b.firstScorer,
+      pts_total_goals: b.totalGoals, pts_team_goals: b.teamGoals, pts_btts: b.btts,
+      pts_first_team: b.firstTeam, pts_first_scorer: b.firstScorer,
     }
   })
 

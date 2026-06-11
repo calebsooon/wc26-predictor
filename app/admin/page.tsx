@@ -207,7 +207,7 @@ function AdminActions() {
   )
 }
 
-interface LeagueAdminRow { id: string; name: string; type: 'money' | 'points'; join_code: string; scoring: unknown; bracket_enabled: boolean; memberIds: string[] }
+interface LeagueAdminRow { id: string; name: string; type: 'money' | 'points'; join_code: string; scoring: unknown; bracket_enabled: boolean; reveal_predictions: boolean; memberIds: string[] }
 interface AdminProfile { id: string; username: string | null }
 
 function ScoringEditor({ league, onClose }: { league: LeagueAdminRow; onClose: () => void }) {
@@ -325,6 +325,12 @@ function LeagueManage({
             {league.bracket_enabled ? 'On' : 'Off'}
           </Button>
         </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-texts">Reveal picks pre-game</span>
+          <Button size="sm" variant={league.reveal_predictions ? 'primary' : 'surface'} onClick={() => patch({ reveal_predictions: !league.reveal_predictions }, league.reveal_predictions ? 'Predictions hidden until kickoff.' : 'Predictions visible pre-game.')}>
+            {league.reveal_predictions ? 'On' : 'Off'}
+          </Button>
+        </div>
       </div>
 
       {/* members */}
@@ -373,6 +379,62 @@ function LeagueManage({
   )
 }
 
+function UserLeagueAssign({
+  leagues, profiles, onChanged,
+}: { leagues: LeagueAdminRow[]; profiles: AdminProfile[]; onChanged: () => Promise<void> | void }) {
+  const supabase = createClient()
+  const [userId, setUserId] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  async function toggle(leagueId: string, isMember: boolean) {
+    if (!userId) return
+    setBusy(true); setMsg(null)
+    const { error } = isMember
+      ? await supabase.from('league_members').delete().eq('league_id', leagueId).eq('user_id', userId)
+      : await supabase.from('league_members').insert({ league_id: leagueId, user_id: userId })
+    setBusy(false)
+    setMsg(error ? error.message : 'Updated.')
+    if (!error) await onChanged()
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border space-y-3">
+      <SectionHeader title="Assign a user to leagues" sub="Pick a user, then tick the leagues they belong to. Users can be in several leagues at once." />
+      <select
+        value={userId}
+        onChange={(e) => setUserId(e.target.value)}
+        className="w-full sm:w-72 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-textp focus:outline-none focus:border-primary"
+      >
+        <option value="">Select a user…</option>
+        {profiles.map((p) => <option key={p.id} value={p.id}>{p.username ?? p.id}</option>)}
+      </select>
+
+      {userId && (
+        <div className="space-y-1.5">
+          {leagues.map((l) => {
+            const isMember = l.memberIds.includes(userId)
+            return (
+              <button
+                key={l.id}
+                onClick={() => toggle(l.id, isMember)}
+                disabled={busy}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left transition-colors ${isMember ? 'border-primary/40 bg-primary/[0.06]' : 'border-border bg-surface hover:border-texts/40'}`}
+              >
+                <span className={`w-4 h-4 rounded grid place-items-center text-[10px] font-black shrink-0 ${isMember ? 'bg-primary text-[#04210F]' : 'border border-border'}`}>{isMember ? '✓' : ''}</span>
+                <span className="flex-1 text-[13px] font-semibold text-textp truncate">{l.name}</span>
+                <Pill tone={l.type === 'money' ? 'gold' : 'green'}>{l.type === 'money' ? 'Money' : 'Points'}</Pill>
+              </button>
+            )
+          })}
+          {leagues.length === 0 && <p className="text-[13px] text-texts">No leagues yet.</p>}
+        </div>
+      )}
+      {msg && <p className="text-[12px] text-primary font-medium">{msg}</p>}
+    </div>
+  )
+}
+
 function LeagueAdmin() {
   const supabase = createClient()
   const [leagues, setLeagues] = useState<LeagueAdminRow[]>([])
@@ -383,10 +445,11 @@ function LeagueAdmin() {
   const [msg, setMsg] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)   // scoring editor
   const [managing, setManaging] = useState<string | null>(null) // manage panel
+  const [assignOpen, setAssignOpen] = useState(false)           // per-user assignment
 
   async function load() {
     const [{ data: ls }, { data: ms }, { data: ps }] = await Promise.all([
-      supabase.from('leagues').select('id, name, type, join_code, scoring, bracket_enabled').order('created_at'),
+      supabase.from('leagues').select('id, name, type, join_code, scoring, bracket_enabled, reveal_predictions').order('created_at'),
       supabase.from('league_members').select('league_id, user_id'),
       supabase.from('profiles').select('id, username').order('username'),
     ])
@@ -419,7 +482,13 @@ function LeagueAdmin() {
 
   return (
     <Card className="p-4">
-      <SectionHeader title="Leagues" sub="Create leagues and share their join codes. Only the money league shows the prize pool." />
+      <div className="flex items-start justify-between gap-3">
+        <SectionHeader title="Leagues" sub="Create leagues and share their join codes. Only the money league shows the prize pool." />
+        <Button size="sm" variant={assignOpen ? 'primary' : 'outline'} onClick={() => setAssignOpen((o) => !o)} className="shrink-0">Assign users</Button>
+      </div>
+
+      {assignOpen && <UserLeagueAssign leagues={leagues} profiles={profiles} onChanged={load} />}
+
       <div className="flex flex-wrap items-end gap-2 mt-3">
         <div className="flex-1 min-w-[160px]">
           <label className="block text-[11px] font-bold uppercase tracking-wider text-texts mb-1">League name</label>

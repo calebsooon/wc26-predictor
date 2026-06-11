@@ -34,14 +34,17 @@ export default function MatchDetailPage() {
   const [h, setH] = useState<number | null>(null)
   const [a, setA] = useState<number | null>(null)
   const [firstTeam, setFirstTeam] = useState<string | null>(null)
-  const [scorerId, setScorerId] = useState<number | null>(null)
+  const [scorerId, setScorerId] = useState<number | 'none' | null>(null)
   const [predTotalGoals, setPredTotalGoals] = useState<number | null>(null)
   const [predGoalDiff, setPredGoalDiff] = useState<number | null>(null)
+  const [predBtts, setPredBtts] = useState<boolean | null>(null)
   const [tgManual, setTgManual] = useState(false)
   const [gdManual, setGdManual] = useState(false)
+  const [bttsManual, setBttsManual] = useState(false)
   const [players, setPlayers] = useState<PlayerForPicker[]>([])
   const [others, setOthers] = useState<OtherPred[]>([])
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
+  const [revealPredictions, setRevealPredictions] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
@@ -80,25 +83,28 @@ export default function MatchDetailPage() {
 
       const { data: mine } = await supabase
         .from('predictions')
-        .select('pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff')
+        .select('pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff, pred_btts, pred_no_scorer')
         .eq('user_id', user.id).eq('match_id', id).maybeSingle()
       if (mine) {
         const p = mine as Record<string, unknown>
         setH(p.pred_home as number); setA(p.pred_away as number)
         setFirstTeam((p.pred_first_goal_team as string) ?? null)
-        setScorerId((p.pred_first_scorer_id as number) ?? null)
+        setScorerId(p.pred_no_scorer ? 'none' : ((p.pred_first_scorer_id as number) ?? null))
         if (p.pred_total_goals != null) { setPredTotalGoals(p.pred_total_goals as number); setTgManual(true) }
         if (p.pred_goal_diff != null) { setPredGoalDiff(p.pred_goal_diff as number); setGdManual(true) }
+        if (p.pred_btts != null) { setPredBtts(p.pred_btts as boolean); setBttsManual(true) }
       }
 
-      const { weights: w, memberIds } = await getActiveLeague(supabase, user.id)
+      const { league, weights: w, memberIds } = await getActiveLeague(supabase, user.id)
       setWeights(w)
+      const reveal = league?.reveal_predictions === true
+      setRevealPredictions(reveal)
 
       const kickedOff = dbm.is_locked || new Date(dbm.match_date) <= new Date()
-      if (kickedOff) {
+      if (kickedOff || reveal) {
         let q = supabase
           .from('predictions')
-          .select('user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer, profiles(username, avatar_url)')
+          .select('user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, profiles(username, avatar_url)')
           .eq('match_id', id)
         if (memberIds.length) q = q.in('user_id', memberIds)
         const { data: o } = await q
@@ -119,6 +125,10 @@ export default function MatchDetailPage() {
     if (!gdManual && h != null && a != null) setPredGoalDiff(h - a)
   }, [h, a, gdManual])
 
+  useEffect(() => {
+    if (!bttsManual && h != null && a != null) setPredBtts(h > 0 && a > 0)
+  }, [h, a, bttsManual])
+
   if (loading) {
     return <div className="max-w-2xl mx-auto space-y-4"><Skeleton className="h-8 w-32" /><Skeleton className="h-44 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>
   }
@@ -137,9 +147,11 @@ export default function MatchDetailPage() {
       user_id: userId, match_id: id,
       pred_home: h, pred_away: a,
       pred_first_goal_team: firstTeam,
-      pred_first_scorer_id: scorerId,
+      pred_first_scorer_id: typeof scorerId === 'number' ? scorerId : null,
+      pred_no_scorer: scorerId === 'none',
       pred_total_goals: predTotalGoals,
       pred_goal_diff: predGoalDiff,
+      pred_btts: bttsManual ? predBtts : null,
     }, { onConflict: 'user_id,match_id' })
     setSaving(false)
     setJustSaved(true)
@@ -214,11 +226,31 @@ export default function MatchDetailPage() {
                     <p className="text-[9px] text-texts">+{POINTS.totalGoals} if correct</p>
                   )}
                 </div>
-                {/* Both Score — derived display only */}
-                <div className="text-center py-2 rounded-xl bg-surface border border-border/60 flex flex-col justify-center">
+                {/* Both Score — editable hedge */}
+                <div className="flex flex-col items-center gap-1 py-2 px-1 rounded-xl bg-surface border border-border/60">
                   <p className="text-[9px] font-bold uppercase tracking-wider text-texts">Both score</p>
-                  <p className="text-base font-extrabold tabular-nums text-textp mt-0.5">{h > 0 && a > 0 ? 'Yes' : 'No'}</p>
-                  <p className="text-[9px] text-texts mt-0.5">+{POINTS.btts} if correct</p>
+                  {(() => {
+                    const derived = h > 0 && a > 0
+                    const eff = bttsManual ? predBtts : derived
+                    return (
+                      <>
+                        <div className="flex gap-1">
+                          {[{ v: true, l: 'Yes' }, { v: false, l: 'No' }].map((o) => (
+                            <button
+                              key={o.l}
+                              onClick={() => { setPredBtts(o.v); setBttsManual(o.v !== derived) }}
+                              className={`px-2 py-0.5 rounded-md text-[11px] font-bold border transition-all ${eff === o.v ? 'border-primary bg-primary/12 text-primary' : 'border-border bg-card text-texts'}`}
+                            >{o.l}</button>
+                          ))}
+                        </div>
+                        {bttsManual && predBtts !== derived ? (
+                          <button onClick={() => { setBttsManual(false); setPredBtts(derived) }} className="text-[9px] text-primary">↺ Auto</button>
+                        ) : (
+                          <p className="text-[9px] text-texts">+{POINTS.btts} if correct</p>
+                        )}
+                      </>
+                    )
+                  })()}
                 </div>
                 {/* Goal Diff — editable, supports negative */}
                 <div className="flex flex-col items-center gap-1 py-2 px-1 rounded-xl bg-surface border border-border/60">
@@ -235,7 +267,7 @@ export default function MatchDetailPage() {
                   )}
                 </div>
               </div>
-              {((tgManual && predTotalGoals !== h + a) || (gdManual && predGoalDiff !== h - a)) && (
+              {((tgManual && predTotalGoals !== h + a) || (gdManual && predGoalDiff !== h - a) || (bttsManual && predBtts !== (h > 0 && a > 0))) && (
                 <p className="text-[10px] text-gold text-center font-medium">Custom overrides active — earn pts even if your score is wrong</p>
               )}
             </div>
@@ -275,8 +307,8 @@ export default function MatchDetailPage() {
 
       {/* league predictions */}
       <Card className="p-5">
-        <SectionHeader title="League predictions" sub={locked ? 'Revealed — picks are in.' : 'Hidden until kickoff to keep it fair.'} />
-        {!locked ? (
+        <SectionHeader title="League predictions" sub={locked ? 'Revealed — picks are in.' : revealPredictions ? 'Visible pre-game in this league.' : 'Hidden until kickoff to keep it fair.'} />
+        {!locked && !revealPredictions ? (
           <div className="relative">
             <div className="grid sm:grid-cols-2 gap-2 blur-sm select-none pointer-events-none opacity-60">
               {[0, 1, 2, 3].map((i) => (

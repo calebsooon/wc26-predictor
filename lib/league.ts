@@ -19,6 +19,7 @@ export interface League {
   join_code?: string | null
   scoring?: unknown
   bracket_enabled?: boolean
+  reveal_predictions?: boolean
 }
 
 export interface ActiveLeague {
@@ -57,16 +58,19 @@ export async function getActiveLeague(supabase: SupabaseClient, userId: string):
   }
   if (!activeId) return { league: null, weights: DEFAULT_WEIGHTS, memberIds: [], memberProfiles: [] }
 
+  // NB: league_members.user_id FKs to auth.users, not profiles — so we can't embed
+  // profiles via PostgREST. Fetch member ids first, then their profiles by id.
   const [{ data: leagueRow }, { data: members }] = await Promise.all([
-    supabase.from('leagues').select('id, name, type, join_code, scoring, bracket_enabled').eq('id', activeId).maybeSingle(),
-    supabase.from('league_members').select('user_id, profiles(id, username, avatar_url)').eq('league_id', activeId),
+    supabase.from('leagues').select('id, name, type, join_code, scoring, bracket_enabled, reveal_predictions').eq('id', activeId).maybeSingle(),
+    supabase.from('league_members').select('user_id').eq('league_id', activeId),
   ])
 
-  const memberRows = (members ?? []) as unknown as { user_id: string; profiles: ProfileLite | null }[]
-  const memberProfiles = memberRows
-    .map((m) => m.profiles)
-    .filter((p): p is ProfileLite => !!p)
-  const memberIds = memberRows.map((m) => m.user_id)
+  const memberIds = ((members ?? []) as { user_id: string }[]).map((m) => m.user_id)
+  let memberProfiles: ProfileLite[] = []
+  if (memberIds.length) {
+    const { data: profs } = await supabase.from('profiles').select('id, username, avatar_url').in('id', memberIds)
+    memberProfiles = (profs ?? []) as ProfileLite[]
+  }
   const league = (leagueRow as League | null) ?? null
 
   return {

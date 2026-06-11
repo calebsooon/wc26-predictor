@@ -90,15 +90,17 @@ export function PlayerCardPicker({
   label = 'First scorer',
 }: {
   players: PlayerForPicker[]
-  value: number | null
-  onChange: (id: number | null) => void
+  value: number | 'none' | null
+  onChange: (id: number | 'none' | null) => void
   pts: number
   label?: string
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
 
-  const selected = players.find((p) => p.id === value) ?? null
+  const noScorer = value === 'none'
+  const selected = typeof value === 'number' ? (players.find((p) => p.id === value) ?? null) : null
+  const hasChoice = noScorer || !!selected
 
   const grouped = useMemo(() => {
     const q = search.toLowerCase()
@@ -129,7 +131,7 @@ export function PlayerCardPicker({
         <label className="text-xs font-bold uppercase tracking-wider text-texts">
           {label} <span className="text-gold normal-case">+{pts}</span>
         </label>
-        {selected && (
+        {hasChoice && (
           <button onClick={clear} className="text-[10px] font-bold text-texts hover:text-error transition-colors">
             Clear
           </button>
@@ -139,9 +141,11 @@ export function PlayerCardPicker({
       <button
         onClick={() => setOpen((o) => !o)}
         className={`w-full h-11 px-3 rounded-xl border flex items-center gap-2.5 text-sm font-semibold transition-all
-          ${selected ? 'border-gold/40 bg-gold/[0.05]' : 'border-border bg-surface hover:border-texts/30'}`}
+          ${hasChoice ? 'border-gold/40 bg-gold/[0.05]' : 'border-border bg-surface hover:border-texts/30'}`}
       >
-        {selected ? (
+        {noScorer ? (
+          <span className="flex-1 text-left text-textp">🚫 No scorer</span>
+        ) : selected ? (
           <>
             <span className="text-lg leading-none">{getTeam(selected.team_code).flag}</span>
             <span className="flex-1 text-left text-textp truncate">{selected.name}</span>
@@ -176,6 +180,16 @@ export function PlayerCardPicker({
               <button onClick={() => setSearch('')} className="text-texts text-xs shrink-0">✕</button>
             )}
           </div>
+
+          {!search && (
+            <button
+              onClick={() => { onChange('none'); setOpen(false) }}
+              className={`flex items-center gap-2 px-3 h-11 border-b border-border text-left text-sm font-bold transition-colors ${noScorer ? 'bg-gold/10 text-gold' : 'text-textp hover:bg-surface'}`}
+            >
+              🚫 No scorer <span className="text-[11px] font-medium text-texts">(predict nobody scores first)</span>
+              {noScorer && <span className="ml-auto text-gold">✓</span>}
+            </button>
+          )}
 
           <div className="overflow-y-auto p-3 space-y-4">
             {Array.from(grouped.entries()).map(([teamCode, teamPlayers]) => {
