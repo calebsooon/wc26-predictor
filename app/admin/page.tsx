@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
 import {
-  PageHeader, Card, Button, Pill, ScoreStepper, ChipRow, Skeleton, ChevDown, SearchIcon, SectionHeader,
+  PageHeader, Card, Button, Pill, ScoreStepper, ChipRow, Skeleton, ChevDown, SearchIcon, SectionHeader, LeagueBadge,
 } from '@/components/ui'
 import { WEIGHT_FIELDS, resolveWeights, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 
@@ -207,7 +207,8 @@ function AdminActions() {
   )
 }
 
-interface LeagueAdminRow { id: string; name: string; type: 'money' | 'points'; join_code: string; scoring: unknown; bracket_enabled: boolean; reveal_predictions: boolean; memberIds: string[] }
+interface LabelRow { id: string; name: string; color: string }
+interface LeagueAdminRow { id: string; name: string; type: 'money' | 'points'; join_code: string; scoring: unknown; bracket_enabled: boolean; reveal_predictions: boolean; prize_pool: boolean; label_id: string | null; league_labels: { name: string; color: string } | null; memberIds: string[] }
 interface AdminProfile { id: string; username: string | null }
 
 function ScoringEditor({ league, onClose }: { league: LeagueAdminRow; onClose: () => void }) {
@@ -257,8 +258,8 @@ function randomCode() {
 }
 
 function LeagueManage({
-  league, leagues, profiles, onChanged,
-}: { league: LeagueAdminRow; leagues: LeagueAdminRow[]; profiles: AdminProfile[]; onChanged: () => Promise<void> | void }) {
+  league, leagues, profiles, labels, onChanged,
+}: { league: LeagueAdminRow; leagues: LeagueAdminRow[]; profiles: AdminProfile[]; labels: LabelRow[]; onChanged: () => Promise<void> | void }) {
   const supabase = createClient()
   const [name, setName] = useState(league.name)
   const [code, setCode] = useState(league.join_code)
@@ -316,8 +317,21 @@ function LeagueManage({
 
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-texts">Type</span>
-          <ChipRow chips={[{ key: 'points', label: 'Points' }, { key: 'money', label: 'Money' }]} value={league.type} onChange={(v) => patch({ type: v }, 'Type updated.')} />
+          <span className="text-[11px] font-bold uppercase tracking-wider text-texts">Label</span>
+          <select
+            value={league.label_id ?? ''}
+            onChange={(e) => patch({ label_id: e.target.value || null }, 'Label updated.')}
+            className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-[13px] text-textp focus:outline-none focus:border-primary"
+          >
+            <option value="">No label</option>
+            {labels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-texts">Prize pool</span>
+          <Button size="sm" variant={league.prize_pool ? 'gold' : 'surface'} onClick={() => patch({ prize_pool: !league.prize_pool, type: !league.prize_pool ? 'money' : 'points' }, league.prize_pool ? 'Prize pool off.' : 'Prize pool on.')}>
+            {league.prize_pool ? 'On' : 'Off'}
+          </Button>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-bold uppercase tracking-wider text-texts">Bracket game</span>
@@ -423,7 +437,7 @@ function UserLeagueAssign({
               >
                 <span className={`w-4 h-4 rounded grid place-items-center text-[10px] font-black shrink-0 ${isMember ? 'bg-primary text-[#04210F]' : 'border border-border'}`}>{isMember ? '✓' : ''}</span>
                 <span className="flex-1 text-[13px] font-semibold text-textp truncate">{l.name}</span>
-                <Pill tone={l.type === 'money' ? 'gold' : 'green'}>{l.type === 'money' ? 'Money' : 'Points'}</Pill>
+                <LeagueBadge name={l.league_labels?.name} color={l.league_labels?.color} money={l.prize_pool} />
               </button>
             )
           })}
@@ -435,12 +449,62 @@ function UserLeagueAssign({
   )
 }
 
+function LabelManager({ labels, onChanged }: { labels: LabelRow[]; onChanged: () => Promise<void> | void }) {
+  const supabase = createClient()
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [color, setColor] = useState('#22C55E')
+  const [msg, setMsg] = useState<string | null>(null)
+
+  async function create() {
+    if (!name.trim()) return
+    const { error } = await supabase.from('league_labels').insert({ name: name.trim(), color })
+    setMsg(error ? error.message : 'Label created.')
+    if (!error) { setName(''); await onChanged() }
+  }
+  async function del(id: string) {
+    const { error } = await supabase.from('league_labels').delete().eq('id', id)
+    setMsg(error ? error.message : 'Label deleted.')
+    if (!error) await onChanged()
+  }
+
+  return (
+    <div className="mt-3">
+      <button onClick={() => setOpen((o) => !o)} className="text-xs font-bold text-primary hover:underline">
+        {open ? 'Hide labels' : `Manage labels (${labels.length})`}
+      </button>
+      {open && (
+        <div className="mt-2 p-3 rounded-xl border border-border bg-surface/40 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {labels.map((l) => (
+              <span key={l.id} className="inline-flex items-center gap-1">
+                <LeagueBadge name={l.name} color={l.color} />
+                <button onClick={() => del(l.id)} className="text-texts hover:text-error text-xs" title="Delete label">✕</button>
+              </span>
+            ))}
+            {labels.length === 0 && <span className="text-[12px] text-texts">No labels yet — create one below.</span>}
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Label name (e.g. Elite)"
+              className="flex-1 min-w-[140px] rounded-lg border border-border bg-surface px-3 py-2 text-sm text-textp placeholder:text-texts focus:outline-none focus:border-primary" />
+            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-9 w-12 rounded-lg border border-border bg-surface cursor-pointer" title="Label colour" />
+            <Button size="sm" variant="surface" onClick={create} disabled={!name.trim()}>Add label</Button>
+          </div>
+          {msg && <p className="text-[12px] text-primary font-medium">{msg}</p>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function LeagueAdmin() {
   const supabase = createClient()
   const [leagues, setLeagues] = useState<LeagueAdminRow[]>([])
   const [profiles, setProfiles] = useState<AdminProfile[]>([])
+  const [labels, setLabels] = useState<LabelRow[]>([])
   const [name, setName] = useState('')
-  const [type, setType] = useState<'money' | 'points'>('points')
+  const [prizePool, setPrizePool] = useState(false)
+  const [labelId, setLabelId] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)   // scoring editor
@@ -448,17 +512,19 @@ function LeagueAdmin() {
   const [assignOpen, setAssignOpen] = useState(false)           // per-user assignment
 
   async function load() {
-    const [{ data: ls }, { data: ms }, { data: ps }] = await Promise.all([
-      supabase.from('leagues').select('id, name, type, join_code, scoring, bracket_enabled, reveal_predictions').order('created_at'),
+    const [{ data: ls }, { data: ms }, { data: ps }, { data: lbs }] = await Promise.all([
+      supabase.from('leagues').select('id, name, type, join_code, scoring, bracket_enabled, reveal_predictions, prize_pool, label_id, league_labels(name, color)').order('created_at'),
       supabase.from('league_members').select('league_id, user_id'),
       supabase.from('profiles').select('id, username').order('username'),
+      supabase.from('league_labels').select('id, name, color').order('name'),
     ])
     const byLeague = new Map<string, string[]>()
     for (const m of (ms ?? []) as { league_id: string; user_id: string }[]) {
       const arr = byLeague.get(m.league_id) ?? []; arr.push(m.user_id); byLeague.set(m.league_id, arr)
     }
     setProfiles((ps ?? []) as AdminProfile[])
-    setLeagues(((ls ?? []) as Omit<LeagueAdminRow, 'memberIds'>[]).map((l) => ({ ...l, memberIds: byLeague.get(l.id) ?? [] })))
+    setLabels((lbs ?? []) as LabelRow[])
+    setLeagues(((ls ?? []) as unknown as Omit<LeagueAdminRow, 'memberIds'>[]).map((l) => ({ ...l, memberIds: byLeague.get(l.id) ?? [] })))
   }
 
   useEffect(() => {
@@ -473,7 +539,11 @@ function LeagueAdmin() {
     // Retry on the (rare) unique-code collision
     for (let attempt = 0; attempt < 5; attempt++) {
       const code = randomCode()
-      const { error } = await supabase.from('leagues').insert({ name: name.trim(), type, join_code: code, created_by: user?.id ?? null })
+      const { error } = await supabase.from('leagues').insert({
+        name: name.trim(), join_code: code, created_by: user?.id ?? null,
+        type: prizePool ? 'money' : 'points', prize_pool: prizePool,
+        label_id: labelId || null,
+      })
       if (!error) { setName(''); setMsg(`Created “${name.trim()}” · code ${code}`); await load(); break }
       if (!error.message.toLowerCase().includes('duplicate')) { setMsg(error.message); break }
     }
@@ -483,11 +553,13 @@ function LeagueAdmin() {
   return (
     <Card className="p-4">
       <div className="flex items-start justify-between gap-3">
-        <SectionHeader title="Leagues" sub="Create leagues and share their join codes. Only the money league shows the prize pool." />
+        <SectionHeader title="Leagues" sub="Create leagues and share their join codes. Toggle the prize pool per league." />
         <Button size="sm" variant={assignOpen ? 'primary' : 'outline'} onClick={() => setAssignOpen((o) => !o)} className="shrink-0">Assign users</Button>
       </div>
 
       {assignOpen && <UserLeagueAssign leagues={leagues} profiles={profiles} onChanged={load} />}
+
+      <LabelManager labels={labels} onChanged={load} />
 
       <div className="flex flex-wrap items-end gap-2 mt-3">
         <div className="flex-1 min-w-[160px]">
@@ -495,7 +567,14 @@ function LeagueAdmin() {
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Office League"
             className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-textp placeholder:text-texts focus:outline-none focus:border-primary" />
         </div>
-        <ChipRow chips={[{ key: 'points', label: 'Points' }, { key: 'money', label: 'Money' }]} value={type} onChange={(v) => setType(v as 'money' | 'points')} />
+        <div>
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-texts mb-1">Label</label>
+          <select value={labelId} onChange={(e) => setLabelId(e.target.value)} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-textp focus:outline-none focus:border-primary">
+            <option value="">No label</option>
+            {labels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </div>
+        <Button size="sm" variant={prizePool ? 'gold' : 'surface'} onClick={() => setPrizePool((p) => !p)}>Prize pool: {prizePool ? 'On' : 'Off'}</Button>
         <Button size="sm" variant="primary" onClick={create} disabled={busy || !name.trim()}>{busy ? '…' : 'Create'}</Button>
       </div>
       {msg && <p className="text-[12px] text-primary mt-2 font-medium">{msg}</p>}
@@ -504,7 +583,7 @@ function LeagueAdmin() {
         {leagues.map((l) => (
           <div key={l.id} className="py-2.5">
             <div className="flex flex-wrap items-center gap-2.5">
-              <Pill tone={l.type === 'money' ? 'gold' : 'green'}>{l.type === 'money' ? 'Money' : 'Points'}</Pill>
+              <LeagueBadge name={l.league_labels?.name} color={l.league_labels?.color} money={l.prize_pool} />
               <span className="flex-1 min-w-[120px] font-bold text-sm text-textp truncate">{l.name}</span>
               {!l.bracket_enabled && <Pill tone="default">Bracket off</Pill>}
               <span className="text-[11px] text-texts font-medium">{l.memberIds.length} member{l.memberIds.length !== 1 ? 's' : ''}</span>
@@ -516,7 +595,7 @@ function LeagueAdmin() {
                 {editing === l.id ? 'Hide' : 'Scoring'}
               </Button>
             </div>
-            {managing === l.id && <LeagueManage league={l} leagues={leagues} profiles={profiles} onChanged={load} />}
+            {managing === l.id && <LeagueManage league={l} leagues={leagues} profiles={profiles} labels={labels} onChanged={load} />}
             {editing === l.id && <ScoringEditor league={l} onClose={() => setEditing(null)} />}
           </div>
         ))}

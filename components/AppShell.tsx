@@ -4,10 +4,10 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { getMyLeagues, setActiveLeague, type League } from '@/lib/league'
+import { getMyLeagues, setActiveLeague, isMoneyLeague, type League } from '@/lib/league'
 import ThemeToggle from '@/components/ThemeToggle'
 import {
-  Logo, Avatar, ChevDown, Pill,
+  Logo, Avatar, ChevDown, LeagueBadge,
   HomeIcon, CalIcon, TrophyIcon, GridIcon, TreeIcon, UserIcon, ShieldIcon, UsersIcon, HelpIcon,
 } from '@/components/ui'
 
@@ -202,9 +202,9 @@ function LeagueSwitcher({
         onClick={() => setOpen((o) => !o)}
         className={`flex items-center gap-2 rounded-xl border border-border bg-card hover:border-texts/40 transition-colors ${compact ? 'h-9 px-2.5 max-w-[150px]' : 'w-full h-11 px-3'}`}
       >
-        <TrophyIcon size={15} className={active.type === 'money' ? 'text-gold' : 'text-primary'} />
+        <TrophyIcon size={15} className={isMoneyLeague(active) ? 'text-gold' : 'text-primary'} />
         <span className="flex-1 text-left font-bold text-[13px] truncate">{active.name}</span>
-        {!compact && <Pill tone={active.type === 'money' ? 'gold' : 'green'} className="!px-1.5 !py-0.5 !text-[9px]">{active.type === 'money' ? '$' : 'PTS'}</Pill>}
+        {!compact && <LeagueBadge name={active.league_labels?.name} color={active.league_labels?.color} money={isMoneyLeague(active)} />}
         <ChevDown size={13} className="text-texts shrink-0" />
       </button>
       {open && (
@@ -218,9 +218,9 @@ function LeagueSwitcher({
                   onClick={() => { onSwitch(l.id); setOpen(false) }}
                   className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-colors ${l.id === active.id ? 'bg-primary/10' : 'hover:bg-surface'}`}
                 >
-                  <TrophyIcon size={14} className={l.type === 'money' ? 'text-gold' : 'text-primary'} />
+                  <TrophyIcon size={14} className={isMoneyLeague(l) ? 'text-gold' : 'text-primary'} />
                   <span className="flex-1 text-[13px] font-semibold text-textp truncate">{l.name}</span>
-                  <Pill tone={l.type === 'money' ? 'gold' : 'green'} className="!px-1.5 !py-0.5 !text-[9px]">{l.type === 'money' ? '$' : 'PTS'}</Pill>
+                  <LeagueBadge name={l.league_labels?.name} color={l.league_labels?.color} money={isMoneyLeague(l)} />
                 </button>
               ))}
             </div>

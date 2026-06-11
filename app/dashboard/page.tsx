@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
-import { Card, StatCard, SectionHeader, Button, Skeleton, BoltIcon, EmptyState, CalIcon, Pill, CountUp, ScoreStepper, Countdown, ProgressBar } from '@/components/ui'
+import { Card, StatCard, SectionHeader, Button, Skeleton, BoltIcon, EmptyState, CalIcon, Pill, CountUp, ScoreStepper, Countdown, ProgressBar, LeagueBadge } from '@/components/ui'
 import { NextPredictCard, LeaderboardTable, type LBRow } from '@/components/football'
 import RulesModal from '@/components/RulesModal'
 import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
-import { getActiveLeague } from '@/lib/league'
+import { getActiveLeague, isMoneyLeague, type LeagueLabel } from '@/lib/league'
 import { toUIMatch, isKnockout, type DBMatch, type MyPred } from '@/lib/match-ui'
 import { getTeam } from '@/lib/teams'
 import { SCORING_RULES, weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
@@ -40,6 +40,7 @@ export default function DashboardPage() {
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [isMoney, setIsMoney] = useState(false)
   const [leagueName, setLeagueName] = useState('')
+  const [leagueLabel, setLeagueLabel] = useState<LeagueLabel | null>(null)
   const [bracketEnabled, setBracketEnabled] = useState(true)
   const [rulesOpen, setRulesOpen] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -73,8 +74,9 @@ export default function DashboardPage() {
       // Active league — scopes the leaderboard, prize and points to its members + weights
       const { league, weights: w, memberIds, memberProfiles } = await getActiveLeague(supabase, user.id)
       setWeights(w)
-      setIsMoney(league?.type === 'money')
+      setIsMoney(isMoneyLeague(league))
       setLeagueName(league?.name ?? '')
+      setLeagueLabel(league?.league_labels ?? null)
       setBracketEnabled(league?.bracket_enabled !== false)
 
       const ids = memberIds.length ? memberIds : [user.id]
@@ -191,7 +193,7 @@ export default function DashboardPage() {
         <div>
           <div className="flex items-center gap-2 mb-1.5">
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-primary">World Cup 2026</span>
-            {leagueName && <Pill tone={isMoney ? 'gold' : 'green'} className="!py-0.5">{leagueName}{isMoney ? ' · 💰' : ''}</Pill>}
+            {leagueName && <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-textp">{leagueName}<LeagueBadge name={leagueLabel?.name} color={leagueLabel?.color} money={isMoney} /></span>}
           </div>
           <h1 className="text-2xl sm:text-[28px] font-black tracking-tight leading-none">Dashboard</h1>
           <p className="text-texts font-medium mt-2 text-sm">

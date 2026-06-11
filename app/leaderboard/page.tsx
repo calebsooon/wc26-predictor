@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { PageHeader, Tabs, Card, Skeleton, EmptyState, TrophyIcon, Avatar, Pill } from '@/components/ui'
+import { PageHeader, Tabs, Card, Skeleton, EmptyState, TrophyIcon, Avatar, LeagueBadge } from '@/components/ui'
 import { LeaderboardTable, type LBRow } from '@/components/football'
 import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
-import { getActiveLeague, getMyLeagues, setActiveLeague, type League } from '@/lib/league'
+import { getActiveLeague, getMyLeagues, setActiveLeague, isMoneyLeague, type League, type LeagueLabel } from '@/lib/league'
 import { DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { GW_NAMES, GW_SHORT, GW_PRIZES, OVERALL_PRIZES, formatPrize, prizeTone } from '@/lib/prizes'
 
@@ -38,6 +38,7 @@ export default function LeaderboardPage() {
   const [memberIds, setMemberIds] = useState<string[]>([])
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [leagueName, setLeagueName] = useState<string>('')
+  const [leagueLabel, setLeagueLabel] = useState<LeagueLabel | null>(null)
   const [isMoney, setIsMoney] = useState(false)
   const [myLeagues, setMyLeagues] = useState<League[]>([])
   const [activeLeagueId, setActiveLeagueId] = useState<string | null>(null)
@@ -52,7 +53,8 @@ export default function LeaderboardPage() {
     setMembers(memberProfiles)
     setMemberIds(ids)
     setLeagueName(league?.name ?? '')
-    setIsMoney(league?.type === 'money')
+    setLeagueLabel(league?.league_labels ?? null)
+    setIsMoney(isMoneyLeague(league))
     setActiveLeagueId(league?.id ?? null)
     await Promise.all([fetchRows(ids), fetchSnaps(league?.id ?? null)])
   }
@@ -136,7 +138,7 @@ export default function LeaderboardPage() {
         eyebrow="Standings"
         title="Leaderboard"
         sub={tab === 'all' ? (isMoney ? 'Overall season standings + prize pool' : 'Overall season standings') : gwLabel}
-        action={leagueName ? <Pill tone={isMoney ? 'gold' : 'green'}>{leagueName}{isMoney ? ' · 💰' : ''}</Pill> : undefined}
+        action={leagueName ? <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-textp">{leagueName}<LeagueBadge name={leagueLabel?.name} color={leagueLabel?.color} money={isMoney} /></span> : undefined}
       />
 
       {myLeagues.length > 1 && (
@@ -150,7 +152,7 @@ export default function LeaderboardPage() {
                 className={`shrink-0 flex items-center gap-1.5 px-3 h-9 rounded-full border text-[13px] font-bold transition-colors ${active ? 'border-primary bg-primary/12 text-primary' : 'border-border bg-surface text-texts hover:text-textp'}`}
               >
                 {l.name}
-                <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${l.type === 'money' ? 'bg-gold/20 text-gold' : 'bg-primary/15 text-primary'}`}>{l.type === 'money' ? '$' : 'PTS'}</span>
+                <LeagueBadge name={l.league_labels?.name} color={l.league_labels?.color} money={isMoneyLeague(l)} />
               </button>
             )
           })}

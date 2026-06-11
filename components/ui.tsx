@@ -157,6 +157,26 @@ export function StatCard({
   )
 }
 
+/* ---------- LeagueBadge (custom label + colour chip) ---------- */
+function hexAlpha(hex: string, alpha: number): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex
+  return hex + Math.round(alpha * 255).toString(16).padStart(2, '0')
+}
+export function LeagueBadge({
+  name, color, money = false, className = '',
+}: { name?: string | null; color?: string | null; money?: boolean; className?: string }) {
+  const label = name ?? (money ? 'Money' : 'League')
+  const c = color ?? (money ? '#EAB308' : '#22C55E')
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold border whitespace-nowrap ${className}`}
+      style={{ color: c, borderColor: hexAlpha(c, 0.4), background: hexAlpha(c, 0.12) }}
+    >
+      {label}{money && ' 💰'}
+    </span>
+  )
+}
+
 /* ---------- CountUp (animated number, respects reduced motion) ---------- */
 export function CountUp({ value, duration = 700, prefix = '', className = '' }: { value: number; duration?: number; prefix?: string; className?: string }) {
   const [display, setDisplay] = useState(0)

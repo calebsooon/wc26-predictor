@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
-import { getMyLeagues, setActiveLeague, type League } from '@/lib/league'
-import { Card, Button, PageHeader, Pill, Skeleton, TrophyIcon } from '@/components/ui'
+import { getMyLeagues, setActiveLeague, isMoneyLeague, type League } from '@/lib/league'
+import { Card, Button, PageHeader, Skeleton, TrophyIcon, LeagueBadge } from '@/components/ui'
 
 export default function JoinPage() {
   const supabase = createClient()
@@ -85,9 +85,9 @@ export default function JoinPage() {
           <p className="text-xs font-bold uppercase tracking-wider text-texts px-1">Your leagues</p>
           {leagues.map((l) => (
             <Card key={l.id} className="p-3 flex items-center gap-3">
-              <TrophyIcon size={18} className={l.type === 'money' ? 'text-gold' : 'text-primary'} />
+              <TrophyIcon size={18} className={isMoneyLeague(l) ? 'text-gold' : 'text-primary'} />
               <span className="flex-1 font-bold text-sm truncate">{l.name}</span>
-              <Pill tone={l.type === 'money' ? 'gold' : 'green'}>{l.type === 'money' ? 'Money' : 'Points'}</Pill>
+              <LeagueBadge name={l.league_labels?.name} color={l.league_labels?.color} money={isMoneyLeague(l)} />
               <Button variant="surface" size="sm" onClick={() => makeActive(l.id)}>Open</Button>
             </Card>
           ))}
