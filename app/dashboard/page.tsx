@@ -45,79 +45,76 @@ export default function DashboardPage() {
   const [bracketEnabled, setBracketEnabled] = useState(true)
   const [rulesOpen, setRulesOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.replace('/login'); return }
-      setUserId(user.id)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.replace('/login'); return }
+        setUserId(user.id)
 
-      const { data: roundData } = await supabase
-        .from('rounds')
-        .select('id, name, "order", matches (id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, gameweek)')
-        .order('"order"')
-        .order('match_date', { referencedTable: 'matches' })
+        // Phase 1 — critical path: matches + my picks (shows hero card fast)
+        const [{ data: roundData, error: roundErr }, { data: myData, error: myErr }] = await Promise.all([
+          supabase
+            .from('rounds')
+            .select('id, name, "order", matches (id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, gameweek)')
+            .order('"order"')
+            .order('match_date', { referencedTable: 'matches' }),
+          supabase
+            .from('predictions')
+            .select('match_id, pred_home, pred_away, points_awarded, pts_exact, pts_outcome, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, pred_first_goal_team, pred_first_scorer_id')
+            .eq('user_id', user.id),
+        ])
+        if (roundErr) throw roundErr
+        if (myErr) throw myErr
 
-      const flat: DBMatch[] = []
-      for (const r of (roundData ?? []) as unknown as RoundRow[]) {
-        for (const m of r.matches ?? []) flat.push({ ...m, round_name: r.name })
+        const flat: DBMatch[] = []
+        for (const r of (roundData ?? []) as unknown as RoundRow[]) {
+          for (const m of r.matches ?? []) flat.push({ ...m, round_name: r.name })
+        }
+        setMatches(flat)
+
+        const map: Record<string, MyPred> = {}
+        for (const p of myData ?? []) map[(p as { match_id: string }).match_id] = p as unknown as MyPred
+        setPreds(map)
+
+        // Show hero card immediately — phase 2 loads behind it
+        setLoading(false)
+
+        // Phase 2 — deferred: league, leaderboard, prize, rank snapshot (parallel)
+        const { league, weights: w, memberIds, memberProfiles } = await getActiveLeague(supabase, user.id)
+        setWeights(w)
+        setIsMoney(isMoneyLeague(league))
+        setLeagueName(league?.name ?? '')
+        setLeagueLabel(league?.league_labels ?? null)
+        setBracketEnabled(league?.bracket_enabled !== false)
+
+        const ids = memberIds.length ? memberIds : [user.id]
+        const [
+          { data: scored },
+          { data: gwMatches },
+          { data: tp },
+          snapResult,
+        ] = await Promise.all([
+          supabase.from('predictions').select(SCORED_COLS).not('points_awarded', 'is', null).in('user_id', ids),
+          supabase.from('matches').select('gw_number, real_home_score').not('gw_number', 'is', null),
+          supabase.from('tournament_predictions').select('user_id').eq('user_id', user.id).limit(1),
+          league
+            ? supabase.from('rank_snapshots').select('rank, snapshot_at').eq('user_id', user.id).eq('league_id', league.id).order('snapshot_at', { ascending: false }).limit(1).maybeSingle()
+            : Promise.resolve({ data: null }),
+        ])
+
+        const allScored = (scored ?? []) as unknown as ScoredPredRow[]
+        setScoredPreds(allScored)
+        setLb(aggregateLeaderboard({ scoredPreds: allScored, profiles: memberProfiles as ProfileLite[], userId: user.id, weights: w }))
+        setGwMatchRows((gwMatches ?? []) as unknown as MatchGWRow[])
+        setHasTournamentPick(!!(tp && tp.length))
+        setPrevRank((snapResult.data as { rank: number } | null)?.rank ?? null)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load dashboard')
+        setLoading(false)
       }
-      setMatches(flat)
-
-      const { data: myData } = await supabase
-        .from('predictions')
-        .select('match_id, pred_home, pred_away, points_awarded, pts_exact, pts_outcome, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, pred_first_goal_team, pred_first_scorer_id')
-        .eq('user_id', user.id)
-      const map: Record<string, MyPred> = {}
-      for (const p of myData ?? []) map[(p as { match_id: string }).match_id] = p as unknown as MyPred
-      setPreds(map)
-
-      // Active league — scopes the leaderboard, prize and points to its members + weights
-      const { league, weights: w, memberIds, memberProfiles } = await getActiveLeague(supabase, user.id)
-      setWeights(w)
-      setIsMoney(isMoneyLeague(league))
-      setLeagueName(league?.name ?? '')
-      setLeagueLabel(league?.league_labels ?? null)
-      setBracketEnabled(league?.bracket_enabled !== false)
-
-      const ids = memberIds.length ? memberIds : [user.id]
-      const { data: scored } = await supabase.from('predictions')
-        .select(SCORED_COLS)
-        .not('points_awarded', 'is', null)
-        .in('user_id', ids)
-      const allScored = (scored ?? []) as unknown as ScoredPredRow[]
-      setScoredPreds(allScored)
-
-      // Leaderboard aggregation — shared helper keeps order identical to /leaderboard
-      setLb(aggregateLeaderboard({
-        scoredPreds: allScored,
-        profiles: memberProfiles as ProfileLite[],
-        userId: user.id,
-        weights: w,
-      }))
-
-      // GW match status for prize range
-      const { data: gwMatches } = await supabase
-        .from('matches')
-        .select('gw_number, real_home_score')
-        .not('gw_number', 'is', null)
-      setGwMatchRows((gwMatches ?? []) as unknown as MatchGWRow[])
-
-      const { data: tp } = await supabase.from('tournament_predictions').select('user_id').eq('user_id', user.id).limit(1)
-      setHasTournamentPick(!!(tp && tp.length))
-
-      // Latest rank snapshot for this user in this league → My Rank trend arrow
-      const { data: snap } = league ? await supabase
-        .from('rank_snapshots')
-        .select('rank, snapshot_at')
-        .eq('user_id', user.id)
-        .eq('league_id', league.id)
-        .order('snapshot_at', { ascending: false })
-        .limit(1)
-        .maybeSingle() : { data: null }
-      setPrevRank((snap as { rank: number } | null)?.rank ?? null)
-
-      setLoading(false)
     }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -196,6 +193,17 @@ export default function DashboardPage() {
         <Skeleton className="h-9 w-48" />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
         <Skeleton className="h-40 rounded-xl" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-5">
+        <div className="pb-4 border-b border-border">
+          <h1 className="text-2xl font-black tracking-tight">Dashboard</h1>
+        </div>
+        <EmptyState icon={<CalIcon size={22} />} title="Couldn't load dashboard" desc={error} />
       </div>
     )
   }
