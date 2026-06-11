@@ -41,3 +41,7 @@ next-env.d.ts
 # git bundles / patch archives (used for branch transfers, not source)
 *.bundle
 *-patches.zip
+
+# local AI assistant config / guidance (kept out of the repo)
+CLAUDE.md
+.claude/

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { PageHeader, Tabs, Card, Skeleton, EmptyState, TrophyIcon, Avatar } from '@/components/ui'
 import { LeaderboardTable, type LBRow } from '@/components/football'
+import { aggregateLeaderboard } from '@/lib/leaderboard'
 import { GW_NAMES, GW_SHORT, GW_PRIZES, OVERALL_PRIZES, formatPrize, prizeTone } from '@/lib/prizes'
 
 interface PredRow {
@@ -67,36 +68,9 @@ export default function LeaderboardPage() {
 
   const board = useMemo<LBRow[]>(() => {
     const gwNum = tab === 'all' ? null : parseInt(tab)
-    const filtered = gwNum == null ? rows : rows.filter((r) => r.matches?.gw_number === gwNum)
-
-    const agg = new Map<string, LBRow & { scored: number; correct: number; outcomeWins: number }>()
-
-    // Seed every registered player at 0 so they show even before scoring starts
-    for (const p of allProfiles) {
-      agg.set(p.id, {
-        id: p.id, name: p.username ?? '?', avatar: p.avatar_url,
-        pts: 0, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 0, you: p.id === userId,
-      })
-    }
-
-    for (const r of filtered) {
-      const cur = agg.get(r.user_id) ?? {
-        id: r.user_id, name: r.profiles?.username ?? '?', avatar: r.profiles?.avatar_url,
-        pts: 0, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 0, you: r.user_id === userId,
-      }
-      cur.pts += r.points_awarded
-      cur.scored += 1
-      if (r.points_awarded >= 3) cur.correct += 1
-      if ((r.pts_outcome ?? 0) > 0) cur.outcomeWins += 1
-      if ((r.pts_exact ?? 0) > 0) cur.exact = (cur.exact ?? 0) + 1
-      agg.set(r.user_id, cur)
-    }
-
     const prizes = tab === 'all' ? OVERALL_PRIZES : GW_PRIZES
 
-    const sorted = Array.from(agg.values())
-      .map((r) => ({ ...r, acc: r.scored ? Math.round((r.correct / r.scored) * 100) : 0 }))
-      .sort((a, b) => b.pts - a.pts || b.outcomeWins - a.outcomeWins)
+    const sorted = aggregateLeaderboard({ scoredPreds: rows, profiles: allProfiles, userId, gwNumber: gwNum })
 
     return sorted.map((r, currentIdx) => {
       const prevRank = prevRanks.get(r.id)
@@ -162,7 +136,7 @@ export default function LeaderboardPage() {
 
           <div className="px-1">
             <p className="text-[11px] text-texts font-medium">
-              Tiebreaker: number of correct outcome predictions. Prize pool per GW: 1st +$15 · 2nd +$10 · 3rd +$5 · 4th $0 · 5th -$5 · 6th -$10 · 7th -$15. Overall: 1st +$40 · 7th -$40.
+              Tiebreaker: most correct outcomes, then alphabetical. Prize pool per GW: 1st +$15 · 2nd +$10 · 3rd +$5 · 4th $0 · 5th -$5 · 6th -$10 · 7th -$15. Overall: 1st +$40 · 7th -$40.
             </p>
           </div>
         </>

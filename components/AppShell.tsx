@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase-browser'
 import ThemeToggle from '@/components/ThemeToggle'
 import {
   Logo, Avatar, ChevDown,
-  HomeIcon, CalIcon, TrophyIcon, GridIcon, TreeIcon, UserIcon, ShieldIcon, UsersIcon,
+  HomeIcon, CalIcon, TrophyIcon, GridIcon, TreeIcon, UserIcon, ShieldIcon, UsersIcon, HelpIcon,
 } from '@/components/ui'
 
 interface Profile {
@@ -25,6 +25,7 @@ const SIDEBAR: NavItem[] = [
   { href: '/groups',      label: 'Groups',      icon: GridIcon },
   { href: '/bracket',     label: 'Bracket',     icon: TreeIcon },
   { href: '/squads',      label: 'Squads',      icon: UsersIcon },
+  { href: '/rules',       label: 'Rules',       icon: HelpIcon },
   { href: '/profile',     label: 'Profile',     icon: UserIcon },
   { href: '/admin',       label: 'Admin',       icon: ShieldIcon, admin: true },
 ]
@@ -83,7 +84,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-60 border-r border-border bg-surface/50 z-30">
         <Link href="/dashboard" className="h-16 flex items-center gap-2.5 px-5 border-b border-border">
           <Logo />
-          <span className="font-extrabold tracking-tight">BRACKET XI</span>
+          <span className="font-extrabold tracking-tight">MATCHDAY</span>
         </Link>
         <nav className="flex-1 p-3 space-y-1">
           {items.map((it) => {
@@ -120,7 +121,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="h-full max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between">
             <Link href="/dashboard" className="flex items-center gap-2 lg:hidden">
               <Logo size={26} />
-              <span className="font-extrabold tracking-tight text-sm">BRACKET XI</span>
+              <span className="font-extrabold tracking-tight text-sm">MATCHDAY</span>
             </Link>
             <div className="hidden lg:flex items-center gap-3.5">
               <span className="text-xs font-bold uppercase tracking-wider text-texts whitespace-nowrap">World Cup 2026</span>

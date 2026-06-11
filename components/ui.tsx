@@ -1,7 +1,7 @@
 'use client'
 
 /* ============================================================
-   BRACKET XI — UI primitives (Dark Stadium Analytics)
+   MatchDay — UI primitives (Dark Stadium Analytics)
    Ported from the Claude Design bundle to typed React/Tailwind.
    All colours are token-driven so they flip light/dark automatically.
    ============================================================ */
@@ -46,6 +46,39 @@ export function Avatar({
       }}
     >
       {(name?.[0] ?? '?')}
+    </div>
+  )
+}
+
+/* ---------- Modal (generic overlay) ---------- */
+export function Modal({
+  open, onClose, title, children, maxWidth = 'max-w-lg',
+}: { open: boolean; onClose: () => void; title?: ReactNode; children: ReactNode; maxWidth?: string }) {
+  const overlayRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
+  }, [open, onClose])
+
+  if (!open) return null
+  return (
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-0 sm:px-4"
+      onClick={(e) => { if (e.target === overlayRef.current) onClose() }}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className={`w-full ${maxWidth} bg-card border border-border rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]`}>
+        <div className="flex items-center justify-between gap-3 px-5 h-14 shrink-0 border-b border-border bg-surface">
+          <h2 className="font-extrabold text-textp text-[15px] truncate">{title}</h2>
+          <button onClick={onClose} aria-label="Close" className="text-texts hover:text-textp p-1 -mr-1 shrink-0">✕</button>
+        </div>
+        <div className="flex-1 overflow-y-auto">{children}</div>
+      </div>
     </div>
   )
 }
@@ -108,7 +141,12 @@ export function StatCard({
   const c = accents[accent]
   return (
     <div className="bg-card border border-border rounded-xl p-4 relative overflow-hidden">
-      {accent !== 'default' && <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: c }} />}
+      {accent !== 'default' && (
+        <>
+          <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: c }} />
+          <div className="absolute -right-8 -top-10 w-28 h-28 rounded-full blur-2xl opacity-[0.10] pointer-events-none" style={{ background: c }} />
+        </>
+      )}
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-bold uppercase tracking-wider text-texts">{label}</span>
         {icon && <span className="text-texts/70">{icon}</span>}
@@ -117,6 +155,29 @@ export function StatCard({
       {sub && <div className="mt-2 text-xs text-texts font-medium">{sub}</div>}
     </div>
   )
+}
+
+/* ---------- CountUp (animated number, respects reduced motion) ---------- */
+export function CountUp({ value, duration = 700, prefix = '', className = '' }: { value: number; duration?: number; prefix?: string; className?: string }) {
+  const [display, setDisplay] = useState(0)
+  const fromRef = useRef(0)
+  useEffect(() => {
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (reduce || duration <= 0) { setDisplay(value); fromRef.current = value; return }
+    const from = fromRef.current
+    const start = performance.now()
+    let raf = 0
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration)
+      const eased = 1 - Math.pow(1 - t, 3) // easeOutCubic
+      setDisplay(Math.round(from + (value - from) * eased))
+      if (t < 1) raf = requestAnimationFrame(tick)
+      else fromRef.current = value
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [value, duration])
+  return <span className={className}>{prefix}{display}</span>
 }
 
 /* ---------- Pill ---------- */
@@ -367,7 +428,7 @@ export function EmptyState({ icon, title, desc, action }: { icon?: ReactNode; ti
 export function Logo({ size = 28 }: { size?: number }) {
   return (
     <div className="grid place-items-center rounded-md shrink-0 bg-primary" style={{ width: size, height: size }}>
-      <span style={{ fontSize: size * 0.5 }} className="font-black text-[#04210F] tracking-tight">XI</span>
+      <span style={{ fontSize: size * 0.5 }} className="font-black text-[#04210F] tracking-tight">MD</span>
     </div>
   )
 }
@@ -426,4 +487,7 @@ export const SunIcon = ({ size = 18, className }: IcoProps) => (
 )
 export const MoonIcon = ({ size = 18, className }: IcoProps) => (
   <Icon size={size} className={className} d={<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />} />
+)
+export const HelpIcon = ({ size = 20, className }: IcoProps) => (
+  <Icon size={size} className={className} d={<><circle cx="12" cy="12" r="9" /><path d="M9.2 9.3a2.8 2.8 0 0 1 5.4 1c0 1.9-2.6 2.3-2.6 4" /><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none" /></>} />
 )

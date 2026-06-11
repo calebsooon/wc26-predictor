@@ -4,9 +4,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
-import { Card, StatCard, SectionHeader, Button, Skeleton, BoltIcon, EmptyState, CalIcon, Pill } from '@/components/ui'
+import { Card, StatCard, SectionHeader, Button, Skeleton, BoltIcon, EmptyState, CalIcon, Pill, CountUp, ScoreStepper, Countdown, ProgressBar } from '@/components/ui'
 import { NextPredictCard, LeaderboardTable, type LBRow } from '@/components/football'
-import { toUIMatch, type DBMatch, type MyPred } from '@/lib/match-ui'
+import RulesModal from '@/components/RulesModal'
+import { aggregateLeaderboard } from '@/lib/leaderboard'
+import { toUIMatch, isKnockout, type DBMatch, type MyPred } from '@/lib/match-ui'
+import { getTeam } from '@/lib/teams'
 import { SCORING_RULES } from '@/lib/scoring'
 import { computePrizeSnapshot, formatPrize, prizeTone, GW_NAMES, GW_PRIZES, OVERALL_PRIZES } from '@/lib/prizes'
 
@@ -28,6 +31,8 @@ export default function DashboardPage() {
   const [hasTournamentPick, setHasTournamentPick] = useState(true)
   const [scoredPreds, setScoredPreds] = useState<ScoredPredRow[]>([])
   const [gwMatchRows, setGwMatchRows] = useState<MatchGWRow[]>([])
+  const [prevRank, setPrevRank] = useState<number | null>(null)
+  const [rulesOpen, setRulesOpen] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -50,7 +55,7 @@ export default function DashboardPage() {
 
       const { data: myData } = await supabase
         .from('predictions')
-        .select('match_id, pred_home, pred_away, points_awarded, pts_exact, pred_first_goal_team, pred_first_scorer_id')
+        .select('match_id, pred_home, pred_away, points_awarded, pts_exact, pts_outcome, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer, pred_first_goal_team, pred_first_scorer_id')
         .eq('user_id', user.id)
       const map: Record<string, MyPred> = {}
       for (const p of myData ?? []) map[(p as { match_id: string }).match_id] = p as unknown as MyPred
@@ -66,17 +71,12 @@ export default function DashboardPage() {
       const allScored = (scored ?? []) as unknown as ScoredPredRow[]
       setScoredPreds(allScored)
 
-      // Leaderboard aggregation — seed all profiles at 0 so everyone shows up
-      const agg = new Map<string, LBRow>()
-      for (const p of (profiles ?? []) as { id: string; username: string | null; avatar_url: string | null }[]) {
-        agg.set(p.id, { id: p.id, name: p.username ?? '?', avatar: p.avatar_url, pts: 0, you: p.id === user.id })
-      }
-      for (const row of allScored) {
-        const cur = agg.get(row.user_id) ?? { id: row.user_id, name: row.profiles?.username ?? '?', avatar: row.profiles?.avatar_url, pts: 0, you: row.user_id === user.id }
-        cur.pts += row.points_awarded
-        agg.set(row.user_id, cur)
-      }
-      setLb(Array.from(agg.values()).sort((a, b) => b.pts - a.pts))
+      // Leaderboard aggregation — shared helper keeps order identical to /leaderboard
+      setLb(aggregateLeaderboard({
+        scoredPreds: allScored,
+        profiles: (profiles ?? []) as { id: string; username: string | null; avatar_url: string | null }[],
+        userId: user.id,
+      }))
 
       // GW match status for prize range
       const { data: gwMatches } = await supabase
@@ -87,6 +87,16 @@ export default function DashboardPage() {
 
       const { data: tp } = await supabase.from('tournament_predictions').select('user_id').eq('user_id', user.id).maybeSingle()
       setHasTournamentPick(!!tp)
+
+      // Latest rank snapshot for this user → drives the My Rank trend arrow
+      const { data: snap } = await supabase
+        .from('rank_snapshots')
+        .select('rank, snapshot_at')
+        .eq('user_id', user.id)
+        .order('snapshot_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      setPrevRank((snap as { rank: number } | null)?.rank ?? null)
 
       setLoading(false)
     }
@@ -100,12 +110,19 @@ export default function DashboardPage() {
   }, [lb, userId])
   const myPts = lb.find((r) => r.id === userId)?.pts ?? 0
   const exactCount = useMemo(() => Object.values(preds).filter((p) => (p.pts_exact ?? 0) > 0).length, [preds])
+  const rankMove = prevRank != null && myRank != null ? prevRank - myRank : null
 
   const upcoming = useMemo(() => matches
     .filter((m) => m.real_home_score === null && new Date(m.match_date) > new Date())
     .sort((a, b) => +new Date(a.match_date) - +new Date(b.match_date)), [matches])
   const missingCount = upcoming.filter((m) => !preds[m.id]).length
-  const next = upcoming.slice(0, 4)
+  const hero = upcoming[0] ?? null
+  const next = upcoming.slice(1, 5)
+
+  // My scored matches (most recent first) → powers form, accuracy, recent feed
+  const myScored = useMemo(() => matches
+    .filter((m) => m.real_home_score !== null && (preds[m.id]?.points_awarded ?? null) !== null)
+    .sort((a, b) => +new Date(b.match_date) - +new Date(a.match_date)), [matches, preds])
 
   const prize = useMemo(() => {
     if (!userId || scoredPreds.length === 0) return null
@@ -178,11 +195,26 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Hero — soonest match to predict */}
+      {hero && (
+        <HeroMatch
+          m={hero}
+          pred={{ h: preds[hero.id]?.pred_home ?? null, a: preds[hero.id]?.pred_away ?? null }}
+          onChange={(side, v) => savePred(hero.id, side, v)}
+          onOpen={() => router.push(`/match/${hero.id}`)}
+        />
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="My Rank" value={myRank ? `#${myRank}` : '–'} sub={`of ${lb.length || 1} players`} accent="gold" />
-        <StatCard label="Total Points" value={myPts} accent="green" />
-        <StatCard label="Exact Scores" value={exactCount} accent="blue" />
-        <StatCard label="Predictions" value={Object.keys(preds).length} sub={`${missingCount} still to make`} />
+        <StatCard
+          label="My Rank"
+          value={myRank ? <span className="inline-flex items-center gap-2">#<CountUp value={myRank} />{rankMove != null && rankMove !== 0 && <TrendArrow move={rankMove} />}</span> : '–'}
+          sub={`of ${lb.length || 1} players`}
+          accent="gold"
+        />
+        <StatCard label="Total Points" value={<CountUp value={myPts} />} accent="green" />
+        <StatCard label="Exact Scores" value={<CountUp value={exactCount} />} accent="blue" />
+        <StatCard label="Predictions" value={<CountUp value={Object.keys(preds).length} />} sub={`${missingCount} still to make`} />
       </div>
 
       {/* Prize card */}
@@ -198,7 +230,7 @@ export default function DashboardPage() {
             action={<Link href="/predictions" className="text-sm font-bold text-primary hover:underline">All fixtures →</Link>}
           />
           {next.length === 0 ? (
-            <EmptyState icon={<CalIcon size={22} />} title="No upcoming matches" desc="Fixtures will appear here as kickoff approaches." />
+            !hero && <EmptyState icon={<CalIcon size={22} />} title="No upcoming matches" desc="Fixtures will appear here as kickoff approaches." />
           ) : (
             <div className="grid sm:grid-cols-2 gap-3">
               {next.map((m) => (
@@ -211,6 +243,10 @@ export default function DashboardPage() {
                 />
               ))}
             </div>
+          )}
+
+          {myScored.length > 0 && (
+            <RecentResults items={myScored.slice(0, 5).map((m) => ({ m, pred: preds[m.id] }))} onOpen={(id) => router.push(`/match/${id}`)} />
           )}
         </div>
 
@@ -227,8 +263,13 @@ export default function DashboardPage() {
             )}
           </Card>
 
+          {myScored.length > 0 && <FormAccuracy items={myScored.map((m) => preds[m.id])} />}
+
           <Card className="overflow-hidden">
-            <div className="flex items-center px-4 h-12 border-b border-border"><h3 className="font-extrabold text-textp text-[15px]">Scoring</h3></div>
+            <div className="flex items-center justify-between px-4 h-12 border-b border-border">
+              <h3 className="font-extrabold text-textp text-[15px]">Scoring</h3>
+              <button onClick={() => setRulesOpen(true)} className="text-xs font-bold text-primary hover:underline">Full rules →</button>
+            </div>
             <div className="divide-y divide-border/60">
               {SCORING_RULES.map((s) => (
                 <div key={s.key} className="flex items-center justify-between px-4 py-2.5">
@@ -240,6 +281,8 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
+
+      <RulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} />
     </div>
   )
 }
@@ -328,4 +371,146 @@ function PrizeCard({ prize }: { prize: ReturnType<typeof computePrizeSnapshot> }
 function ordinal(n: number) {
   const s = ['th', 'st', 'nd', 'rd'], v = n % 100
   return n + (s[(v - 20) % 10] ?? s[v] ?? s[0])
+}
+
+function ptsColor(pts: number) {
+  return pts >= 8 ? 'rgb(var(--primary))' : pts > 0 ? 'rgb(var(--gold))' : 'rgb(var(--error))'
+}
+
+function TrendArrow({ move }: { move: number }) {
+  const up = move > 0
+  return <span className={`text-xs font-bold tabular-nums ${up ? 'text-success' : 'text-error'}`}>{up ? '▲' : '▼'}{Math.abs(move)}</span>
+}
+
+/* Hero — the single soonest match to predict */
+function HeroMatch({
+  m, pred, onChange, onOpen,
+}: { m: DBMatch; pred: { h: number | null; a: number | null }; onChange: (side: 'h' | 'a', v: number) => void; onOpen: () => void }) {
+  const home = getTeam(m.home_team), away = getTeam(m.away_team)
+  const missing = pred.h == null || pred.a == null
+  const knockout = isKnockout(m)
+  const stage = knockout ? (m.round_name ?? 'Knockout') : `Group ${m.group_name ?? ''}`.trim()
+  return (
+    <Card className="relative overflow-hidden p-5 sm:p-6">
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.10] via-transparent to-gold/[0.06] pointer-events-none" />
+      <div className="relative">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <Pill tone={knockout ? 'gold' : 'green'}>{stage}</Pill>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-texts">Next up</span>
+          </div>
+          {missing ? <Pill tone="red">● Missing</Pill> : <Pill tone="blue">✓ Submitted</Pill>}
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <button onClick={onOpen} className="flex flex-col items-center gap-2 flex-1 min-w-0 group">
+            <span className="text-[44px] sm:text-[54px] leading-none">{home.flag}</span>
+            <span className="font-bold text-textp text-sm truncate max-w-full group-hover:text-primary transition-colors">{home.name}</span>
+          </button>
+
+          <div className="flex flex-col items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              <ScoreStepper value={pred.h} onChange={(v) => onChange('h', v)} />
+              <span className="text-texts font-bold">:</span>
+              <ScoreStepper value={pred.a} onChange={(v) => onChange('a', v)} />
+            </div>
+            <span className="text-[11px] flex items-center gap-1 font-semibold">
+              <span className="text-texts">Locks in</span> <Countdown kickoff={m.match_date} className="text-[11px]" />
+            </span>
+          </div>
+
+          <button onClick={onOpen} className="flex flex-col items-center gap-2 flex-1 min-w-0 group">
+            <span className="text-[44px] sm:text-[54px] leading-none">{away.flag}</span>
+            <span className="font-bold text-textp text-sm truncate max-w-full group-hover:text-primary transition-colors">{away.name}</span>
+          </button>
+        </div>
+
+        <div className="flex justify-center mt-5">
+          <Button variant="primary" size="sm" icon={<BoltIcon size={15} />} onClick={onOpen}>
+            {missing ? 'Predict this match' : 'Edit prediction'}
+          </Button>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+/* Recent results — how the user's latest scored picks landed */
+function RecentResults({ items, onOpen }: { items: { m: DBMatch; pred?: MyPred }[]; onOpen: (id: string) => void }) {
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-center px-4 h-12 border-b border-border">
+        <h3 className="font-extrabold text-textp text-[15px]">Recent results</h3>
+      </div>
+      <div className="divide-y divide-border/60">
+        {items.map(({ m, pred }) => {
+          const home = getTeam(m.home_team), away = getTeam(m.away_team)
+          const pts = pred?.points_awarded ?? 0
+          return (
+            <button key={m.id} onClick={() => onOpen(m.id)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface/60 transition-colors text-left">
+              <div className="flex-1 min-w-0 flex items-center gap-1.5 text-[13px] font-bold text-textp">
+                <span>{home.flag}</span><span className="tabular-nums">{m.real_home_score}</span>
+                <span className="text-texts">–</span>
+                <span className="tabular-nums">{m.real_away_score}</span><span>{away.flag}</span>
+              </div>
+              {pred && (
+                <span className="text-[10px] text-texts font-semibold tabular-nums shrink-0">you {pred.pred_home}-{pred.pred_away}</span>
+              )}
+              <span className="text-sm font-extrabold tabular-nums shrink-0 w-9 text-right" style={{ color: ptsColor(pts) }}>+{pts}</span>
+            </button>
+          )
+        })}
+      </div>
+    </Card>
+  )
+}
+
+/* Form (last 5) + per-category accuracy */
+function FormAccuracy({ items }: { items: (MyPred | undefined)[] }) {
+  const scored = items.filter((p): p is MyPred => !!p)
+  const form = scored.slice(0, 5)
+  const total = scored.length
+  const cats: { label: string; get: (p: MyPred) => number }[] = [
+    { label: 'Outcome', get: (p) => p.pts_outcome ?? 0 },
+    { label: 'Exact', get: (p) => p.pts_exact ?? 0 },
+    { label: 'Goal diff', get: (p) => p.pts_goal_diff ?? 0 },
+    { label: 'Total goals', get: (p) => p.pts_total_goals ?? 0 },
+    { label: 'Both scored', get: (p) => p.pts_btts ?? 0 },
+  ]
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-center justify-between px-4 h-12 border-b border-border">
+        <h3 className="font-extrabold text-textp text-[15px]">Form &amp; accuracy</h3>
+        <span className="text-[11px] font-bold text-texts">{total} scored</span>
+      </div>
+      <div className="p-4 space-y-4">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-texts mb-2">Last {form.length}</p>
+          <div className="flex items-center gap-1.5">
+            {form.map((p, i) => {
+              const pts = p.points_awarded ?? 0
+              return (
+                <span key={i} title={`+${pts}`} className="w-6 h-6 grid place-items-center rounded-md text-[10px] font-extrabold tabular-nums text-white" style={{ background: ptsColor(pts) }}>{pts}</span>
+              )
+            })}
+          </div>
+        </div>
+        <div className="space-y-2">
+          {cats.map((c) => {
+            const hits = scored.filter((p) => c.get(p) > 0).length
+            const pct = total ? Math.round((hits / total) * 100) : 0
+            return (
+              <div key={c.label}>
+                <div className="flex items-center justify-between text-[12px] font-semibold mb-1">
+                  <span className="text-texts">{c.label}</span>
+                  <span className="text-textp tabular-nums">{pct}%</span>
+                </div>
+                <ProgressBar pct={pct} height={5} />
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </Card>
+  )
 }

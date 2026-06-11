@@ -19,6 +19,12 @@ export interface MyPred {
   pred_away: number
   points_awarded: number | null
   pts_exact?: number | null
+  pts_outcome?: number | null
+  pts_goal_diff?: number | null
+  pts_total_goals?: number | null
+  pts_btts?: number | null
+  pts_first_team?: number | null
+  pts_first_scorer?: number | null
   pred_first_goal_team?: string | null
   pred_first_scorer_id?: number | null
 }

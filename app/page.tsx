@@ -2,6 +2,7 @@ import Link from 'next/link'
 import {
   Logo, Button, Pill, ChartIcon, ShieldIcon, TreeIcon, TrophyIcon, GridIcon,
 } from '@/components/ui'
+import RulesButton from '@/components/RulesButton'
 import { SCORING_RULES } from '@/lib/scoring'
 
 const FEATURES = [
@@ -37,7 +38,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Logo />
-            <span className="font-extrabold tracking-tight text-lg">BRACKET XI</span>
+            <span className="font-extrabold tracking-tight text-lg">MATCHDAY</span>
           </div>
           <div className="flex items-center gap-2">
             <Link href="/login"><Button variant="ghost" size="sm">Sign in</Button></Link>
@@ -54,7 +55,7 @@ export default function Landing() {
           </div>
           <h1 className="text-5xl sm:text-7xl font-black tracking-tighter leading-[0.92] text-textp">
             Predict every match.<br />
-            <span className="text-primary">Prove every take.</span>
+            <span className="text-primary">Your road to glory.</span>
           </h1>
           <p className="mt-6 text-base sm:text-lg text-texts max-w-xl mx-auto font-medium leading-relaxed">
             The private World Cup prediction league for your group chat. Call exact scorelines, climb a live leaderboard, and settle it once and for all.
@@ -70,7 +71,7 @@ export default function Landing() {
               <span className="w-2.5 h-2.5 rounded-full bg-border" />
               <span className="w-2.5 h-2.5 rounded-full bg-border" />
               <span className="w-2.5 h-2.5 rounded-full bg-border" />
-              <span className="ml-2 text-[11px] font-semibold text-texts">bracketxi.app/dashboard</span>
+              <span className="ml-2 text-[11px] font-semibold text-texts">matchday.app/dashboard</span>
             </div>
             <div className="bg-card border border-border rounded-b-lg p-4 sm:p-5">
               <div className="flex items-center justify-between mb-4">
@@ -118,10 +119,13 @@ export default function Landing() {
       {/* scoring strip */}
       <section className="border-b border-border">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-16">
-          <div className="mb-8">
-            <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary mb-2">Scoring</div>
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight">How points are earned</h2>
-            <p className="text-texts font-medium mt-1.5">Every prediction earns across multiple categories — stack them up.</p>
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-primary mb-2">Scoring</div>
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tight">How points are earned</h2>
+              <p className="text-texts font-medium mt-1.5">Every prediction earns across multiple categories — stack them up.</p>
+            </div>
+            <RulesButton label="Read the full rules" variant="outline" size="md" />
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border border border-border rounded-xl overflow-hidden">
             {SCORING_RULES.map((s) => (
@@ -136,8 +140,8 @@ export default function Landing() {
 
       <footer>
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-7 flex items-center justify-between text-sm text-texts">
-          <div className="flex items-center gap-2"><Logo size={20} /><span className="font-bold text-textp">BRACKET XI</span></div>
-          <span className="font-medium hidden sm:inline">Predict every match. Prove every take.</span>
+          <div className="flex items-center gap-2"><Logo size={20} /><span className="font-bold text-textp">MATCHDAY</span></div>
+          <span className="font-medium hidden sm:inline">Your road to glory starts here.</span>
         </div>
       </footer>
     </div>

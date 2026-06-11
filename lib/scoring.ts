@@ -1,5 +1,5 @@
 /* ============================================================
-   BRACKET XI — scoring engine (7-category model)
+   MatchDay — scoring engine (7-category model)
    ============================================================
    Outcome (W/D/L) ............. +3
    Exact scoreline ............. +3 (bonus on top of outcome)

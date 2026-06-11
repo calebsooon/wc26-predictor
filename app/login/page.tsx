@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { Logo, Button } from '@/components/ui'
+import RulesButton from '@/components/RulesButton'
 
 type Mode = 'signin' | 'signup'
 
@@ -46,7 +47,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <Link href="/" className="flex items-center gap-2.5 justify-center mb-8">
           <Logo />
-          <span className="font-extrabold tracking-tight text-lg">BRACKET XI</span>
+          <span className="font-extrabold tracking-tight text-lg">MATCHDAY</span>
         </Link>
 
         <div className="bg-card rounded-2xl border border-border p-7">
@@ -95,7 +96,10 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-xs text-texts mt-6">Predict every match. Prove every take.</p>
+        <div className="flex flex-col items-center gap-3 mt-6">
+          <RulesButton label="How scoring works" variant="ghost" size="sm" />
+          <p className="text-center text-xs text-texts">Your road to glory starts here.</p>
+        </div>
       </div>
     </main>
   )
