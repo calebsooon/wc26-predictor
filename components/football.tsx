@@ -4,6 +4,7 @@
    MatchDay — MatchCard + LeaderboardTable (shared)
    ============================================================ */
 
+import { motion, AnimatePresence } from 'framer-motion'
 import { getTeam } from '@/lib/teams'
 import {
   Card, Pill, StatusBadge, Avatar, Countdown, LockIcon, ScoreStepper,
@@ -45,6 +46,7 @@ export function MatchCard({ m, onClick, compact = false }: { m: UIMatch; onClick
   const kickedOff = new Date(m.kickoff) <= new Date()
 
   return (
+    <motion.div whileTap={{ scale: 0.97 }} transition={{ duration: 0.12 }}>
     <Card hover onClick={onClick} className="p-4 cursor-pointer group">
       <div className="flex items-center justify-between mb-3">
         <Pill tone={m.knockout ? 'gold' : 'default'}>{stageLabel}</Pill>
@@ -101,6 +103,7 @@ export function MatchCard({ m, onClick, compact = false }: { m: UIMatch; onClick
         </div>
       )}
     </Card>
+    </motion.div>
   )
 }
 
@@ -117,20 +120,20 @@ export function NextPredictCard({
         {missing ? <Pill tone="red">● Missing</Pill> : <Pill tone="blue">✓ Submitted</Pill>}
       </div>
 
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex flex-col items-center gap-1.5 flex-1">
-          <span className="text-[34px] leading-none">{home.flag}</span>
-          <span className="text-xs font-bold text-textp group-hover/card:text-primary transition-colors">{home.code}</span>
+      <div className="flex items-center gap-2">
+        <div className="flex flex-col items-center gap-1 w-10 shrink-0">
+          <span className="text-[28px] leading-none">{home.flag}</span>
+          <span className="text-[11px] font-bold text-textp group-hover/card:text-primary transition-colors">{home.code}</span>
         </div>
         {/* Steppers must not trigger card navigation */}
-        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1 flex-1 justify-center min-w-0" onClick={(e) => e.stopPropagation()}>
           <ScoreStepper value={pred.h} onChange={(v) => onChange('h', v)} compact />
           <span className="text-texts font-bold px-0.5">:</span>
           <ScoreStepper value={pred.a} onChange={(v) => onChange('a', v)} compact />
         </div>
-        <div className="flex flex-col items-center gap-1.5 flex-1">
-          <span className="text-[34px] leading-none">{away.flag}</span>
-          <span className="text-xs font-bold text-textp group-hover/card:text-primary transition-colors">{away.code}</span>
+        <div className="flex flex-col items-center gap-1 w-10 shrink-0">
+          <span className="text-[28px] leading-none">{away.flag}</span>
+          <span className="text-[11px] font-bold text-textp group-hover/card:text-primary transition-colors">{away.code}</span>
         </div>
       </div>
 
@@ -178,42 +181,52 @@ export function LeaderboardTable({
 }: { players: LBRow[]; metricLabel?: string; onRow?: (p: LBRow) => void; dense?: boolean; showMove?: boolean; showMeta?: boolean; showPrize?: boolean }) {
   return (
     <div className="divide-y divide-border/50">
-      {players.map((p, i) => {
-        const isFirst = i === 0
-        const rankColor = i === 0 ? 'rgb(var(--gold))' : i === 1 ? '#94A3B8' : i === 2 ? '#D9A066' : 'rgb(var(--texts))'
-        return (
-          <div
-            key={p.id}
-            onClick={onRow ? () => onRow(p) : undefined}
-            className={`flex items-center gap-3 ${dense ? 'py-2.5' : 'py-3'} px-3 transition-colors ${onRow ? 'cursor-pointer hover:bg-surface/60' : ''} ${p.you ? 'bg-blue/[0.07]' : ''}`}
-          >
-            <div className="w-7 text-center shrink-0">
-              <span className="text-sm font-extrabold tabular-nums" style={{ color: rankColor }}>{i + 1}</span>
-            </div>
-            <Avatar name={p.name} src={p.avatar} size={dense ? 30 : 36} ring={isFirst} you={p.you} />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className={`font-bold truncate ${isFirst ? 'text-gold' : 'text-textp'}`}>{p.name}</span>
-                {p.you && <Pill tone="blue" className="!px-1.5 !py-0.5 !text-[9px]">YOU</Pill>}
+      <AnimatePresence initial={false}>
+        {players.map((p, i) => {
+          const isFirst = i === 0
+          const rankColor = i === 0 ? 'rgb(var(--gold))' : i === 1 ? '#94A3B8' : i === 2 ? '#D9A066' : 'rgb(var(--texts))'
+          // Flash green if moved up, red if moved down
+          const flashBg = p.move && p.move > 0 ? 'rgba(34,197,94,0.08)' : p.move && p.move < 0 ? 'rgba(239,68,68,0.07)' : undefined
+          return (
+            <motion.div
+              key={p.id}
+              layout
+              layoutId={p.id}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0, backgroundColor: flashBg ?? 'transparent' }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={{ layout: { type: 'spring', stiffness: 300, damping: 30 }, opacity: { duration: 0.2 }, x: { duration: 0.2 } }}
+              onClick={onRow ? () => onRow(p) : undefined}
+              className={`flex items-center gap-3 ${dense ? 'py-2.5' : 'py-3'} px-3 ${onRow ? 'cursor-pointer hover:bg-surface/60' : ''} ${p.you ? 'bg-blue/[0.07]' : ''}`}
+            >
+              <div className="w-7 text-center shrink-0">
+                <span className="text-sm font-extrabold tabular-nums" style={{ color: rankColor }}>{i + 1}</span>
               </div>
-              {!dense && showMeta && (
-                <div className="text-[11px] text-texts font-medium tabular-nums">{p.acc ?? 0}% acc · {p.exact ?? 0} exact</div>
+              <Avatar name={p.name} src={p.avatar} size={dense ? 30 : 36} ring={isFirst} you={p.you} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`font-bold truncate ${isFirst ? 'text-gold' : 'text-textp'}`}>{p.name}</span>
+                  {p.you && <Pill tone="blue" className="!px-1.5 !py-0.5 !text-[9px]">YOU</Pill>}
+                </div>
+                {!dense && showMeta && (
+                  <div className="text-[11px] text-texts font-medium tabular-nums">{p.acc ?? 0}% acc · {p.exact ?? 0} exact</div>
+                )}
+              </div>
+              {showMove && <div className="w-8 text-center shrink-0"><MoveArrow move={p.move} /></div>}
+              {showPrize && p.prize != null && (
+                <div className="text-right shrink-0 w-12">
+                  <PrizeTag amount={p.prize} />
+                  <div className="text-[9px] text-texts font-bold tracking-wider">PRIZE</div>
+                </div>
               )}
-            </div>
-            {showMove && <div className="w-8 text-center shrink-0"><MoveArrow move={p.move} /></div>}
-            {showPrize && p.prize != null && (
-              <div className="text-right shrink-0 w-12">
-                <PrizeTag amount={p.prize} />
-                <div className="text-[9px] text-texts font-bold tracking-wider">PRIZE</div>
+              <div className="text-right shrink-0 w-14">
+                <div className={`font-extrabold tabular-nums ${isFirst ? 'text-gold' : 'text-textp'}`}>{p.pts}</div>
+                <div className="text-[9px] text-texts font-bold tracking-wider">{metricLabel}</div>
               </div>
-            )}
-            <div className="text-right shrink-0 w-14">
-              <div className={`font-extrabold tabular-nums ${isFirst ? 'text-gold' : 'text-textp'}`}>{p.pts}</div>
-              <div className="text-[9px] text-texts font-bold tracking-wider">{metricLabel}</div>
-            </div>
-          </div>
-        )
-      })}
+            </motion.div>
+          )
+        })}
+      </AnimatePresence>
     </div>
   )
 }

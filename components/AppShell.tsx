@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { createClient } from '@/lib/supabase-browser'
 import { getMyLeagues, setActiveLeague, isMoneyLeague, type League } from '@/lib/league'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -167,8 +168,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="px-4 sm:px-6 py-5 sm:py-7 pb-28 lg:pb-10 max-w-6xl mx-auto">
-          {children}
+        <main className="px-4 sm:px-6 py-5 sm:py-7 pb-28 lg:pb-10 max-w-6xl mx-auto overflow-x-hidden">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={pathname}
+              className="w-full"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
+import { motion } from 'framer-motion'
 import {
   PageHeader, Card, StatCard, Button, Avatar, ProgressBar, Skeleton, Pill, SectionHeader, EmptyState, TrophyIcon,
 } from '@/components/ui'
@@ -200,12 +201,18 @@ export default function ProfilePage() {
       <Card className="p-5">
         <SectionHeader title="Badges" sub="Collectible achievements across the tournament." />
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {badges.map((b) => (
-            <div key={b.id} className={`flex flex-col items-center text-center gap-2 p-4 rounded-xl border ${b.earned ? 'border-gold/30 bg-gold/[0.06]' : 'border-border bg-surface opacity-60'}`}>
+          {badges.map((b, i) => (
+            <motion.div
+              key={b.id}
+              initial={b.earned ? { scale: 0.7, opacity: 0 } : { opacity: 0.6 }}
+              animate={b.earned ? { scale: 1, opacity: 1 } : { opacity: 0.6 }}
+              transition={b.earned ? { type: 'spring', stiffness: 500, damping: 18, delay: i * 0.05 } : { duration: 0.2 }}
+              className={`flex flex-col items-center text-center gap-2 p-4 rounded-xl border ${b.earned ? 'border-gold/30 bg-gold/[0.06]' : 'border-border bg-surface'}`}
+            >
               <div className={`text-2xl grid place-items-center w-11 h-11 rounded-lg ${b.earned ? 'bg-gold/10' : 'bg-card'}`}>{b.earned ? b.icon : '🔒'}</div>
               <span className="text-[11px] font-bold text-textp leading-tight">{b.name}</span>
               <span className="text-[10px] text-texts">{b.hint}</span>
-            </div>
+            </motion.div>
           ))}
         </div>
       </Card>
