@@ -21,7 +21,8 @@ interface RoundRow { id: string; name: string; order: number; matches: DBMatch[]
 interface ScoredPredRow {
   user_id: string; points_awarded: number
   pts_outcome: number | null; pts_exact: number | null; pts_goal_diff: number | null
-  pts_total_goals: number | null; pts_btts: number | null; pts_first_team: number | null; pts_first_scorer: number | null
+  pts_total_goals: number | null; pts_team_goals: number | null; pts_btts: number | null
+  pts_first_team: number | null; pts_first_scorer: number | null
   profiles: { username: string; avatar_url: string | null } | null
   matches: { gw_number: number | null } | null
 }
@@ -352,7 +353,7 @@ export default function DashboardPage() {
               <button onClick={() => setRulesOpen(true)} className="text-xs font-bold text-primary hover:underline">Full rules →</button>
             </div>
             <div className="divide-y divide-border/60">
-              {SCORING_RULES.map((s) => (
+              {SCORING_RULES.filter((s) => (weights[s.key as keyof ScoringWeights] ?? s.pts) > 0).map((s) => (
                 <div key={s.key} className="flex items-center justify-between px-4 py-2.5">
                   <span className="text-[13px] font-medium text-texts">{s.label}</span>
                   <span className="text-sm font-extrabold tabular-nums text-primary">+{weights[s.key as keyof ScoringWeights] ?? s.pts}</span>

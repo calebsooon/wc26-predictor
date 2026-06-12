@@ -14,6 +14,7 @@ const RULE_HINTS: Record<string, string> = {
   exact: 'Nail the exact scoreline (on top of the outcome points).',
   goalDiff: 'Match the goal difference, even if the scoreline is off.',
   totalGoals: 'Match the combined number of goals in the match.',
+  teamGoals: "At least one team's exact goal count matches, but the overall score was wrong.",
   btts: 'Correctly call whether both teams score (or both blank).',
   firstTeam: 'Pick which team scores the first goal of the match.',
   firstScorer: 'Name the player who scores the first goal (or call "no scorer").',
@@ -42,7 +43,9 @@ function PointBadge({ pts }: { pts: number }) {
 export default function RulesContent({
   className = '', weights = DEFAULT_WEIGHTS, showPrizePool = true,
 }: { className?: string; weights?: ScoringWeights; showPrizePool?: boolean }) {
-  const matchMax = SCORING_RULES.reduce((s, r) => s + (weights[r.key as keyof ScoringWeights] ?? r.pts), 0)
+  // Only show rules that are active (weight > 0) in this league
+  const activeRules = SCORING_RULES.filter((r) => (weights[r.key as keyof ScoringWeights] ?? r.pts) > 0)
+  const matchMax = activeRules.reduce((s, r) => s + (weights[r.key as keyof ScoringWeights] ?? r.pts), 0)
   return (
     <div className={`space-y-7 ${className}`}>
       <Section
@@ -50,7 +53,7 @@ export default function RulesContent({
         sub={`Every prediction earns across multiple categories — up to ${matchMax} points per match in this league.`}
       >
         <div className="rounded-xl border border-border divide-y divide-border/60 overflow-hidden">
-          {SCORING_RULES.map((s) => (
+          {activeRules.map((s) => (
             <div key={s.key} className="flex items-center gap-3 p-3 bg-card">
               <PointBadge pts={weights[s.key as keyof ScoringWeights] ?? s.pts} />
               <div className="min-w-0">

@@ -381,7 +381,7 @@ export default function MatchDetailPage() {
                           { label: 'Exact', pts: pk.pts_exact },
                           { label: 'Goal diff', pts: pk.pts_goal_diff },
                           { label: 'Tot goals', pts: pk.pts_total_goals },
-                          { label: 'Tm goals', pts: pk.pts_team_goals },
+                          ...(weights.teamGoals > 0 ? [{ label: 'Tm goals', pts: pk.pts_team_goals }] : []),
                           { label: 'BTTS', pts: pk.pts_btts },
                           { label: '1st team', pts: pk.pts_first_team },
                           { label: '1st scorer', pts: pk.pts_first_scorer },

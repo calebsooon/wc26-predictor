@@ -316,7 +316,10 @@ function LeagueManage({
       .insert({ league_id: league.id, image_url: publicUrl, storage_path: storagePath, display_order: nextOrder })
       .select('id, image_url, storage_path, display_order')
       .single()
-    if (dbErr) { toast.error(dbErr.message) } else {
+    if (dbErr) {
+      await supabase.storage.from('banners').remove([storagePath])
+      toast.error(dbErr.message)
+    } else {
       setBanners((b) => [...b, inserted as BannerItem])
       toast.success('Banner uploaded')
     }
@@ -752,4 +755,3 @@ export default function AdminPage() {
     </div>
   )
 }
-

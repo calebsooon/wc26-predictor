@@ -21,12 +21,12 @@ alter table league_banners enable row level security;
 create policy "league_banners: authenticated read"
   on league_banners for select to authenticated using (true);
 
--- Authenticated users can insert/delete (admin check enforced by the UI)
-create policy "league_banners: authenticated insert"
-  on league_banners for insert to authenticated with check (true);
+-- Admins can manage banner metadata
+create policy "league_banners: admin insert"
+  on league_banners for insert to authenticated with check (is_admin());
 
-create policy "league_banners: authenticated delete"
-  on league_banners for delete to authenticated using (true);
+create policy "league_banners: admin delete"
+  on league_banners for delete to authenticated using (is_admin());
 
 -- Public banners storage bucket (images served directly by URL)
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -39,16 +39,16 @@ values (
 )
 on conflict (id) do nothing;
 
--- Authenticated users can upload banners (admin-only in UI)
-create policy "banners: authenticated upload"
+-- Admins can upload and delete banner files
+create policy "banners: admin upload"
   on storage.objects for insert
   to authenticated
-  with check (bucket_id = 'banners');
+  with check (bucket_id = 'banners' and is_admin());
 
-create policy "banners: authenticated delete"
+create policy "banners: admin delete"
   on storage.objects for delete
   to authenticated
-  using (bucket_id = 'banners');
+  using (bucket_id = 'banners' and is_admin());
 
 -- Public read (images embedded via <img src>)
 create policy "banners: public read"
