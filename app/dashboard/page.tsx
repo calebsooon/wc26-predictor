@@ -3,6 +3,38 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+
+function InstallBanner() {
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    const dismissed = sessionStorage.getItem('md_install_banner_dismissed')
+    const standalone = window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as Navigator & { standalone?: boolean }).standalone === true
+    if (!dismissed && !standalone) setShow(true)
+  }, [])
+  if (!show) return null
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-surface border border-border">
+      <div className="flex items-center gap-3 min-w-0">
+        <img src="/icon-192.png" alt="MatchDay" className="w-9 h-9 rounded-xl shrink-0" />
+        <div className="min-w-0">
+          <p className="text-[13px] font-bold text-textp">Add MatchDay to your home screen</p>
+          <p className="text-[11px] text-texts mt-0.5">Launch instantly, full-screen, no browser bar.</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <Link href="/install" className="text-[12px] font-extrabold text-primary whitespace-nowrap hover:underline">
+          How →
+        </Link>
+        <button
+          onClick={() => { sessionStorage.setItem('md_install_banner_dismissed', '1'); setShow(false) }}
+          className="text-texts hover:text-textp text-lg font-bold leading-none w-7 h-7 grid place-items-center"
+          aria-label="Dismiss"
+        >×</button>
+      </div>
+    </div>
+  )
+}
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { Card, StatCard, SectionHeader, Button, Skeleton, BoltIcon, EmptyState, CalIcon, Pill, CountUp, ScoreStepper, Countdown, ProgressBar, LeagueBadge, ConfettiBurst, Avatar } from '@/components/ui'
@@ -254,6 +286,8 @@ export default function DashboardPage() {
   return (
     <div className="space-y-7">
       <ConfettiBurst trigger={confetti} />
+
+      <InstallBanner />
 
       {newResultsBanner && (
         <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-primary/[0.08] border border-primary/25">
