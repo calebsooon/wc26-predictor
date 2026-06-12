@@ -9,7 +9,7 @@ import type { ProfileLite } from '@/lib/leaderboard'
 
 interface PredRow extends MatchBreakdown { user_id: string; match_id: string; points_awarded: number }
 
-const COLS = 'user_id, match_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer'
+const COLS = 'user_id, match_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer'
 
 export default function H2HPage() {
   const supabase = createClient()

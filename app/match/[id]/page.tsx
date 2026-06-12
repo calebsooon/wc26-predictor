@@ -104,7 +104,7 @@ export default function MatchDetailPage() {
       // Fetch picks for this match scoped to league members.
       // Profiles fetched separately — the embedded join (profiles(username,avatar_url))
       // can fail silently on some Supabase plans, returning null data with no error shown.
-      const predSelect = 'user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer'
+      const predSelect = 'user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer'
       const predBase = supabase.from('predictions').select(predSelect).eq('match_id', id)
       const { data: predRows } = await (memberIds.length ? predBase.in('user_id', memberIds) : predBase)
 

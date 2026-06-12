@@ -42,7 +42,7 @@ export default function FixturesPage() {
 
         const { data: myData, error: predErr } = await supabase
           .from('predictions')
-          .select('match_id, pred_home, pred_away, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
+          .select('match_id, pred_home, pred_away, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer')
           .eq('user_id', user.id)
         if (predErr) throw predErr
         const map: Record<string, MyPred> = {}

@@ -14,7 +14,6 @@ const RULE_HINTS: Record<string, string> = {
   exact: 'Nail the exact scoreline (on top of the outcome points).',
   goalDiff: 'Match the goal difference, even if the scoreline is off.',
   totalGoals: 'Match the combined number of goals in the match.',
-  teamGoals: "Get either team's exact goal count right.",
   btts: 'Correctly call whether both teams score (or both blank).',
   firstTeam: 'Pick which team scores the first goal of the match.',
   firstScorer: 'Name the player who scores the first goal (or call "no scorer").',

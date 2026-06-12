@@ -64,7 +64,7 @@ export default function ProfilePage() {
         if (data) { const p = data as Profile; setProfile(p); setUsername(p.username ?? ''); setAvatarUrl(p.avatar_url ?? null) }
 
         const [{ data: mine }, { data: tp }, { data: gp }, leagueData] = await Promise.all([
-          supabase.from('predictions').select('points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer').eq('user_id', user.id).not('points_awarded', 'is', null),
+          supabase.from('predictions').select('points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer').eq('user_id', user.id).not('points_awarded', 'is', null),
           supabase.from('tournament_predictions').select('*').eq('user_id', user.id).eq('phase', 'pre').maybeSingle(),
           supabase.from('group_predictions').select('group_name, ranked_codes, points_awarded').eq('user_id', user.id).order('group_name'),
           getActiveLeague(supabase, user.id),
@@ -78,7 +78,7 @@ export default function ProfilePage() {
         const ids = memberIds.length ? memberIds : [user.id]
         const { data: all } = await supabase
           .from('predictions')
-          .select('user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
+          .select('user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer')
           .not('points_awarded', 'is', null)
           .in('user_id', ids)
         const agg = new Map<string, number>()

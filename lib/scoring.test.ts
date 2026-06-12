@@ -5,24 +5,13 @@ const M = (rh: number, ra: number, extra = {}) =>
   ({ home_team: 'A', away_team: 'B', real_home_score: rh, real_away_score: ra, ...extra })
 
 describe('scorePrediction', () => {
-  it('awards outcome + exact for a perfect call — teamGoals does not stack with exact', () => {
+  it('awards outcome + exact for a perfect call', () => {
     const z = scorePrediction({ pred_home: 2, pred_away: 1 }, M(2, 1))
     expect(z.outcome).toBe(POINTS.outcome)
     expect(z.exact).toBe(POINTS.exact)
     expect(z.goalDiff).toBe(POINTS.goalDiff)
     expect(z.totalGoals).toBe(POINTS.totalGoals)
-    expect(z.teamGoals).toBe(0) // consolation only — not awarded when exact is hit
-  })
-
-  it('team-goals is consolation when one team exact but overall score wrong (3-1 actual, 2-1 pred)', () => {
-    const z = scorePrediction({ pred_home: 2, pred_away: 1 }, M(3, 1))
-    expect(z.teamGoals).toBe(POINTS.teamGoals) // away team (1) matches → consolation awarded
-    expect(z.outcome).toBe(POINTS.outcome)
-    expect(z.exact).toBe(0)
-  })
-
-  it('team-goals is 0 when neither team exact', () => {
-    expect(scorePrediction({ pred_home: 0, pred_away: 0 }, M(3, 1)).teamGoals).toBe(0)
+    expect(z.total).toBe(POINTS.outcome + POINTS.exact + POINTS.goalDiff + POINTS.totalGoals + POINTS.btts)
   })
 
   it('BTTS override lets you hedge', () => {
@@ -51,9 +40,9 @@ describe('scorePrediction', () => {
 
 describe('weightedMatchPoints / resolveWeights', () => {
   it('re-weights a stored breakdown', () => {
-    const b = { pts_outcome: 3, pts_exact: 0, pts_team_goals: 1 }
-    expect(weightedMatchPoints(b, DEFAULT_WEIGHTS)).toBe(POINTS.outcome + POINTS.teamGoals)
-    expect(weightedMatchPoints(b, resolveWeights({ outcome: 5 }))).toBe(5 + DEFAULT_WEIGHTS.teamGoals)
+    const b = { pts_outcome: 3, pts_exact: 0, pts_btts: 1 }
+    expect(weightedMatchPoints(b, DEFAULT_WEIGHTS)).toBe(POINTS.outcome + POINTS.btts)
+    expect(weightedMatchPoints(b, resolveWeights({ outcome: 5 }))).toBe(5 + DEFAULT_WEIGHTS.btts)
   })
 
   it('resolveWeights merges partial overrides over defaults', () => {

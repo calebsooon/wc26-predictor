@@ -32,7 +32,6 @@ export const POINTS = {
   exact: 3,
   goalDiff: 2,
   totalGoals: 1,
-  teamGoals: 1,
   btts: 1,
   firstTeam: 2,
   firstScorer: 4,
@@ -43,7 +42,6 @@ export const SCORING_RULES: { key: string; label: string; pts: number }[] = [
   { key: 'exact', label: 'Exact scoreline', pts: POINTS.exact },
   { key: 'goalDiff', label: 'Goal difference', pts: POINTS.goalDiff },
   { key: 'totalGoals', label: 'Total goals', pts: POINTS.totalGoals },
-  { key: 'teamGoals', label: "A team's exact goals", pts: POINTS.teamGoals },
   { key: 'btts', label: 'Both teams scored', pts: POINTS.btts },
   { key: 'firstTeam', label: 'First-goal team', pts: POINTS.firstTeam },
   { key: 'firstScorer', label: 'First scorer', pts: POINTS.firstScorer },
@@ -64,7 +62,6 @@ export interface ScoringWeights {
   exact: number
   goalDiff: number
   totalGoals: number
-  teamGoals: number
   btts: number
   firstTeam: number
   firstScorer: number
@@ -82,7 +79,6 @@ export const DEFAULT_WEIGHTS: ScoringWeights = {
   exact: POINTS.exact,
   goalDiff: POINTS.goalDiff,
   totalGoals: POINTS.totalGoals,
-  teamGoals: POINTS.teamGoals,
   btts: POINTS.btts,
   firstTeam: POINTS.firstTeam,
   firstScorer: POINTS.firstScorer,
@@ -98,7 +94,6 @@ export const WEIGHT_FIELDS: { key: keyof ScoringWeights; label: string; group: '
   { key: 'exact', label: 'Exact scoreline', group: 'Match' },
   { key: 'goalDiff', label: 'Goal difference', group: 'Match' },
   { key: 'totalGoals', label: 'Total goals', group: 'Match' },
-  { key: 'teamGoals', label: "A team's exact goals", group: 'Match' },
   { key: 'btts', label: 'Both teams scored', group: 'Match' },
   { key: 'firstTeam', label: 'First-goal team', group: 'Match' },
   { key: 'firstScorer', label: 'First scorer', group: 'Match' },
@@ -127,7 +122,6 @@ export interface MatchBreakdown {
   pts_exact?: number | null
   pts_goal_diff?: number | null
   pts_total_goals?: number | null
-  pts_team_goals?: number | null
   pts_btts?: number | null
   pts_first_team?: number | null
   pts_first_scorer?: number | null
@@ -140,7 +134,6 @@ export function weightedMatchPoints(p: MatchBreakdown, w: ScoringWeights = DEFAU
     ((p.pts_exact ?? 0) > 0 ? w.exact : 0) +
     ((p.pts_goal_diff ?? 0) > 0 ? w.goalDiff : 0) +
     ((p.pts_total_goals ?? 0) > 0 ? w.totalGoals : 0) +
-    ((p.pts_team_goals ?? 0) > 0 ? w.teamGoals : 0) +
     ((p.pts_btts ?? 0) > 0 ? w.btts : 0) +
     ((p.pts_first_team ?? 0) > 0 ? w.firstTeam : 0) +
     ((p.pts_first_scorer ?? 0) > 0 ? w.firstScorer : 0)
@@ -171,7 +164,6 @@ export interface ScoreBreakdown {
   exact: number
   goalDiff: number
   totalGoals: number
-  teamGoals: number
   btts: number
   firstTeam: number
   firstScorer: number
@@ -202,7 +194,7 @@ const sign = (n: number) => (n > 0 ? 1 : n < 0 ? -1 : 0)
 
 export function scorePrediction(pred: PredictionInput, m: MatchResult): ScoreBreakdown {
   const z: ScoreBreakdown = {
-    outcome: 0, exact: 0, goalDiff: 0, totalGoals: 0, teamGoals: 0,
+    outcome: 0, exact: 0, goalDiff: 0, totalGoals: 0,
     btts: 0, firstTeam: 0, firstScorer: 0, total: 0,
   }
   const { real_home_score: rh, real_away_score: ra } = m
@@ -218,8 +210,6 @@ export function scorePrediction(pred: PredictionInput, m: MatchResult): ScoreBre
   if (ph === rh && pa === ra) z.exact = POINTS.exact
   if (predGD === rh - ra) z.goalDiff = POINTS.goalDiff
   if (predTG === rh + ra) z.totalGoals = POINTS.totalGoals
-  // Consolation point for nailing one team's exact goals — only when exact score wasn't hit
-  if (z.exact === 0 && (ph === rh || pa === ra)) z.teamGoals = POINTS.teamGoals
   if (predBTTS === (rh > 0 && ra > 0)) z.btts = POINTS.btts
 
   // m.first_goal_team=null means admin hasn't set it yet; 'NONE' means confirmed no goal
@@ -233,6 +223,6 @@ export function scorePrediction(pred: PredictionInput, m: MatchResult): ScoreBre
     z.firstScorer = POINTS.firstScorer
   }
 
-  z.total = z.outcome + z.exact + z.goalDiff + z.totalGoals + z.teamGoals + z.btts + z.firstTeam + z.firstScorer
+  z.total = z.outcome + z.exact + z.goalDiff + z.totalGoals + z.btts + z.firstTeam + z.firstScorer
   return z
 }

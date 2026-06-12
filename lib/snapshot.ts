@@ -6,7 +6,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { resolveWeights, weightedMatchPoints, type MatchBreakdown } from '@/lib/scoring'
 
-const PRED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer'
+const PRED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer'
 
 /** Snapshot every league's current ranking (league-weighted). Returns rows written. */
 export async function snapshotLeagueRanks(supabase: SupabaseClient): Promise<number> {
