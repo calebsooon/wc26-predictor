@@ -3,7 +3,7 @@ import {
   Logo, Button, Pill, ChartIcon, ShieldIcon, TreeIcon, TrophyIcon, GridIcon,
 } from '@/components/ui'
 import RulesButton from '@/components/RulesButton'
-import { SCORING_RULES } from '@/lib/scoring'
+import { DEFAULT_WEIGHTS, SCORING_RULES, type ScoringWeights } from '@/lib/scoring'
 
 const FEATURES = [
   { Ico: ChartIcon, title: 'Exact-score predictions', desc: 'Call every scoreline. Points for outcome, exact result, goal difference, scorers and more.' },
@@ -128,7 +128,7 @@ export default function Landing() {
             <RulesButton label="Read the full rules" variant="outline" size="md" />
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border border border-border rounded-xl overflow-hidden">
-            {SCORING_RULES.map((s) => (
+            {SCORING_RULES.filter((s) => (DEFAULT_WEIGHTS[s.key as keyof ScoringWeights] ?? s.pts) > 0).map((s) => (
               <div key={s.key} className="flex items-center gap-3 p-4 bg-card">
                 <div className="w-11 h-11 grid place-items-center rounded-md bg-surface border border-border text-primary font-extrabold tabular-nums shrink-0 text-lg leading-none">+{s.pts}</div>
                 <span className="text-[13px] font-semibold text-textp leading-tight">{s.label}</span>

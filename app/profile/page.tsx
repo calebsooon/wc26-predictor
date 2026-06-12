@@ -26,14 +26,14 @@ interface ScoredPred {
 }
 
 const CATEGORIES = [
-  { key: 'pts_outcome', label: 'Outcome' },
-  { key: 'pts_exact', label: 'Exact score' },
-  { key: 'pts_goal_diff', label: 'Goal diff' },
-  { key: 'pts_total_goals', label: 'Total goals' },
-  { key: 'pts_team_goals', label: "Team goals" },
-  { key: 'pts_btts', label: 'Both scored' },
-  { key: 'pts_first_team', label: 'First goal' },
-  { key: 'pts_first_scorer', label: 'First scorer' },
+  { key: 'pts_outcome', label: 'Outcome', weightKey: 'outcome' },
+  { key: 'pts_exact', label: 'Exact score', weightKey: 'exact' },
+  { key: 'pts_goal_diff', label: 'Goal diff', weightKey: 'goalDiff' },
+  { key: 'pts_total_goals', label: 'Total goals', weightKey: 'totalGoals' },
+  { key: 'pts_team_goals', label: "Team goals", weightKey: 'teamGoals' },
+  { key: 'pts_btts', label: 'Both scored', weightKey: 'btts' },
+  { key: 'pts_first_team', label: 'First goal', weightKey: 'firstTeam' },
+  { key: 'pts_first_scorer', label: 'First scorer', weightKey: 'firstScorer' },
 ] as const
 
 export default function ProfilePage() {
@@ -104,7 +104,8 @@ export default function ProfilePage() {
     const exact = preds.filter((p) => (p.pts_exact ?? 0) > 0).length
     const correctOutcome = preds.filter((p) => (p.pts_outcome ?? (p.points_awarded >= 3 ? 1 : 0)) > 0 || p.points_awarded >= 3).length
     const acc = scored ? Math.round((correctOutcome / scored) * 100) : 0
-    const cats = CATEGORIES.map((c) => {
+    const activeCats = CATEGORIES.filter((c) => weights[c.weightKey] > 0)
+    const cats = activeCats.map((c) => {
       const earned = preds.filter((p) => (p[c.key] ?? 0) > 0).length
       return { ...c, pct: scored ? Math.round((earned / scored) * 100) : 0, earned }
     })

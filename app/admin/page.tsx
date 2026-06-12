@@ -306,28 +306,32 @@ function LeagueManage({
 
   async function uploadBanner(file: File) {
     setBannerUploading(true)
-    const ext = file.name.split('.').pop() ?? 'jpg'
-    const storagePath = `${league.id}/${Date.now()}.${ext}`
-    const { error: upErr } = await supabase.storage.from('banners').upload(storagePath, file)
-    if (upErr) { toast.error(upErr.message); setBannerUploading(false); return }
-    const { data: { publicUrl } } = supabase.storage.from('banners').getPublicUrl(storagePath)
-    const nextOrder = banners.length
-    const { data: inserted, error: dbErr } = await supabase.from('league_banners')
-      .insert({ league_id: league.id, image_url: publicUrl, storage_path: storagePath, display_order: nextOrder })
-      .select('id, image_url, storage_path, display_order')
-      .single()
-    if (dbErr) {
-      await supabase.storage.from('banners').remove([storagePath])
-      toast.error(dbErr.message)
-    } else {
-      setBanners((b) => [...b, inserted as BannerItem])
-      toast.success('Banner uploaded')
+    try {
+      const ext = file.name.split('.').pop() ?? 'jpg'
+      const storagePath = `${league.id}/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('banners').upload(storagePath, file)
+      if (upErr) { toast.error(upErr.message); return }
+      const { data: { publicUrl } } = supabase.storage.from('banners').getPublicUrl(storagePath)
+      const nextOrder = banners.length
+      const { data: inserted, error: dbErr } = await supabase.from('league_banners')
+        .insert({ league_id: league.id, image_url: publicUrl, storage_path: storagePath, display_order: nextOrder })
+        .select('id, image_url, storage_path, display_order')
+        .single()
+      if (dbErr) {
+        await supabase.storage.from('banners').remove([storagePath])
+        toast.error(dbErr.message)
+      } else {
+        setBanners((b) => [...b, inserted as BannerItem])
+        toast.success('Banner uploaded')
+      }
+    } finally {
+      setBannerUploading(false)
     }
-    setBannerUploading(false)
   }
 
   async function deleteBanner(item: BannerItem) {
-    await supabase.storage.from('banners').remove([item.storage_path])
+    const { error: storageErr } = await supabase.storage.from('banners').remove([item.storage_path])
+    if (storageErr) { toast.error(storageErr.message); return }
     const { error } = await supabase.from('league_banners').delete().eq('id', item.id)
     if (error) toast.error(error.message)
     else { setBanners((b) => b.filter((x) => x.id !== item.id)); toast.success('Banner removed') }

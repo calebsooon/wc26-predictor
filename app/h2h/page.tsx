@@ -96,16 +96,17 @@ export default function H2HPage() {
       if (da > db) winA++; else if (db > da) winB++; else tie++
     }
 
-    const catDefs: { label: string; ptsKey: keyof PredRow }[] = [
-      { label: 'Outcome', ptsKey: 'pts_outcome' },
-      { label: 'Exact score', ptsKey: 'pts_exact' },
-      { label: 'Goal diff', ptsKey: 'pts_goal_diff' },
-      { label: 'Total goals', ptsKey: 'pts_total_goals' },
-      { label: 'Team goals', ptsKey: 'pts_team_goals' },
-      { label: 'BTTS', ptsKey: 'pts_btts' },
-      { label: 'First team', ptsKey: 'pts_first_team' },
-      { label: 'First scorer', ptsKey: 'pts_first_scorer' },
-    ]
+    const allCatDefs = [
+      { label: 'Outcome', ptsKey: 'pts_outcome', weightKey: 'outcome' },
+      { label: 'Exact score', ptsKey: 'pts_exact', weightKey: 'exact' },
+      { label: 'Goal diff', ptsKey: 'pts_goal_diff', weightKey: 'goalDiff' },
+      { label: 'Total goals', ptsKey: 'pts_total_goals', weightKey: 'totalGoals' },
+      { label: 'Team goals', ptsKey: 'pts_team_goals', weightKey: 'teamGoals' },
+      { label: 'BTTS', ptsKey: 'pts_btts', weightKey: 'btts' },
+      { label: 'First team', ptsKey: 'pts_first_team', weightKey: 'firstTeam' },
+      { label: 'First scorer', ptsKey: 'pts_first_scorer', weightKey: 'firstScorer' },
+    ] satisfies { label: string; ptsKey: keyof PredRow; weightKey: keyof ScoringWeights }[]
+    const catDefs = allCatDefs.filter((c) => weights[c.weightKey] > 0)
     const catStats = catDefs.map(({ label, ptsKey }) => {
       const hitA = psA.filter((p) => ((p[ptsKey] as number) ?? 0) > 0).length
       const hitB = psB.filter((p) => ((p[ptsKey] as number) ?? 0) > 0).length
