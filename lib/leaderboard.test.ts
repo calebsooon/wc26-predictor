@@ -21,29 +21,29 @@ describe('aggregateLeaderboard', () => {
     expect(board[0].exact).toBe(1)
   })
 
-  it('tiebreaks: points → correct outcomes → exact scorelines → stable tied rank order', () => {
+  it('tiebreaks: points → correct outcomes → alphabetical', () => {
     const preds: ScoredPred[] = [
-      { user_id: 'b', points_awarded: 3, pts_outcome: 3 },
-      { user_id: 'c', points_awarded: 6, pts_outcome: 3, pts_exact: 3 },
-      { user_id: 'a', points_awarded: 3, pts_outcome: 3 },
+      { user_id: 'b', points_awarded: 3, pts_outcome: 3 }, // Bob: 3 pts, 1 outcome
+      { user_id: 'c', points_awarded: 3, pts_outcome: 3 }, // Cara: 3 pts, 1 outcome
+      { user_id: 'a', points_awarded: 3, pts_outcome: 3 }, // Ann: 3 pts, 1 outcome
     ]
     const board = aggregateLeaderboard({
       scoredPreds: preds,
       profiles: [prof('c', 'Cara'), prof('a', 'Ann'), prof('b', 'Bob')],
       userId: null,
     })
-    expect(board.map((r) => r.name)).toEqual(['Cara', 'Ann', 'Bob'])
+    expect(board.map((r) => r.name)).toEqual(['Ann', 'Bob', 'Cara']) // alphabetical on full tie
   })
 
-  it('more correct outcomes beats name order', () => {
-    const a: AggRow = { id: 'a', name: 'Ann', avatar: null, pts: 5, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 1, you: false }
-    const z: AggRow = { id: 'z', name: 'Zed', avatar: null, pts: 5, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 2, you: false }
+  it('more correct outcomes beats alphabetical', () => {
+    const a: AggRow = { id: 'a', name: 'Ann', avatar: null, pts: 5, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 1, streak: 0, you: false }
+    const z: AggRow = { id: 'z', name: 'Zed', avatar: null, pts: 5, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 2, streak: 0, you: false }
     expect([a, z].sort(compareLeaderboard)[0].name).toBe('Zed') // Zed has more outcomes despite Z > A
   })
 
   it('more exact scorelines breaks ties after outcomes', () => {
-    const a: AggRow = { id: 'a', name: 'Ann', avatar: null, pts: 6, exact: 1, acc: 0, scored: 0, correct: 0, outcomeWins: 1, you: false }
-    const z: AggRow = { id: 'z', name: 'Zed', avatar: null, pts: 6, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 1, you: false }
+    const a: AggRow = { id: 'a', name: 'Ann', avatar: null, pts: 6, exact: 1, acc: 0, scored: 0, correct: 0, outcomeWins: 1, streak: 0, you: false }
+    const z: AggRow = { id: 'z', name: 'Zed', avatar: null, pts: 6, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 1, streak: 0, you: false }
     expect([z, a].sort(compareLeaderboard)[0].name).toBe('Ann')
   })
 

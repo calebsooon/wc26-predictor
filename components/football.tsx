@@ -48,7 +48,17 @@ export function MatchCard({ m, onClick, compact = false }: { m: UIMatch; onClick
     <Card hover onClick={onClick} className="p-4 cursor-pointer group">
       <div className="flex items-center justify-between mb-3">
         <Pill tone={m.knockout ? 'gold' : 'default'}>{stageLabel}</Pill>
-        <StatusBadge status={m.status} pts={m.pts} />
+        {m.status === 'locked' && kickedOff && !isScored ? (
+          <span className="flex items-center gap-1.5 text-[11px] font-extrabold text-success">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
+            </span>
+            Live
+          </span>
+        ) : (
+          <StatusBadge status={m.status} pts={m.pts} />
+        )}
       </div>
 
       <div className="flex items-center">
@@ -157,10 +167,10 @@ export interface LBRow {
   pts: number
   acc?: number
   exact?: number
-  outcomeWins?: number
   move?: number
   prize?: number
   you?: boolean
+  streak?: number
 }
 
 function MoveArrow({ move }: { move?: number }) {
@@ -178,25 +188,12 @@ function PrizeTag({ amount }: { amount: number }) {
 export function LeaderboardTable({
   players, metricLabel = 'PTS', onRow, dense = false, showMove = true, showMeta = true, showPrize = false,
 }: { players: LBRow[]; metricLabel?: string; onRow?: (p: LBRow) => void; dense?: boolean; showMove?: boolean; showMeta?: boolean; showPrize?: boolean }) {
-  function displayRank(i: number) {
-    const cur = players[i]
-    let rank = i + 1
-    for (let j = i - 1; j >= 0; j--) {
-      const prev = players[j]
-      const tied = prev.pts === cur.pts && (prev.outcomeWins ?? 0) === (cur.outcomeWins ?? 0) && (prev.exact ?? 0) === (cur.exact ?? 0)
-      if (!tied) break
-      rank = j + 1
-    }
-    return rank
-  }
-
   return (
     <div className="divide-y divide-border/50">
       <AnimatePresence initial={false}>
         {players.map((p, i) => {
-          const rank = displayRank(i)
-          const isFirst = rank === 1
-          const rankColor = rank === 1 ? 'rgb(var(--gold))' : rank === 2 ? '#94A3B8' : rank === 3 ? '#D9A066' : 'rgb(var(--texts))'
+          const isFirst = i === 0
+          const rankColor = i === 0 ? 'rgb(var(--gold))' : i === 1 ? '#94A3B8' : i === 2 ? '#D9A066' : 'rgb(var(--texts))'
           // Flash green if moved up, red if moved down
           const flashBg = p.move && p.move > 0 ? 'rgba(34,197,94,0.08)' : p.move && p.move < 0 ? 'rgba(239,68,68,0.07)' : undefined
           return (
@@ -212,13 +209,16 @@ export function LeaderboardTable({
               className={`flex items-center gap-3 ${dense ? 'py-2.5' : 'py-3'} px-3 ${onRow ? 'cursor-pointer hover:bg-surface/60' : ''} ${p.you ? 'bg-blue/[0.07]' : ''}`}
             >
               <div className="w-7 text-center shrink-0">
-                <span className="text-sm font-extrabold tabular-nums" style={{ color: rankColor }}>{rank}</span>
+                <span className="text-sm font-extrabold tabular-nums" style={{ color: rankColor }}>{i + 1}</span>
               </div>
               <Avatar name={p.name} src={p.avatar} size={dense ? 30 : 36} ring={isFirst} you={p.you} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className={`font-bold truncate ${isFirst ? 'text-gold' : 'text-textp'}`}>{p.name}</span>
                   {p.you && <Pill tone="blue" className="!px-1.5 !py-0.5 !text-[9px]">YOU</Pill>}
+                  {(p.streak ?? 0) >= 3 && (
+                    <span className="text-[10px] ml-1" title={`${p.streak} in a row`}>🔥{p.streak}</span>
+                  )}
                 </div>
                 {!dense && showMeta && (
                   <div className="text-[11px] text-texts font-medium tabular-nums">{p.acc ?? 0}% acc · {p.exact ?? 0} exact</div>

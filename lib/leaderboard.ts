@@ -12,7 +12,7 @@ export interface ScoredPred extends MatchBreakdown {
   user_id: string
   points_awarded: number
   profiles?: { username: string | null; avatar_url: string | null } | null
-  matches?: { gw_number: number | null } | null
+  matches?: { gw_number: number | null; match_date?: string | null } | null
 }
 
 export interface ProfileLite {
@@ -26,21 +26,20 @@ export type AggRow = LBRow & {
   scored: number
   correct: number
   outcomeWins: number
+  streak: number
 }
 
 /**
  * Canonical leaderboard sort:
  *   1. most points
  *   2. most correct outcomes (tiebreaker)
- *   3. most exact scorelines (tiebreaker)
- *   4. stable id order only for rendering deterministic tied rows
+ *   3. alphabetical by name (final, deterministic fallback)
  */
 export function compareLeaderboard(a: AggRow, b: AggRow): number {
   return (
     b.pts - a.pts ||
     b.outcomeWins - a.outcomeWins ||
-    (b.exact ?? 0) - (a.exact ?? 0) ||
-    a.id.localeCompare(b.id)
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
   )
 }
 
@@ -71,7 +70,7 @@ export function aggregateLeaderboard({
 
   const seed = (id: string, name: string | null, avatar: string | null | undefined): AggRow => ({
     id, name: name ?? '?', avatar: avatar ?? null,
-    pts: 0, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 0, you: id === userId,
+    pts: 0, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 0, streak: 0, you: id === userId,
   })
 
   for (const p of profiles) agg.set(p.id, seed(p.id, p.username, p.avatar_url))
@@ -83,6 +82,26 @@ export function aggregateLeaderboard({
     if ((r.pts_outcome ?? 0) > 0) { cur.correct += 1; cur.outcomeWins += 1 }
     if ((r.pts_exact ?? 0) > 0) cur.exact = (cur.exact ?? 0) + 1
     agg.set(r.user_id, cur)
+  }
+
+  // Compute streak: consecutive correct outcomes from most recent match backward
+  const userPreds = new Map<string, Array<{ date: string; correct: boolean }>>()
+  for (const r of filtered) {
+    const date = r.matches?.match_date ?? ''
+    if (!userPreds.has(r.user_id)) userPreds.set(r.user_id, [])
+    userPreds.get(r.user_id)!.push({ date, correct: (r.pts_outcome ?? 0) > 0 })
+  }
+  for (const [uid, results] of Array.from(userPreds.entries())) {
+    const row = agg.get(uid)
+    if (!row) continue
+    const sorted = results.sort((a: { date: string; correct: boolean }, b: { date: string; correct: boolean }) => b.date.localeCompare(a.date))
+    let streak = 0
+    for (const { correct } of sorted) {
+      if (!correct) break
+      streak++
+    }
+    row.streak = streak
+    agg.set(uid, row)
   }
 
   return Array.from(agg.values())

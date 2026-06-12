@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
-import { PageHeader, ChipRow, EmptyState, Skeleton, CalIcon, StaggerList, StaggerItem, Card, Select } from '@/components/ui'
+import { PageHeader, ChipRow, EmptyState, Skeleton, CalIcon, StaggerList, StaggerItem, Button, ScoreStepper } from '@/components/ui'
 import { MatchCard } from '@/components/football'
 import { toUIMatch, type DBMatch, type MyPred } from '@/lib/match-ui'
 import { getActiveLeague } from '@/lib/league'
 import { DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { fmtDateKey } from '@/lib/date-format'
+import { getTeam } from '@/lib/teams'
 
 interface RoundRow { id: string; name: string; order: number; matches: DBMatch[] }
 
@@ -19,13 +21,11 @@ export default function FixturesPage() {
   const [preds, setPreds] = useState<Record<string, MyPred>>({})
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [filter, setFilter] = useState('all')
-  const [stageFilter, setStageFilter] = useState('all')
-  const [groupFilter, setGroupFilter] = useState('all')
-  const [weekFilter, setWeekFilter] = useState('all')
-  const [roundFilter, setRoundFilter] = useState('all')
-  const [dateFilter, setDateFilter] = useState('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [quickMatch, setQuickMatch] = useState<DBMatch | null>(null)
+  const [quickH, setQuickH] = useState<number | null>(null)
+  const [quickA, setQuickA] = useState<number | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -76,74 +76,30 @@ export default function FixturesPage() {
     }
   }, [matches, preds])
 
-  const statusChips = [
+  const chips = [
     { key: 'all', label: 'All', count: counts.all },
     { key: 'today', label: 'Today' },
     { key: 'missing', label: 'Missing', count: counts.missing },
     { key: 'locked', label: 'Locked', count: counts.locked },
     { key: 'finished', label: 'Finished', count: counts.finished },
-  ]
-  const stageChips = [
-    { key: 'all', label: 'All stages' },
-    { key: 'group', label: 'Group stage', count: matches.filter((m) => !toUIMatch(m, preds[m.id]).knockout).length },
-    { key: 'knockout', label: 'Knockouts', count: matches.filter((m) => toUIMatch(m, preds[m.id]).knockout).length },
+    { key: 'group', label: 'Group' },
+    { key: 'knockout', label: 'Knockout' },
   ]
 
   const sgtDate = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(d)
   const todaySGT = sgtDate(new Date())
-
-  const dateOptions = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const m of matches) {
-      const key = sgtDate(new Date(m.match_date))
-      map.set(key, (map.get(key) ?? 0) + 1)
-    }
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b))
-  }, [matches])
-
-  const groups = useMemo(() => {
-    const set = new Set<string>()
-    for (const m of matches) if (m.group_name) set.add(m.group_name)
-    return Array.from(set).sort()
-  }, [matches])
-
-  const gameweeks = useMemo(() => {
-    const set = new Set<number>()
-    for (const m of matches) if (m.group_name && m.gameweek != null) set.add(m.gameweek)
-    return Array.from(set).sort((a, b) => a - b)
-  }, [matches])
-
-  const knockoutRounds = useMemo(() => {
-    const set = new Set<string>()
-    for (const m of matches) {
-      const ui = toUIMatch(m, preds[m.id])
-      if (ui.knockout) set.add(m.round_name ?? 'Knockout')
-    }
-    return Array.from(set)
-  }, [matches, preds])
-
   const filtered = useMemo(() => matches.filter((m) => {
     const ui = toUIMatch(m, preds[m.id])
-    const statusOk = (() => {
-      switch (filter) {
+    switch (filter) {
       case 'today': return sgtDate(new Date(m.match_date)) === todaySGT
       case 'missing': return ui.status === 'missing'
       case 'locked': return ui.status === 'locked'
       case 'finished': return ui.status === 'scored'
+      case 'group': return !ui.knockout
+      case 'knockout': return ui.knockout
       default: return true
-      }
-    })()
-    if (!statusOk) return false
-    if (stageFilter === 'group' && ui.knockout) return false
-    if (stageFilter === 'knockout' && !ui.knockout) return false
-    if (stageFilter === 'group' && groupFilter !== 'all' && m.group_name !== groupFilter) return false
-    if (stageFilter === 'group' && weekFilter !== 'all' && String(m.gameweek ?? '') !== weekFilter) return false
-    if (stageFilter === 'knockout' && roundFilter !== 'all' && (m.round_name ?? 'Knockout') !== roundFilter) return false
-    if (dateFilter !== 'all' && sgtDate(new Date(m.match_date)) !== dateFilter) return false
-    return true
-  }), [matches, preds, filter, stageFilter, groupFilter, weekFilter, roundFilter, dateFilter, todaySGT])
-
-  const sortMatches = (items: DBMatch[]) => [...items].sort((a, b) => +new Date(a.match_date) - +new Date(b.match_date))
+    }
+  }), [matches, preds, filter, todaySGT])
 
   const byDate = useMemo(() => {
     const g: Record<string, DBMatch[]> = {}
@@ -154,47 +110,6 @@ export default function FixturesPage() {
     return g
   }, [filtered])
   const dates = Object.keys(byDate).sort()
-
-  const byGroup = useMemo(() => {
-    const g: Record<string, DBMatch[]> = {}
-    for (const m of filtered) if (m.group_name) (g[m.group_name] ||= []).push(m)
-    for (const key of Object.keys(g)) g[key] = sortMatches(g[key])
-    return g
-  }, [filtered])
-  const groupKeys = Object.keys(byGroup).sort()
-
-  const byRound = useMemo(() => {
-    const g: Record<string, DBMatch[]> = {}
-    for (const m of filtered) {
-      const key = m.round_name ?? 'Knockout'
-      ;(g[key] ||= []).push(m)
-    }
-    for (const key of Object.keys(g)) g[key] = sortMatches(g[key])
-    return g
-  }, [filtered])
-  const roundKeys = Object.keys(byRound)
-
-  function renderSection(title: string, items: DBMatch[], sub?: string) {
-    return (
-      <div key={title}>
-        <div className="flex items-center gap-3 mb-3 mt-2">
-          <div>
-            <h2 className="text-sm font-extrabold uppercase tracking-wider text-texts">{title}</h2>
-            {sub && <p className="text-[11px] text-texts font-medium mt-0.5">{sub}</p>}
-          </div>
-          <div className="flex-1 h-px bg-border" />
-          <span className="text-xs text-texts font-bold tabular-nums">{items.length} matches</span>
-        </div>
-        <StaggerList className="grid sm:grid-cols-2 gap-3">
-          {items.map((m) => (
-            <StaggerItem key={m.id}>
-              <MatchCard m={toUIMatch(m, preds[m.id], weights)} onClick={() => router.push(`/match/${m.id}`)} />
-            </StaggerItem>
-          ))}
-        </StaggerList>
-      </div>
-    )
-  }
 
   if (loading) {
     return (
@@ -226,64 +141,124 @@ export default function FixturesPage() {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="World Cup 2026" title="Fixtures" sub={`${counts.missing} predictions still missing across the schedule.`} />
-      <Card className="p-3 sm:p-4 space-y-3">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-texts mb-2">Status</p>
-          <ChipRow chips={statusChips} value={filter} onChange={setFilter} />
-        </div>
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-texts mb-2">Stage</p>
-          <ChipRow
-            chips={stageChips}
-            value={stageFilter}
-            onChange={(v) => {
-              setStageFilter(v)
-              if (v !== 'group') { setGroupFilter('all'); setWeekFilter('all') }
-              if (v !== 'knockout') setRoundFilter('all')
-            }}
-          />
-        </div>
-        <div className="grid sm:grid-cols-3 gap-3">
-          <Select id="fixture-date" label="Matchday" value={dateFilter} onChange={setDateFilter}>
-            <option value="all">All dates</option>
-            {dateOptions.map(([d, count]) => <option key={d} value={d}>{fmtDateKey(d)} ({count})</option>)}
-          </Select>
-          {stageFilter === 'group' ? (
-            <>
-              <Select id="fixture-group" label="Group" value={groupFilter} onChange={setGroupFilter}>
-                <option value="all">All groups</option>
-                {groups.map((g) => <option key={g} value={g}>Group {g}</option>)}
-              </Select>
-              <Select id="fixture-gw" label="Gameweek" value={weekFilter} onChange={setWeekFilter}>
-                <option value="all">All group GWs</option>
-                {gameweeks.map((gw) => <option key={gw} value={String(gw)}>GW {gw}</option>)}
-              </Select>
-            </>
-          ) : stageFilter === 'knockout' ? (
-            <Select id="fixture-round" label="Round" value={roundFilter} onChange={setRoundFilter} className="sm:col-span-2">
-              <option value="all">All knockout rounds</option>
-              {knockoutRounds.map((r) => <option key={r} value={r}>{r}</option>)}
-            </Select>
-          ) : (
-            <div className="sm:col-span-2 rounded-lg border border-border bg-surface px-3 py-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-texts">Quick tip</p>
-              <p className="text-[13px] font-semibold text-textp mt-1">Choose Group stage for Group A-L and GW filters, or Knockouts for round filters.</p>
-            </div>
-          )}
-        </div>
-      </Card>
+      <ChipRow chips={chips} value={filter} onChange={setFilter} />
 
-      {filtered.length === 0 ? (
+      {dates.length === 0 ? (
         <EmptyState icon={<CalIcon size={22} />} title="Nothing here" desc="No matches match this filter. Try a different one." />
-      ) : stageFilter === 'group' ? (
-        groupKeys.map((g) => renderSection(`Group ${g}`, byGroup[g], weekFilter === 'all' ? undefined : `GW ${weekFilter}`))
-      ) : stageFilter === 'knockout' ? (
-        roundKeys.map((r) => renderSection(r, byRound[r]))
       ) : (
         dates.map((d) => (
-          renderSection(fmtDateKey(d), byDate[d])
+          <div key={d}>
+            <div className="flex items-center gap-3 mb-3 mt-2">
+              <h2 className="text-sm font-extrabold uppercase tracking-wider text-texts">{fmtDateKey(d)}</h2>
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-texts font-bold tabular-nums">{byDate[d].length} matches</span>
+            </div>
+            <StaggerList className="grid sm:grid-cols-2 gap-3">
+              {byDate[d].map((m) => (
+                <StaggerItem key={m.id}>
+                  <MatchCard
+                    m={toUIMatch(m, preds[m.id], weights)}
+                    onClick={() => {
+                      const ui = toUIMatch(m, preds[m.id])
+                      if (ui.status === 'missing' || (ui.status !== 'locked' && ui.status !== 'scored')) {
+                        const existing = preds[m.id]
+                        setQuickMatch(m)
+                        setQuickH(existing?.pred_home ?? null)
+                        setQuickA(existing?.pred_away ?? null)
+                      } else {
+                        router.push(`/match/${m.id}`)
+                      }
+                    }}
+                  />
+                </StaggerItem>
+              ))}
+            </StaggerList>
+          </div>
         ))
       )}
+
+      {quickMatch && (
+        <QuickPredictModal
+          match={quickMatch}
+          initialH={quickH}
+          initialA={quickA}
+          onClose={() => setQuickMatch(null)}
+          onSaved={(matchId, h, a) => {
+            setPreds((prev) => ({
+              ...prev,
+              [matchId]: { ...prev[matchId], pred_home: h, pred_away: a, match_id: matchId } as MyPred,
+            }))
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+function QuickPredictModal({
+  match, initialH, initialA, onClose, onSaved,
+}: {
+  match: DBMatch
+  initialH: number | null
+  initialA: number | null
+  onClose: () => void
+  onSaved: (matchId: string, h: number, a: number) => void
+}) {
+  const supabase = createClient()
+  const home = getTeam(match.home_team), away = getTeam(match.away_team)
+  const [h, setH] = useState<number | null>(initialH)
+  const [a, setA] = useState<number | null>(initialA)
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user || h == null || a == null) return
+    setSaving(true)
+    const { error } = await supabase.from('predictions').upsert({
+      user_id: user.id, match_id: match.id,
+      pred_home: h, pred_away: a,
+    }, { onConflict: 'user_id,match_id' })
+    setSaving(false)
+    if (error) { toast.error(`Couldn't save: ${error.message}`); return }
+    toast.success(`${home.code} ${h}–${a} ${away.code} saved`)
+    onSaved(match.id, h, a)
+    onClose()
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed bottom-0 inset-x-0 z-50 sm:inset-0 sm:flex sm:items-center sm:justify-center p-4">
+        <div className="bg-card border border-border rounded-2xl shadow-2xl p-5 w-full max-w-sm sm:mx-auto">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-texts">{match.group_name ? `Group ${match.group_name}` : 'Knockout'}</p>
+              <p className="text-sm font-extrabold text-textp">{home.name} vs {away.name}</p>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 grid place-items-center rounded-lg border border-border text-texts hover:text-textp text-lg">×</button>
+          </div>
+
+          <div className="flex items-center justify-center gap-5 py-3">
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-3xl">{home.flag}</span>
+              <ScoreStepper value={h} onChange={setH} />
+            </div>
+            <span className="text-xl font-black text-texts mt-6">:</span>
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-3xl">{away.flag}</span>
+              <ScoreStepper value={a} onChange={setA} />
+            </div>
+          </div>
+
+          <div className="flex gap-2 mt-4">
+            <Button variant="surface" className="flex-1" onClick={onClose}>Cancel</Button>
+            <Button variant="primary" className="flex-1" onClick={save} disabled={saving || h == null || a == null}>
+              {saving ? 'Saving…' : 'Save pick'}
+            </Button>
+          </div>
+          <p className="text-center text-[11px] text-texts mt-3">For full options (first scorer, BTTS etc), tap View match →</p>
+        </div>
+      </div>
+    </>
   )
 }

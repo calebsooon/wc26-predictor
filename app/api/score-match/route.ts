@@ -2,11 +2,16 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/require-admin'
 import { scorePrediction, type PredictionInput } from '@/lib/scoring'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient()
   const denied = await requireAdmin(supabase)
   if (denied) return denied
+
+  const { data: { user } } = await supabase.auth.getUser()
+  const { allowed, retryAfterMs } = checkRateLimit(`score-match:${user?.id ?? 'anon'}`)
+  if (!allowed) return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: { 'Retry-After': String(Math.ceil((retryAfterMs ?? 60000) / 1000)) } })
 
   const serviceSupabase = createServiceSupabaseClient()
 
@@ -60,6 +65,15 @@ export async function POST(request: Request) {
 
   const { error: upsertErr } = await serviceSupabase.from('predictions').upsert(updates, { onConflict: 'user_id,match_id' })
   if (upsertErr) return NextResponse.json({ error: upsertErr.message }, { status: 500 })
+
+  // Audit log — fire and forget
+  serviceSupabase.from('scoring_events').insert({
+    triggered_by: user!.id,
+    event_type: 'match',
+    subject_id: match_id,
+    pts_distributed: updates.reduce((s, u) => s + (u.points_awarded ?? 0), 0),
+    scored_count: updates.length,
+  }).then(() => {})
 
   return NextResponse.json({ match_id, scored: updates.length })
 }

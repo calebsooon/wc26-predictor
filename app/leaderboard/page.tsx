@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { PageHeader, Tabs, Card, Skeleton, EmptyState, TrophyIcon, Avatar, LeagueBadge, Pill, ChipRow } from '@/components/ui'
 import { LeaderboardTable, type LBRow } from '@/components/football'
@@ -10,7 +10,7 @@ import { DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { GW_NAMES, GW_SHORT, GW_PRIZES, OVERALL_PRIZES, formatPrize, prizeTone } from '@/lib/prizes'
 import { getTeam } from '@/lib/teams'
 
-const PRED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, matches(gw_number)'
+const PRED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, matches(gw_number, match_date)'
 
 interface PredRow {
   user_id: string
@@ -24,7 +24,7 @@ interface PredRow {
   pts_first_team: number | null
   pts_first_scorer: number | null
   profiles?: { username: string; avatar_url: string | null } | null
-  matches: { gw_number: number | null } | null
+  matches: { gw_number: number | null; match_date?: string | null } | null
 }
 interface SnapRow { user_id: string; rank: number; snapshot_at: string }
 
@@ -45,6 +45,26 @@ interface PickPred {
   pred_home: number | null
   pred_away: number | null
   points_awarded: number | null
+}
+
+function downloadCSV(rows: LBRow[], gwLabel: string) {
+  const headers = ['Rank', 'Player', 'Points', 'Exact Scores', 'Accuracy %', 'Prize']
+  const data = rows.map((r, i) => [
+    String(i + 1),
+    r.name,
+    String(r.pts),
+    String(r.exact ?? 0),
+    String(r.acc ?? 0),
+    r.prize != null ? String(r.prize) : '',
+  ])
+  const csv = [headers, ...data].map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `matchday-leaderboard-${gwLabel.toLowerCase().replace(/\s+/g, '-')}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 const GW_TABS = [
@@ -79,6 +99,17 @@ export default function LeaderboardPage() {
   const [pickMatches, setPickMatches] = useState<PickMatch[]>([])
   const [pickPreds, setPickPreds] = useState<PickPred[]>([])
   const [picksLoading, setPicksLoading] = useState(false)
+
+  const fetchRows = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) { setRows([]); return }
+    const { data, error } = await supabase
+      .from('predictions')
+      .select(PRED_COLS)
+      .not('points_awarded', 'is', null)
+      .in('user_id', ids)
+    if (!error) setRows((data ?? []) as unknown as PredRow[])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function applyLeague(uid: string) {
     const { league, weights: w, memberIds: ids, memberProfiles } = await getActiveLeague(supabase, uid)
@@ -123,6 +154,23 @@ export default function LeaderboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Realtime subscription scoped to active league — re-fetch when any prediction is scored
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!activeLeagueId) return
+    const channel = supabase
+      .channel(`lb-realtime-${activeLeagueId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'predictions' },
+        () => {
+          if (memberIdsRef.current.length) fetchRows(memberIdsRef.current)
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [activeLeagueId, fetchRows])
+
   // Load picks data when picks tab is activated
   useEffect(() => {
     if (view !== 'picks' || !revealPicks || members.length === 0) return
@@ -156,16 +204,6 @@ export default function LeaderboardPage() {
     } finally {
       setPicksLoading(false)
     }
-  }
-
-  async function fetchRows(ids: string[]) {
-    if (ids.length === 0) { setRows([]); return }
-    const { data, error } = await supabase
-      .from('predictions')
-      .select(PRED_COLS)
-      .not('points_awarded', 'is', null)
-      .in('user_id', ids)
-    if (!error) setRows((data ?? []) as unknown as PredRow[])
   }
 
   async function fetchSnaps(leagueId: string | null) {
@@ -263,8 +301,16 @@ export default function LeaderboardPage() {
         />
       ) : (
         <>
-          <div className="overflow-x-auto -mx-4 px-4">
-            <Tabs tabs={GW_TABS} value={tab} onChange={setTab} />
+          <div className="flex items-center gap-3">
+            <div className="flex-1 overflow-x-auto -mx-4 px-4">
+              <Tabs tabs={GW_TABS} value={tab} onChange={setTab} />
+            </div>
+            <button
+              onClick={() => downloadCSV(board, gwLabel)}
+              className="shrink-0 flex items-center gap-1.5 text-[12px] font-bold text-texts hover:text-textp px-3 py-1.5 rounded-lg border border-border hover:border-texts/40 transition-colors"
+            >
+              ↓ CSV
+            </button>
           </div>
 
           {board.length === 0 ? (
@@ -305,7 +351,7 @@ export default function LeaderboardPage() {
 
               <div className="px-1">
                 <p className="text-[11px] text-texts font-medium">
-                  Tiebreakers: total weighted points, correct outcomes, exact scorelines, then shared rank.{isMoney ? ' Prize pool per GW: 1st +$15 · 2nd +$10 · 3rd +$5 · 4th $0 · 5th -$5 · 6th -$10 · 7th -$15. Overall: 1st +$40 · 7th -$40.' : ' This is a points-only league — no prize pool.'}
+                  Tiebreaker: most correct outcomes, then alphabetical.{isMoney ? ' Prize pool per GW: 1st +$15 · 2nd +$10 · 3rd +$5 · 4th $0 · 5th -$5 · 6th -$10 · 7th -$15. Overall: 1st +$40 · 7th -$40.' : ' This is a points-only league — no prize pool.'}
                 </p>
               </div>
             </>

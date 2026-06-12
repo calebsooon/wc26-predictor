@@ -20,6 +20,13 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   title: "MatchDay — World Cup 2026 Prediction League",
   description: "Your road to glory starts here.",
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'MatchDay',
+  },
+  themeColor: '#0a0a0f',
 };
 
 // Set the theme class before paint to avoid a flash of the wrong theme.
@@ -44,6 +51,11 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="MatchDay" />
       </head>
       <body className={`${archivo.variable} ${spaceGrotesk.variable} antialiased min-h-screen bg-bg text-textp`}>
         <AppShell>{children}</AppShell>
