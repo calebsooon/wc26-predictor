@@ -3,38 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-
-function InstallBanner() {
-  const [show, setShow] = useState(false)
-  useEffect(() => {
-    const dismissed = sessionStorage.getItem('md_install_banner_dismissed')
-    const standalone = window.matchMedia('(display-mode: standalone)').matches ||
-      (navigator as Navigator & { standalone?: boolean }).standalone === true
-    if (!dismissed && !standalone) setShow(true)
-  }, [])
-  if (!show) return null
-  return (
-    <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-surface border border-border">
-      <div className="flex items-center gap-3 min-w-0">
-        <img src="/icon-192.png" alt="MatchDay" className="w-9 h-9 rounded-xl shrink-0" />
-        <div className="min-w-0">
-          <p className="text-[13px] font-bold text-textp">Add MatchDay to your home screen</p>
-          <p className="text-[11px] text-texts mt-0.5">Launch instantly, full-screen, no browser bar.</p>
-        </div>
-      </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <Link href="/install" className="text-[12px] font-extrabold text-primary whitespace-nowrap hover:underline">
-          How →
-        </Link>
-        <button
-          onClick={() => { sessionStorage.setItem('md_install_banner_dismissed', '1'); setShow(false) }}
-          className="text-texts hover:text-textp text-lg font-bold leading-none w-7 h-7 grid place-items-center"
-          aria-label="Dismiss"
-        >×</button>
-      </div>
-    </div>
-  )
-}
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { Card, StatCard, SectionHeader, Button, Skeleton, BoltIcon, EmptyState, CalIcon, Pill, CountUp, ScoreStepper, Countdown, ProgressBar, LeagueBadge, ConfettiBurst, Avatar } from '@/components/ui'
@@ -46,6 +14,7 @@ import { toUIMatch, isKnockout, type DBMatch, type MyPred } from '@/lib/match-ui
 import { getTeam } from '@/lib/teams'
 import { SCORING_RULES, weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { computePrizeSnapshot, formatPrize, prizeTone, GW_NAMES, GW_PRIZES, OVERALL_PRIZES } from '@/lib/prizes'
+import { useInstallPrompt, useAppBadge } from '@/lib/pwa'
 
 const SCORED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, matches(gw_number)'
 
@@ -219,6 +188,7 @@ export default function DashboardPage() {
     .filter((m) => m.real_home_score === null && new Date(m.match_date) > new Date())
     .sort((a, b) => +new Date(a.match_date) - +new Date(b.match_date)), [matches])
   const missingCount = upcoming.filter((m) => !preds[m.id]).length
+  useAppBadge(missingCount)
   const hero = upcoming[0] ?? null
   const next = upcoming.slice(1, 5)
 
@@ -287,7 +257,7 @@ export default function DashboardPage() {
     <div className="space-y-7">
       <ConfettiBurst trigger={confetti} />
 
-      <InstallBanner />
+      <InstallBanner missingCount={missingCount} />
 
       {newResultsBanner && (
         <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-primary/[0.08] border border-primary/25">
@@ -737,6 +707,68 @@ function BannerSlider({ banners }: { banners: string[] }) {
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+/* ── InstallBanner ─────────────────────────────────────────────── */
+function InstallBanner({ missingCount }: { missingCount: number }) {
+  const { canInstall, isInstalled, triggerInstall } = useInstallPrompt()
+  const [show, setShow] = useState(false)
+  const [installing, setInstalling] = useState(false)
+
+  useEffect(() => {
+    if (isInstalled) { setShow(false); return }
+    const dismissed = sessionStorage.getItem('md_install_banner_dismissed')
+    if (!dismissed) setShow(true)
+  }, [isInstalled])
+
+  if (!show) return null
+
+  async function handleInstall() {
+    setInstalling(true)
+    const outcome = await triggerInstall()
+    setInstalling(false)
+    if (outcome === 'accepted') {
+      setShow(false)
+    }
+  }
+
+  function dismiss() {
+    sessionStorage.setItem('md_install_banner_dismissed', '1')
+    setShow(false)
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-surface border border-border">
+      <div className="flex items-center gap-3 min-w-0">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/icon-192.png" alt="MatchDay" className="w-9 h-9 rounded-xl shrink-0" />
+        <div className="min-w-0">
+          <p className="text-[13px] font-bold text-textp">Add MatchDay to your home screen</p>
+          <p className="text-[11px] text-texts mt-0.5">
+            {missingCount > 0
+              ? `${missingCount} prediction${missingCount !== 1 ? 's' : ''} still open — launch instantly anytime.`
+              : 'Launch instantly, full-screen, no browser bar.'}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {canInstall ? (
+          <button
+            onClick={handleInstall}
+            disabled={installing}
+            className="text-[12px] font-extrabold text-primary whitespace-nowrap px-2.5 py-1 rounded-lg border border-primary/30 hover:bg-primary/10 transition-colors disabled:opacity-50"
+          >
+            {installing ? 'Installing…' : 'Install'}
+          </button>
+        ) : (
+          <Link href="/install" className="text-[12px] font-extrabold text-primary whitespace-nowrap hover:underline">
+            How →
+          </Link>
+        )}
+        <button onClick={dismiss} className="text-texts hover:text-textp text-lg font-bold leading-none w-7 h-7 grid place-items-center" aria-label="Dismiss">×</button>
+      </div>
     </div>
   )
 }
