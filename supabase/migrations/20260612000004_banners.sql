@@ -17,6 +17,12 @@ create index if not exists league_banners_league_idx on league_banners(league_id
 
 alter table league_banners enable row level security;
 
+drop policy if exists "league_banners: authenticated read" on league_banners;
+drop policy if exists "league_banners: authenticated insert" on league_banners;
+drop policy if exists "league_banners: authenticated delete" on league_banners;
+drop policy if exists "league_banners: admin insert" on league_banners;
+drop policy if exists "league_banners: admin delete" on league_banners;
+
 -- All authenticated users can read (the app filters by league_id)
 create policy "league_banners: authenticated read"
   on league_banners for select to authenticated using (true);
@@ -38,6 +44,12 @@ values (
   array['image/jpeg','image/jpg','image/png','image/gif','image/webp']
 )
 on conflict (id) do nothing;
+
+drop policy if exists "banners: authenticated upload" on storage.objects;
+drop policy if exists "banners: authenticated delete" on storage.objects;
+drop policy if exists "banners: admin upload" on storage.objects;
+drop policy if exists "banners: admin delete" on storage.objects;
+drop policy if exists "banners: public read" on storage.objects;
 
 -- Admins can upload and delete banner files
 create policy "banners: admin upload"
