@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/require-admin'
 import { scorePrediction, type PredictionInput, type MatchResult } from '@/lib/scoring'
 
@@ -7,6 +7,8 @@ export async function POST() {
   const supabase = createServerSupabaseClient()
   const denied = await requireAdmin(supabase)
   if (denied) return denied
+
+  const serviceSupabase = createServiceSupabaseClient()
 
   const { data: matches, error: matchErr } = await supabase
     .from('matches')
@@ -17,7 +19,7 @@ export async function POST() {
   if (!matches || matches.length === 0) return NextResponse.json({ rescored: 0 })
 
   const matchIds = (matches as { id: string }[]).map((m) => m.id)
-  const { data: predictions, error: predsErr } = await supabase
+  const { data: predictions, error: predsErr } = await serviceSupabase
     .from('predictions')
     .select('id, match_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff, pred_btts, pred_no_scorer')
     .in('match_id', matchIds)
@@ -47,7 +49,7 @@ export async function POST() {
   let total = 0
   for (let i = 0; i < updates.length; i += BATCH) {
     const batch = updates.slice(i, i + BATCH)
-    const { error } = await supabase.from('predictions').upsert(batch as object[], { onConflict: 'id' })
+    const { error } = await serviceSupabase.from('predictions').upsert(batch as object[], { onConflict: 'id' })
     if (error) return NextResponse.json({ error: error.message, rescored: total }, { status: 500 })
     total += batch.length
   }

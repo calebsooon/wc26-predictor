@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/require-admin'
 import { scorePrediction, type PredictionInput } from '@/lib/scoring'
 import { snapshotLeagueRanks } from '@/lib/snapshot'
@@ -22,6 +22,9 @@ export async function POST() {
   const supabase = createServerSupabaseClient()
   const denied = await requireAdmin(supabase)
   if (denied) return denied
+
+  // Service client bypasses RLS for scoring writes across all users' predictions
+  const serviceSupabase = createServiceSupabaseClient()
 
   if (!FD_TOKEN) return NextResponse.json({ error: 'FOOTBALL_DATA_API_KEY not set' }, { status: 500 })
 
@@ -81,7 +84,7 @@ export async function POST() {
     const { data: match, error: mErr } = await supabase.from('matches').select('id, home_team, away_team, real_home_score, real_away_score, first_goal_team, first_goal_player_id').eq('id', u.id).single()
     if (mErr || !match) { scoreErrors.push(`fetch match ${u.id}: ${mErr?.message ?? 'not found'}`); continue }
     const m = match as unknown as MatchRow
-    const { data: preds, error: pErr } = await supabase.from('predictions').select('id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff, pred_btts, pred_no_scorer').eq('match_id', u.id)
+    const { data: preds, error: pErr } = await serviceSupabase.from('predictions').select('id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff, pred_btts, pred_no_scorer').eq('match_id', u.id)
     if (pErr) { scoreErrors.push(`fetch preds ${u.id}: ${pErr.message}`); continue }
     if (!preds?.length) continue
     const result = { home_team: m.home_team, away_team: m.away_team, real_home_score: m.real_home_score, real_away_score: m.real_away_score, first_goal_team: m.first_goal_team, first_goal_player_id: m.first_goal_player_id }
@@ -89,7 +92,7 @@ export async function POST() {
       const b = scorePrediction(p as unknown as PredictionInput, result)
       return { id: (p as { id: string }).id, match_id: u.id, pred_home: (p as { pred_home: number }).pred_home, pred_away: (p as { pred_away: number }).pred_away, points_awarded: b.total, pts_outcome: b.outcome, pts_exact: b.exact, pts_goal_diff: b.goalDiff, pts_total_goals: b.totalGoals, pts_team_goals: b.teamGoals, pts_btts: b.btts, pts_first_team: b.firstTeam, pts_first_scorer: b.firstScorer }
     })
-    const { error: uErr } = await supabase.from('predictions').upsert(updates, { onConflict: 'id' })
+    const { error: uErr } = await serviceSupabase.from('predictions').upsert(updates, { onConflict: 'id' })
     if (uErr) { scoreErrors.push(`upsert preds ${u.id}: ${uErr.message}`); continue }
     totalScored += updates.length
   }

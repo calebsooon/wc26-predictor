@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/require-admin'
 import { TOURNAMENT_POINTS } from '@/lib/scoring'
 
@@ -15,6 +15,8 @@ export async function POST() {
   const supabase = createServerSupabaseClient()
   const denied = await requireAdmin(supabase)
   if (denied) return denied
+
+  const serviceSupabase = createServiceSupabaseClient()
 
   const { data: matches, error: mErr } = await supabase
     .from('matches')
@@ -58,7 +60,7 @@ export async function POST() {
     }
   }
 
-  const { data: preds, error: pErr } = await supabase.from('tournament_predictions').select('*')
+  const { data: preds, error: pErr } = await serviceSupabase.from('tournament_predictions').select('*')
   if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 })
   if (!preds || preds.length === 0) return NextResponse.json({ updated: 0 })
 
@@ -77,7 +79,7 @@ export async function POST() {
     return u
   })
 
-  const { error: uErr } = await supabase.from('tournament_predictions').upsert(updates, { onConflict: 'user_id,phase' })
+  const { error: uErr } = await serviceSupabase.from('tournament_predictions').upsert(updates, { onConflict: 'user_id,phase' })
   if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 })
 
   return NextResponse.json({
