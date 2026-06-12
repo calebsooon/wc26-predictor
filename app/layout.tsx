@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Archivo, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
@@ -26,7 +26,10 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'MatchDay',
   },
-  themeColor: '#0a0a0f',
+};
+
+export const viewport: Viewport = {
+  themeColor: '#0B0C14',
 };
 
 // Set the theme class before paint to avoid a flash of the wrong theme.
