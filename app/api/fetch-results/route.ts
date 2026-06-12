@@ -84,15 +84,16 @@ export async function POST() {
     const { data: match, error: mErr } = await supabase.from('matches').select('id, home_team, away_team, real_home_score, real_away_score, first_goal_team, first_goal_player_id').eq('id', u.id).single()
     if (mErr || !match) { scoreErrors.push(`fetch match ${u.id}: ${mErr?.message ?? 'not found'}`); continue }
     const m = match as unknown as MatchRow
-    const { data: preds, error: pErr } = await serviceSupabase.from('predictions').select('id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff, pred_btts, pred_no_scorer').eq('match_id', u.id)
+    const { data: preds, error: pErr } = await serviceSupabase.from('predictions').select('user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff, pred_btts, pred_no_scorer').eq('match_id', u.id)
     if (pErr) { scoreErrors.push(`fetch preds ${u.id}: ${pErr.message}`); continue }
     if (!preds?.length) continue
     const result = { home_team: m.home_team, away_team: m.away_team, real_home_score: m.real_home_score, real_away_score: m.real_away_score, first_goal_team: m.first_goal_team, first_goal_player_id: m.first_goal_player_id }
-    const updates = preds.map((p) => {
-      const b = scorePrediction(p as unknown as PredictionInput, result)
-      return { id: (p as { id: string }).id, match_id: u.id, pred_home: (p as { pred_home: number }).pred_home, pred_away: (p as { pred_away: number }).pred_away, points_awarded: b.total, pts_outcome: b.outcome, pts_exact: b.exact, pts_goal_diff: b.goalDiff, pts_total_goals: b.totalGoals, pts_team_goals: b.teamGoals, pts_btts: b.btts, pts_first_team: b.firstTeam, pts_first_scorer: b.firstScorer }
+    type FRPredRow = PredictionInput & { user_id: string }
+    const updates = (preds as unknown as FRPredRow[]).map((p) => {
+      const b = scorePrediction(p, result)
+      return { user_id: p.user_id, match_id: u.id, pred_home: p.pred_home, pred_away: p.pred_away, points_awarded: b.total, pts_outcome: b.outcome, pts_exact: b.exact, pts_goal_diff: b.goalDiff, pts_total_goals: b.totalGoals, pts_team_goals: b.teamGoals, pts_btts: b.btts, pts_first_team: b.firstTeam, pts_first_scorer: b.firstScorer }
     })
-    const { error: uErr } = await serviceSupabase.from('predictions').upsert(updates, { onConflict: 'id' })
+    const { error: uErr } = await serviceSupabase.from('predictions').upsert(updates, { onConflict: 'user_id,match_id' })
     if (uErr) { scoreErrors.push(`upsert preds ${u.id}: ${uErr.message}`); continue }
     totalScored += updates.length
   }
