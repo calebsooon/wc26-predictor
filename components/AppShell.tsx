@@ -46,10 +46,9 @@ const SIDEBAR: NavItem[] = [
 ]
 
 const BOTTOM: NavItem[] = [
-  { href: '/dashboard',   label: 'Home',    icon: HomeIcon },
-  { href: '/predictions', label: 'Fixtures',icon: CalIcon },
-  { href: '/leaderboard', label: 'Ranks',   icon: TrophyIcon },
-  { href: '/bracket',     label: 'Bracket', icon: TreeIcon },
+  { href: '/dashboard',   label: 'Home',     icon: HomeIcon },
+  { href: '/predictions', label: 'Fixtures', icon: CalIcon },
+  { href: '/leaderboard', label: 'Ranks',    icon: TrophyIcon },
 ]
 
 // Routes that render WITHOUT the app shell (own full-bleed layout)
@@ -220,7 +219,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Mobile bottom nav */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-surface/95 backdrop-blur-lg border-t border-border">
-        <div className="grid grid-cols-5 h-16 max-w-md mx-auto">
+        <div className="grid grid-cols-4 h-16 max-w-md mx-auto">
           {BOTTOM.map((it) => {
             const Ic = it.icon
             const active = isActive(it.href)

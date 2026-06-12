@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
-import { Card, StatCard, SectionHeader, Button, Skeleton, BoltIcon, EmptyState, CalIcon, Pill, CountUp, ScoreStepper, Countdown, ProgressBar, LeagueBadge, ConfettiBurst, Avatar } from '@/components/ui'
+import { Card, StatCard, SectionHeader, Button, Skeleton, BoltIcon, EmptyState, CalIcon, Pill, CountUp, ScoreStepper, Countdown, ProgressBar, LeagueBadge, Avatar } from '@/components/ui'
 import { NextPredictCard, LeaderboardTable, type LBRow } from '@/components/football'
 import RulesModal from '@/components/RulesModal'
 import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
@@ -172,14 +172,12 @@ export default function DashboardPage() {
   const exactCount = useMemo(() => Object.values(preds).filter((p) => (p.pts_exact ?? 0) > 0).length, [preds])
   const rankMove = prevRank != null && myRank != null ? prevRank - myRank : null
 
-  // Celebrate a climb since the last snapshot (once per load)
-  const [confetti, setConfetti] = useState(0)
+  // Notify on rank climb (toast only — no confetti)
   const celebratedRef = useRef(false)
   useEffect(() => {
     if (celebratedRef.current || loading) return
     if (rankMove != null && rankMove > 0 && myRank != null) {
       celebratedRef.current = true
-      setConfetti((c) => c + 1)
       toast.success(`📈 You climbed ${rankMove} spot${rankMove !== 1 ? 's' : ''} to ${ordinal(myRank)}!`)
     }
   }, [rankMove, myRank, loading])
@@ -255,8 +253,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-7">
-      <ConfettiBurst trigger={confetti} />
-
       <InstallBanner missingCount={missingCount} />
 
       {newResultsBanner && (

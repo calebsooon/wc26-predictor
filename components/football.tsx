@@ -71,10 +71,13 @@ export function MatchCard({ m, onClick, compact = false }: { m: UIMatch; onClick
           {isScored ? (
             <>
               <ScoreDisplay a={m.result?.h ?? null} b={m.result?.a ?? null} />
-              {m.pred && (
-                <div className="text-[10px] text-texts mt-0.5 font-semibold">
-                  you: <span style={{ color: predColor }} className="tabular-nums">{m.pred.h}-{m.pred.a}</span>
+              {m.pred ? (
+                <div className="mt-1 flex items-center justify-center gap-1">
+                  <span className="text-[10px] text-texts font-semibold">you:</span>
+                  <span className="text-[13px] font-extrabold tabular-nums" style={{ color: predColor }}>{m.pred.h}–{m.pred.a}</span>
                 </div>
+              ) : (
+                <div className="text-[10px] text-texts/50 mt-1 italic">no pick</div>
               )}
             </>
           ) : (
@@ -99,7 +102,13 @@ export function MatchCard({ m, onClick, compact = false }: { m: UIMatch; onClick
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/60">
           <span className="text-[11px] text-texts truncate font-medium">{m.venue ?? stageLabel}</span>
           {isScored ? (
-            <span className="text-[11px] text-texts font-medium">{home.code} {m.result?.h}-{m.result?.a} {away.code}</span>
+            m.pred ? (
+              <span className="text-[11px] font-bold tabular-nums" style={{ color: predColor }}>
+                Pred: {m.pred.h}–{m.pred.a}{m.pts != null ? ` · +${m.pts}pts` : ''}
+              </span>
+            ) : (
+              <span className="text-[11px] text-texts/50 font-medium">No prediction submitted</span>
+            )
           ) : !kickedOff ? (
             <span className="text-[11px] flex items-center gap-1 font-semibold">
               <LockIcon size={11} className="text-texts" />
