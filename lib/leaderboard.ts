@@ -32,13 +32,15 @@ export type AggRow = LBRow & {
  * Canonical leaderboard sort:
  *   1. most points
  *   2. most correct outcomes (tiebreaker)
- *   3. alphabetical by name (final, deterministic fallback)
+ *   3. most exact scorelines (tiebreaker)
+ *   4. stable id order only for rendering deterministic tied rows
  */
 export function compareLeaderboard(a: AggRow, b: AggRow): number {
   return (
     b.pts - a.pts ||
     b.outcomeWins - a.outcomeWins ||
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    (b.exact ?? 0) - (a.exact ?? 0) ||
+    a.id.localeCompare(b.id)
   )
 }
 

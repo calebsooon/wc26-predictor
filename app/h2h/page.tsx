@@ -25,6 +25,7 @@ export default function H2HPage() {
   const supabase = createClient()
   const [members, setMembers] = useState<ProfileLite[]>([])
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
+  const [leagueName, setLeagueName] = useState('')
   const [aId, setAId] = useState('')
   const [bId, setBId] = useState('')
   const [rows, setRows] = useState<PredRow[]>([])
@@ -37,8 +38,9 @@ export default function H2HPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) { setLoading(false); return }
-        const { weights: w, memberProfiles } = await getActiveLeague(supabase, user.id)
+        const { league, weights: w, memberProfiles } = await getActiveLeague(supabase, user.id)
         setWeights(w)
+        setLeagueName(league?.name ?? '')
         setMembers(memberProfiles)
         setAId(user.id)
         const other = memberProfiles.find((m) => m.id !== user.id)
@@ -163,15 +165,16 @@ export default function H2HPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-5">
-      <PageHeader eyebrow="Compare" title="Head-to-head" sub="Stack any two players in your league side by side." />
+    <div className="max-w-3xl mx-auto space-y-5">
+      <PageHeader eyebrow="Compare" title="Head-to-head" sub={leagueName ? `Stack any two players in ${leagueName} side by side.` : 'Stack any two players in your league side by side.'} />
 
       {members.length < 2 ? (
         <EmptyState icon={<UsersIcon size={22} />} title="Not enough players" desc="You need at least two members in this league to compare." />
       ) : (
         <>
           {/* Player selectors */}
-          <div className="grid grid-cols-2 gap-3">
+          <Card className="p-4">
+          <div className="grid sm:grid-cols-2 gap-3">
             <Select id="player-a" label="Player A" value={aId} onChange={setAId}>
               <option value="">Select…</option>
               {members.filter((m) => m.id !== bId).map((m) => <option key={m.id} value={m.id}>{m.username ?? '?'}</option>)}
@@ -181,6 +184,7 @@ export default function H2HPage() {
               {members.filter((m) => m.id !== aId).map((m) => <option key={m.id} value={m.id}>{m.username ?? '?'}</option>)}
             </Select>
           </div>
+          </Card>
 
           {a && b && aId !== bId && (
             <>
@@ -237,6 +241,14 @@ export default function H2HPage() {
               </Card>
 
               {/* Per-category comparison bars */}
+              {stats.common === 0 && (
+                <EmptyState
+                  icon={<UsersIcon size={22} />}
+                  title="No shared scored matches yet"
+                  desc="Once both players have scored predictions for the same fixture, their comparison will appear here."
+                />
+              )}
+
               {catStats.some((c) => c.totalA > 0 || c.totalB > 0) && (
                 <Card className="p-5">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-texts mb-3">Category accuracy</p>

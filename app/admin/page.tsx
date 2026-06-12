@@ -235,7 +235,7 @@ function AdminActions() {
 }
 
 interface LabelRow { id: string; name: string; color: string }
-interface LeagueAdminRow { id: string; name: string; type: 'money' | 'points'; join_code: string; scoring: unknown; bracket_enabled: boolean; reveal_predictions: boolean; prize_pool: boolean; banners_enabled: boolean; label_id: string | null; league_labels: { name: string; color: string } | null; memberIds: string[] }
+interface LeagueAdminRow { id: string; name: string; type: 'money' | 'points'; join_code: string; scoring: unknown; bracket_enabled: boolean; reveal_predictions: boolean; prize_pool: boolean; banners_enabled: boolean; label_id: string | null; league_labels: { name: string; color: string } | null; memberIds: string[]; bannerCount: number }
 interface BannerItem { id: string; image_url: string; storage_path: string; display_order: number }
 interface AdminProfile { id: string; username: string | null }
 
@@ -618,19 +618,26 @@ function LeagueAdmin() {
   const [assignOpen, setAssignOpen] = useState(false)           // per-user assignment
 
   async function load() {
-    const [{ data: ls }, { data: ms }, { data: ps }, { data: lbs }] = await Promise.all([
+    const [{ data: ls }, { data: ms }, { data: ps }, { data: lbs }, { data: bs }] = await Promise.all([
       supabase.from('leagues').select('id, name, type, join_code, scoring, bracket_enabled, reveal_predictions, prize_pool, banners_enabled, label_id, league_labels(name, color)').order('created_at'),
       supabase.from('league_members').select('league_id, user_id'),
       supabase.from('profiles').select('id, username').order('username'),
       supabase.from('league_labels').select('id, name, color').order('name'),
+      supabase.from('league_banners').select('league_id'),
     ])
     const byLeague = new Map<string, string[]>()
     for (const m of (ms ?? []) as { league_id: string; user_id: string }[]) {
       const arr = byLeague.get(m.league_id) ?? []; arr.push(m.user_id); byLeague.set(m.league_id, arr)
     }
+    const bannerCounts = new Map<string, number>()
+    for (const b of (bs ?? []) as { league_id: string }[]) bannerCounts.set(b.league_id, (bannerCounts.get(b.league_id) ?? 0) + 1)
     setProfiles((ps ?? []) as AdminProfile[])
     setLabels((lbs ?? []) as LabelRow[])
-    setLeagues(((ls ?? []) as unknown as Omit<LeagueAdminRow, 'memberIds'>[]).map((l) => ({ ...l, memberIds: byLeague.get(l.id) ?? [] })))
+    setLeagues(((ls ?? []) as unknown as Omit<LeagueAdminRow, 'memberIds' | 'bannerCount'>[]).map((l) => ({
+      ...l,
+      memberIds: byLeague.get(l.id) ?? [],
+      bannerCount: bannerCounts.get(l.id) ?? 0,
+    })))
   }
 
   useEffect(() => {
@@ -658,8 +665,23 @@ function LeagueAdmin() {
   return (
     <Card className="p-4">
       <div className="flex items-start justify-between gap-3">
-        <SectionHeader title="Leagues" sub="Create leagues and share their join codes. Toggle the prize pool per league." />
+        <SectionHeader title="League management" sub="Create leagues, tune scoring, manage members, and control banners." />
         <Button size="sm" variant={assignOpen ? 'primary' : 'outline'} onClick={() => setAssignOpen((o) => !o)} className="shrink-0">Assign users</Button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mt-3">
+        <div className="rounded-lg border border-border bg-surface p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-texts">Leagues</p>
+          <p className="text-xl font-extrabold tabular-nums text-textp">{leagues.length}</p>
+        </div>
+        <div className="rounded-lg border border-border bg-surface p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-texts">Members</p>
+          <p className="text-xl font-extrabold tabular-nums text-textp">{leagues.reduce((s, l) => s + l.memberIds.length, 0)}</p>
+        </div>
+        <div className="rounded-lg border border-border bg-surface p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-texts">Banners</p>
+          <p className="text-xl font-extrabold tabular-nums text-textp">{leagues.reduce((s, l) => s + l.bannerCount, 0)}</p>
+        </div>
       </div>
 
       {assignOpen && <UserLeagueAssign leagues={leagues} profiles={profiles} onChanged={load} />}
@@ -682,13 +704,15 @@ function LeagueAdmin() {
         <Button size="sm" variant={prizePool ? 'gold' : 'surface'} onClick={() => setPrizePool((p) => !p)}>Prize pool: {prizePool ? 'On' : 'Off'}</Button>
         <Button size="sm" variant="primary" onClick={create} disabled={busy || !name.trim()}>{busy ? '…' : 'Create'}</Button>
       </div>
-      <div className="mt-4 divide-y divide-border/60">
+      <div className="mt-4 space-y-2">
         {leagues.map((l) => (
-          <div key={l.id} className="py-2.5">
+          <div key={l.id} className="rounded-xl border border-border bg-surface/45 p-3">
             <div className="flex flex-wrap items-center gap-2.5">
               <LeagueBadge name={l.league_labels?.name} color={l.league_labels?.color} money={l.prize_pool} />
               <span className="flex-1 min-w-[120px] font-bold text-sm text-textp truncate">{l.name}</span>
               {!l.bracket_enabled && <Pill tone="default">Bracket off</Pill>}
+              {l.reveal_predictions && <Pill tone="blue">Reveal on</Pill>}
+              {l.banners_enabled && <Pill tone="green">{l.bannerCount} banner{l.bannerCount !== 1 ? 's' : ''}</Pill>}
               <span className="text-[11px] text-texts font-medium">{l.memberIds.length} member{l.memberIds.length !== 1 ? 's' : ''}</span>
               <span className="font-mono text-[13px] font-extrabold tracking-widest text-textp bg-surface border border-border rounded px-2 py-0.5">{l.join_code}</span>
               <Button size="sm" variant="ghost" onClick={() => { setManaging(managing === l.id ? null : l.id); setEditing(null) }}>
@@ -747,9 +771,10 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow="Admin" title="Enter results" sub="Saving a result locks the match and recalculates points." />
+      <PageHeader eyebrow="Admin" title="Admin console" sub="League setup, results entry, and tournament actions." />
       <LeagueAdmin />
       <AdminActions />
+      <SectionHeader title="Results entry" sub="Saving a result locks the match and recalculates points." />
       <ChipRow chips={[{ key: 'pending', label: 'Pending' }, { key: 'done', label: 'Scored' }, { key: 'all', label: 'All' }]} value={filter} onChange={setFilter} />
       <div className="space-y-2.5">
         {filtered.map((m) => (

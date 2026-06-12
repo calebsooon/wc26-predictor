@@ -6,11 +6,11 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { motion } from 'framer-motion'
 import {
-  PageHeader, Card, StatCard, Button, Avatar, ProgressBar, Skeleton, Pill, SectionHeader, EmptyState, TrophyIcon,
+  PageHeader, Card, StatCard, Button, Avatar, ProgressBar, Skeleton, Pill, SectionHeader, EmptyState, TrophyIcon, LeagueBadge,
 } from '@/components/ui'
 import { getTeam } from '@/lib/teams'
 import { weightedMatchPoints, weightedGroupPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
-import { getActiveLeague } from '@/lib/league'
+import { getActiveLeague, isMoneyLeague, type LeagueLabel } from '@/lib/league'
 
 interface Profile { id: string; username: string; avatar_url: string | null; is_admin: boolean }
 interface TournamentPred {
@@ -50,6 +50,9 @@ export default function ProfilePage() {
   const [tournamentPred, setTournamentPred] = useState<TournamentPred | null>(null)
   const [groupPreds, setGroupPreds] = useState<GroupPred[]>([])
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
+  const [leagueName, setLeagueName] = useState('')
+  const [leagueLabel, setLeagueLabel] = useState<LeagueLabel | null>(null)
+  const [isMoney, setIsMoney] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -74,8 +77,11 @@ export default function ProfilePage() {
         if (tp) setTournamentPred(tp as unknown as TournamentPred)
         if (gp) setGroupPreds(gp as GroupPred[])
 
-        const { weights: w, memberIds } = leagueData
+        const { league, weights: w, memberIds } = leagueData
         setWeights(w)
+        setLeagueName(league?.name ?? '')
+        setLeagueLabel(league?.league_labels ?? null)
+        setIsMoney(isMoneyLeague(league))
         const ids = memberIds.length ? memberIds : [user.id]
         const { data: all } = await supabase
           .from('predictions')
@@ -125,6 +131,8 @@ export default function ProfilePage() {
     ]
   }, [preds, stats])
 
+  const groupScoringActive = weights.groupPosition > 0
+
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; if (!file || !profile) return
     setUploading(true)
@@ -169,8 +177,13 @@ export default function ProfilePage() {
       <PageHeader
         eyebrow="Your season"
         title={profile.username}
-        sub={rank ? `Rank #${rank} of ${totalPlayers}` : 'No scored predictions yet'}
-        action={profile.is_admin ? <Pill tone="gold">Admin</Pill> : undefined}
+        sub={rank ? `Rank #${rank} of ${totalPlayers}${leagueName ? ` in ${leagueName}` : ''}` : leagueName ? `No scored predictions yet in ${leagueName}` : 'No scored predictions yet'}
+        action={
+          <div className="flex items-center gap-2">
+            {leagueName && <LeagueBadge name={leagueLabel?.name ?? leagueName} color={leagueLabel?.color} money={isMoney} />}
+            {profile.is_admin && <Pill tone="gold">Admin</Pill>}
+          </div>
+        }
       />
 
       <div className="flex items-center gap-4">
@@ -281,7 +294,10 @@ export default function ProfilePage() {
       {/* group predictions */}
       {groupPreds.length > 0 && (
         <Card className="p-5">
-          <SectionHeader title="Group predictions" sub={`+${weights.groupPosition} pts per team in exact finishing position.`} />
+          <SectionHeader
+            title="Group predictions"
+            sub={groupScoringActive ? `+${weights.groupPosition} pts per team in exact finishing position.` : 'For fun in this league; no effect on standings.'}
+          />
           <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-3">
             {groupPreds.map((gp) => (
               <div key={gp.group_name} className={`p-2.5 rounded-lg border text-center ${gp.points_awarded != null ? (gp.points_awarded > 0 ? 'border-primary/30 bg-primary/[0.05]' : 'border-border bg-surface') : 'border-border bg-surface'}`}>
@@ -291,8 +307,10 @@ export default function ProfilePage() {
                     <span key={code} className="text-sm">{getTeam(code).flag}</span>
                   ))}
                 </div>
-                {gp.points_awarded !== null ? (
+                {groupScoringActive && gp.points_awarded !== null ? (
                   <span className={`text-xs font-extrabold tabular-nums ${gp.points_awarded > 0 ? 'text-primary' : 'text-texts'}`}>+{weightedGroupPoints(gp.points_awarded, weights)}</span>
+                ) : !groupScoringActive ? (
+                  <span className="text-[10px] text-texts">for fun</span>
                 ) : (
                   <span className="text-[10px] text-texts">pending</span>
                 )}

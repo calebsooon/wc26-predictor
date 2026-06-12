@@ -45,7 +45,7 @@ export interface ActiveLeague {
 export async function getMyLeagues(supabase: SupabaseClient, userId: string): Promise<League[]> {
   const { data } = await supabase
     .from('league_members')
-    .select('leagues(id, name, type, join_code, prize_pool, label_id, league_labels(name, color))')
+    .select('leagues(id, name, type, join_code, scoring, bracket_enabled, reveal_predictions, prize_pool, banners_enabled, label_id, league_labels(name, color))')
     .eq('user_id', userId)
   const rows = (data ?? []) as unknown as { leagues: League | null }[]
   return rows.map((r) => r.leagues).filter((l): l is League => !!l)

@@ -3,10 +3,11 @@
 import { Toaster } from 'sonner'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import { createClient } from '@/lib/supabase-browser'
 import { getMyLeagues, setActiveLeague, isMoneyLeague, type League } from '@/lib/league'
+import { ActiveLeagueProvider } from '@/lib/active-league'
 import ThemeToggle from '@/components/ThemeToggle'
 import CommandPalette from '@/components/CommandPalette'
 import {
@@ -41,7 +42,6 @@ const BOTTOM: NavItem[] = [
   { href: '/predictions', label: 'Fixtures',icon: CalIcon },
   { href: '/leaderboard', label: 'Ranks',   icon: TrophyIcon },
   { href: '/bracket',     label: 'Bracket', icon: TreeIcon },
-  { href: '/profile',     label: 'Profile', icon: UserIcon },
 ]
 
 // Routes that render WITHOUT the app shell (own full-bleed layout)
@@ -54,6 +54,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [myLeagues, setMyLeagues] = useState<League[]>([])
   const [leaguesReady, setLeaguesReady] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -93,18 +94,31 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const accentChannels = hexToRgbChannels(activeLeague?.league_labels?.color)
   const accentStyle = accentChannels ? ({ ['--accent' as string]: accentChannels } as React.CSSProperties) : undefined
 
-  async function switchLeague(id: string) {
+  const switchLeague = useCallback(async (id: string) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     await setActiveLeague(supabase, user.id, id)
     setProfile((p) => (p ? { ...p, active_league_id: id } : p))
     router.refresh()
-  }
+  }, [router, supabase])
+
+  const providerValue = useMemo(() => ({
+    league: activeLeague,
+    leagues: myLeagues,
+    profile,
+    leaguesReady,
+    switchLeague,
+  }), [activeLeague, myLeagues, profile, leaguesReady, switchLeague])
+
+  useEffect(() => {
+    setMoreOpen(false)
+  }, [pathname])
 
   if (isBare) return <MotionConfig reducedMotion="user">{children}<Toaster position="bottom-center" richColors /></MotionConfig>
 
   const items = SIDEBAR.filter((it) => !it.admin || profile?.is_admin)
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
+  const mobileItems = [...items, { href: '/join', label: 'Join League', icon: TrophyIcon }]
 
   async function logout() {
     await supabase.auth.signOut()
@@ -113,6 +127,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <MotionConfig reducedMotion="user">
+    <ActiveLeagueProvider value={providerValue}>
     <div className="min-h-screen bg-bg text-textp" style={accentStyle}>
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-60 border-r border-border bg-surface/50 z-30">
@@ -209,8 +224,65 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </Link>
             )
           })}
+          <button onClick={() => setMoreOpen(true)} className="flex flex-col items-center justify-center gap-1 relative">
+            {moreOpen && <span className="absolute top-0 w-10 h-0.5 rounded-full bg-accent" />}
+            <GridIcon size={22} className={moreOpen ? 'text-accent' : 'text-texts'} />
+            <span className={`text-[10px] font-bold ${moreOpen ? 'text-accent' : 'text-texts'}`}>More</span>
+          </button>
         </div>
       </nav>
+      <AnimatePresence>
+        {moreOpen && (
+          <>
+            <motion.button
+              aria-label="Close navigation"
+              className="lg:hidden fixed inset-0 z-40 bg-black/40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMoreOpen(false)}
+            />
+            <motion.div
+              className="lg:hidden fixed inset-x-0 bottom-0 z-50 max-h-[86vh] rounded-t-2xl border border-border bg-card shadow-2xl overflow-hidden"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 420, damping: 36 }}
+            >
+              <div className="p-4 border-b border-border">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-texts">Navigate</p>
+                    <p className="text-sm font-extrabold text-textp truncate">{activeLeague?.name ?? 'MatchDay'}</p>
+                  </div>
+                  <button onClick={() => setMoreOpen(false)} className="w-9 h-9 rounded-lg border border-border text-texts hover:text-textp">×</button>
+                </div>
+                {activeLeague && (
+                  <div className="mt-3">
+                    <LeagueSwitcher leagues={myLeagues} active={activeLeague} onSwitch={switchLeague} />
+                  </div>
+                )}
+              </div>
+              <div className="p-3 grid grid-cols-2 gap-2 overflow-y-auto max-h-[60vh]">
+                {mobileItems.map((it) => {
+                  const Ic = it.icon
+                  const active = isActive(it.href)
+                  return (
+                    <Link
+                      key={it.href}
+                      href={it.href}
+                      className={`flex items-center gap-3 h-12 px-3 rounded-xl border font-bold text-sm ${active ? 'border-accent/40 bg-accent/12 text-accent' : 'border-border bg-surface text-textp'}`}
+                    >
+                      <Ic size={19} className={active ? 'text-accent' : 'text-texts'} />
+                      <span className="truncate">{it.label}</span>
+                    </Link>
+                  )
+                })}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
       <Toaster position="bottom-center" richColors />
       <CommandPalette
         commands={[
@@ -219,6 +291,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         ]}
       />
     </div>
+    </ActiveLeagueProvider>
     </MotionConfig>
   )
 }

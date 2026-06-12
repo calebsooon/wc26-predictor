@@ -13,6 +13,7 @@ import { ScoreDisplay } from '@/components/football'
 import { type DBMatch } from '@/lib/match-ui'
 import { POINTS, weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights, type MatchBreakdown } from '@/lib/scoring'
 import { getActiveLeague } from '@/lib/league'
+import { claimLocalOnce } from '@/lib/once'
 import { PlayerCardPicker, type PlayerForPicker } from '@/components/PlayerCardPicker'
 import { fmtDateTime } from '@/lib/date-format'
 
@@ -92,9 +93,10 @@ export default function MatchDetailPage() {
         if (p.pred_total_goals != null) { setPredTotalGoals(p.pred_total_goals as number); setTgManual(true) }
         if (p.pred_goal_diff != null) { setPredGoalDiff(p.pred_goal_diff as number); setGdManual(true) }
         if (p.pred_btts != null) { setPredBtts(p.pred_btts as boolean); setBttsManual(true) }
-        // Celebrate an exact-score call
+        // Celebrate an exact-score call once per user/match.
         if (dbm.real_home_score != null && dbm.real_home_score === p.pred_home && dbm.real_away_score === p.pred_away) {
-          setConfetti((c) => c + 1)
+          const key = `md_confetti_exact_${user.id}_${id}`
+          if (claimLocalOnce(key)) setConfetti((c) => c + 1)
         }
       }
 
@@ -411,4 +413,3 @@ export default function MatchDetailPage() {
     </div>
   )
 }
-

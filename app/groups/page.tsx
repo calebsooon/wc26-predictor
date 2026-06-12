@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
 import { PageHeader, Card, Tabs, Button, Skeleton, Pill } from '@/components/ui'
+import { getActiveLeague } from '@/lib/league'
+import { DEFAULT_WEIGHTS, weightedGroupPoints, type ScoringWeights } from '@/lib/scoring'
 
 interface Match {
   id: string
@@ -47,6 +49,8 @@ export default function GroupsPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [order, setOrder] = useState<string[]>([])
   const [savedPreds, setSavedPreds] = useState<Record<string, GroupPredRow>>({})
+  const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
+  const [leagueName, setLeagueName] = useState('')
   const [savingMsg, setSavingMsg] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -64,11 +68,16 @@ export default function GroupsPage() {
         if (matchErr) throw matchErr
         if (data) setMatches(data as Match[])
         if (user) {
-          const { data: gp, error: gpErr } = await supabase
-            .from('group_predictions')
-            .select('group_name, ranked_codes, points_awarded')
-            .eq('user_id', user.id)
+          const [{ data: gp, error: gpErr }, active] = await Promise.all([
+            supabase
+              .from('group_predictions')
+              .select('group_name, ranked_codes, points_awarded')
+              .eq('user_id', user.id),
+            getActiveLeague(supabase, user.id),
+          ])
           if (gpErr) throw gpErr
+          setWeights(active.weights)
+          setLeagueName(active.league?.name ?? '')
           const map: Record<string, GroupPredRow> = {}
           for (const r of (gp ?? []) as GroupPredRow[]) map[r.group_name] = r
           setSavedPreds(map)
@@ -138,10 +147,11 @@ export default function GroupsPage() {
 
   const currentPred = savedPreds[group]
   const ptsAwarded = currentPred?.points_awarded ?? null
+  const groupScoringActive = weights.groupPosition > 0
 
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow="World Cup 2026" title="Groups" sub="Live standings and your predicted finishing order." />
+      <PageHeader eyebrow="World Cup 2026" title="Groups" sub={leagueName ? `Live standings and ${leagueName} group-pick settings.` : 'Live standings and your predicted finishing order.'} />
 
       <div className="flex flex-wrap gap-2">
         {GROUPS.map((g) => {
@@ -204,14 +214,15 @@ export default function GroupsPage() {
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm text-texts">Reorder how you think Group {group} finishes.</p>
             <div className="flex items-center gap-2">
-              {ptsAwarded !== null && (
+              {groupScoringActive && ptsAwarded !== null && (
                 <Pill tone={ptsAwarded > 0 ? 'gold' : 'default'}>
-                  +{ptsAwarded} pts
+                  +{weightedGroupPoints(ptsAwarded, weights)} pts
                 </Pill>
               )}
-              {ptsAwarded === null && groupComplete && (
+              {groupScoringActive && ptsAwarded === null && groupComplete && (
                 <Pill tone="default">Awaiting scoring</Pill>
               )}
+              {!groupScoringActive && <Pill tone="default">For fun</Pill>}
               {savingMsg && <Pill tone={savingMsg.includes('✓') ? 'green' : 'default'}>{savingMsg}</Pill>}
             </div>
           </div>
@@ -235,7 +246,11 @@ export default function GroupsPage() {
             })}
           </div>
           <div className="flex items-center justify-between mt-4 gap-2">
-            <p className="text-[11px] text-texts">+2 pts per team in correct finishing position · max 8 pts per group · scored once the group completes</p>
+            <p className="text-[11px] text-texts">
+              {groupScoringActive
+                ? `+${weights.groupPosition} pts per team in correct finishing position · max ${weights.groupPosition * 4} pts per group · scored once the group completes`
+                : 'Group picks are for fun in this league and do not affect standings.'}
+            </p>
             <Button onClick={savePrediction} disabled={!userId || order.length === 0}>Save</Button>
           </div>
         </Card>

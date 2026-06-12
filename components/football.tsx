@@ -157,6 +157,7 @@ export interface LBRow {
   pts: number
   acc?: number
   exact?: number
+  outcomeWins?: number
   move?: number
   prize?: number
   you?: boolean
@@ -177,12 +178,25 @@ function PrizeTag({ amount }: { amount: number }) {
 export function LeaderboardTable({
   players, metricLabel = 'PTS', onRow, dense = false, showMove = true, showMeta = true, showPrize = false,
 }: { players: LBRow[]; metricLabel?: string; onRow?: (p: LBRow) => void; dense?: boolean; showMove?: boolean; showMeta?: boolean; showPrize?: boolean }) {
+  function displayRank(i: number) {
+    const cur = players[i]
+    let rank = i + 1
+    for (let j = i - 1; j >= 0; j--) {
+      const prev = players[j]
+      const tied = prev.pts === cur.pts && (prev.outcomeWins ?? 0) === (cur.outcomeWins ?? 0) && (prev.exact ?? 0) === (cur.exact ?? 0)
+      if (!tied) break
+      rank = j + 1
+    }
+    return rank
+  }
+
   return (
     <div className="divide-y divide-border/50">
       <AnimatePresence initial={false}>
         {players.map((p, i) => {
-          const isFirst = i === 0
-          const rankColor = i === 0 ? 'rgb(var(--gold))' : i === 1 ? '#94A3B8' : i === 2 ? '#D9A066' : 'rgb(var(--texts))'
+          const rank = displayRank(i)
+          const isFirst = rank === 1
+          const rankColor = rank === 1 ? 'rgb(var(--gold))' : rank === 2 ? '#94A3B8' : rank === 3 ? '#D9A066' : 'rgb(var(--texts))'
           // Flash green if moved up, red if moved down
           const flashBg = p.move && p.move > 0 ? 'rgba(34,197,94,0.08)' : p.move && p.move < 0 ? 'rgba(239,68,68,0.07)' : undefined
           return (
@@ -198,7 +212,7 @@ export function LeaderboardTable({
               className={`flex items-center gap-3 ${dense ? 'py-2.5' : 'py-3'} px-3 ${onRow ? 'cursor-pointer hover:bg-surface/60' : ''} ${p.you ? 'bg-blue/[0.07]' : ''}`}
             >
               <div className="w-7 text-center shrink-0">
-                <span className="text-sm font-extrabold tabular-nums" style={{ color: rankColor }}>{i + 1}</span>
+                <span className="text-sm font-extrabold tabular-nums" style={{ color: rankColor }}>{rank}</span>
               </div>
               <Avatar name={p.name} src={p.avatar} size={dense ? 30 : 36} ring={isFirst} you={p.you} />
               <div className="flex-1 min-w-0">

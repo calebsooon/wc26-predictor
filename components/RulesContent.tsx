@@ -46,52 +46,58 @@ export default function RulesContent({
   // Only show rules that are active (weight > 0) in this league
   const activeRules = SCORING_RULES.filter((r) => (weights[r.key as keyof ScoringWeights] ?? r.pts) > 0)
   const matchMax = activeRules.reduce((s, r) => s + (weights[r.key as keyof ScoringWeights] ?? r.pts), 0)
+  const groupActive = weights.groupPosition > 0
   return (
     <div className={`space-y-7 ${className}`}>
-      <Section
-        title="Match scoring"
-        sub={`Every prediction earns across multiple categories — up to ${matchMax} points per match in this league.`}
-      >
-        <div className="rounded-xl border border-border divide-y divide-border/60 overflow-hidden">
-          {activeRules.map((s) => (
-            <div key={s.key} className="flex items-center gap-3 p-3 bg-card">
-              <PointBadge pts={weights[s.key as keyof ScoringWeights] ?? s.pts} />
-              <div className="min-w-0">
-                <p className="text-[13px] font-bold text-textp leading-tight">{s.label}</p>
-                <p className="text-[12px] text-texts font-medium leading-snug">{RULE_HINTS[s.key]}</p>
+      {activeRules.length > 0 && (
+        <Section
+          title="Match scoring"
+          sub={`Every prediction earns across active categories — up to ${matchMax} points per match in this league.`}
+        >
+          <div className="rounded-xl border border-border divide-y divide-border/60 overflow-hidden">
+            {activeRules.map((s) => (
+              <div key={s.key} className="flex items-center gap-3 p-3 bg-card">
+                <PointBadge pts={weights[s.key as keyof ScoringWeights] ?? s.pts} />
+                <div className="min-w-0">
+                  <p className="text-[13px] font-bold text-textp leading-tight">{s.label}</p>
+                  <p className="text-[12px] text-texts font-medium leading-snug">{RULE_HINTS[s.key]}</p>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-        <p className="text-[12px] text-texts font-medium">
-          <span className="font-bold text-textp">Hedge tip:</span> you can set <em>total goals</em>,
-          {' '}<em>goal difference</em> and <em>both teams to score</em> independently of your scoreline —
-          so a smart hedge can still bank points even when the exact score is wrong.
-        </p>
-      </Section>
+            ))}
+          </div>
+          <p className="text-[12px] text-texts font-medium">
+            <span className="font-bold text-textp">Hedge tip:</span> you can set <em>total goals</em>,
+            {' '}<em>goal difference</em> and <em>both teams to score</em> independently of your scoreline —
+            so a smart hedge can still bank points even when the exact score is wrong.
+          </p>
+        </Section>
+      )}
 
-      <Section
-        title="Group stage"
-        sub={`Predict each group's final finishing order. ${weights.groupPosition} points for every team you place in the correct position (4 per group).`}
-      >
-        <div className="flex items-center gap-2 text-[13px] text-texts font-medium">
-          <PointBadge pts={weights.groupPosition} />
-          <span>per correctly placed team · up to {weights.groupPosition * 4} points per group.</span>
-        </div>
-      </Section>
+      {groupActive && (
+        <Section
+          title="Group stage"
+          sub={`Predict each group's final finishing order. ${weights.groupPosition} points for every team you place in the correct position (4 per group).`}
+        >
+          <div className="flex items-center gap-2 text-[13px] text-texts font-medium">
+            <PointBadge pts={weights.groupPosition} />
+            <span>per correctly placed team · up to {weights.groupPosition * 4} points per group.</span>
+          </div>
+        </Section>
+      )}
 
       <Section
         title="Bracket game"
         sub="Call the champion, finalists and more — pre-tournament and again after the group stage."
       >
-        <p className="text-[13px] text-texts font-medium">🎈 Just for fun — the bracket game has <span className="font-bold text-textp">no effect on points, standings or prizes</span>.</p>
+        <p className="text-[13px] text-texts font-medium">Just for fun — the bracket game has <span className="font-bold text-textp">no effect on points, standings or prizes</span>.</p>
       </Section>
 
       <Section title="Tiebreakers">
         <ol className="text-[13px] text-texts font-medium space-y-1.5 list-decimal list-inside">
-          <li>Most total points.</li>
-          <li>Most correct outcomes.</li>
-          <li>Alphabetical by name (final fallback).</li>
+          <li>Total weighted points.</li>
+          <li>Correct outcomes.</li>
+          <li>Exact scorelines.</li>
+          <li>Shared/tied rank if still equal.</li>
         </ol>
       </Section>
 

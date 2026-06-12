@@ -305,7 +305,7 @@ export default function LeaderboardPage() {
 
               <div className="px-1">
                 <p className="text-[11px] text-texts font-medium">
-                  Tiebreaker: most correct outcomes, then alphabetical.{isMoney ? ' Prize pool per GW: 1st +$15 · 2nd +$10 · 3rd +$5 · 4th $0 · 5th -$5 · 6th -$10 · 7th -$15. Overall: 1st +$40 · 7th -$40.' : ' This is a points-only league — no prize pool.'}
+                  Tiebreakers: total weighted points, correct outcomes, exact scorelines, then shared rank.{isMoney ? ' Prize pool per GW: 1st +$15 · 2nd +$10 · 3rd +$5 · 4th $0 · 5th -$5 · 6th -$10 · 7th -$15. Overall: 1st +$40 · 7th -$40.' : ' This is a points-only league — no prize pool.'}
                 </p>
               </div>
             </>

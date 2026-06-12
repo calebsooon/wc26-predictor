@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -14,6 +14,7 @@ import { toUIMatch, isKnockout, type DBMatch, type MyPred } from '@/lib/match-ui
 import { getTeam } from '@/lib/teams'
 import { SCORING_RULES, weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { computePrizeSnapshot, formatPrize, prizeTone, GW_NAMES, GW_PRIZES, OVERALL_PRIZES } from '@/lib/prizes'
+import { claimLocalOnce } from '@/lib/once'
 
 const SCORED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, matches(gw_number)'
 
@@ -39,6 +40,8 @@ export default function DashboardPage() {
   const [scoredPreds, setScoredPreds] = useState<ScoredPredRow[]>([])
   const [gwMatchRows, setGwMatchRows] = useState<MatchGWRow[]>([])
   const [prevRank, setPrevRank] = useState<number | null>(null)
+  const [prevSnapshotAt, setPrevSnapshotAt] = useState<string | null>(null)
+  const [activeLeagueId, setActiveLeagueId] = useState<string | null>(null)
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [isMoney, setIsMoney] = useState(false)
   const [leagueName, setLeagueName] = useState('')
@@ -92,6 +95,7 @@ export default function DashboardPage() {
         setLeagueName(league?.name ?? '')
         setLeagueLabel(league?.league_labels ?? null)
         setBracketEnabled(league?.bracket_enabled !== false)
+        setActiveLeagueId(league?.id ?? null)
 
         if (league?.banners_enabled && league.id) {
           const { data: bannerData } = await supabase.from('league_banners')
@@ -130,7 +134,9 @@ export default function DashboardPage() {
         }
         setGwMatchRows((gwMatches ?? []) as unknown as MatchGWRow[])
         setHasTournamentPick(!!(tp && tp.length))
-        setPrevRank((snapResult.data as { rank: number } | null)?.rank ?? null)
+        const snap = snapResult.data as { rank: number; snapshot_at: string | null } | null
+        setPrevRank(snap?.rank ?? null)
+        setPrevSnapshotAt(snap?.snapshot_at ?? null)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load dashboard')
         setLoading(false)
@@ -150,15 +156,15 @@ export default function DashboardPage() {
 
   // Celebrate a climb since the last snapshot (once per load)
   const [confetti, setConfetti] = useState(0)
-  const celebratedRef = useRef(false)
   useEffect(() => {
-    if (celebratedRef.current || loading) return
+    if (loading || !userId) return
     if (rankMove != null && rankMove > 0 && myRank != null) {
-      celebratedRef.current = true
+      const key = `md_confetti_rank_${userId}_${activeLeagueId ?? 'global'}_${prevSnapshotAt ?? 'latest'}_${rankMove}`
+      if (!claimLocalOnce(key)) return
       setConfetti((c) => c + 1)
       toast.success(`📈 You climbed ${rankMove} spot${rankMove !== 1 ? 's' : ''} to ${ordinal(myRank)}!`)
     }
-  }, [rankMove, myRank, loading])
+  }, [rankMove, myRank, loading, userId, activeLeagueId, prevSnapshotAt])
 
   const upcoming = useMemo(() => matches
     .filter((m) => m.real_home_score === null && new Date(m.match_date) > new Date())
@@ -553,11 +559,12 @@ function FormAccuracy({ items, weights }: { items: (MyPred | undefined)[]; weigh
   const form = scored.slice(0, 5)
   const total = scored.length
   const cats: { label: string; get: (p: MyPred) => number }[] = [
-    { label: 'Outcome', get: (p) => p.pts_outcome ?? 0 },
-    { label: 'Exact', get: (p) => p.pts_exact ?? 0 },
-    { label: 'Goal diff', get: (p) => p.pts_goal_diff ?? 0 },
-    { label: 'Total goals', get: (p) => p.pts_total_goals ?? 0 },
-    { label: 'Both scored', get: (p) => p.pts_btts ?? 0 },
+    ...(weights.outcome > 0 ? [{ label: 'Outcome', get: (p: MyPred) => p.pts_outcome ?? 0 }] : []),
+    ...(weights.exact > 0 ? [{ label: 'Exact', get: (p: MyPred) => p.pts_exact ?? 0 }] : []),
+    ...(weights.goalDiff > 0 ? [{ label: 'Goal diff', get: (p: MyPred) => p.pts_goal_diff ?? 0 }] : []),
+    ...(weights.totalGoals > 0 ? [{ label: 'Total goals', get: (p: MyPred) => p.pts_total_goals ?? 0 }] : []),
+    ...(weights.teamGoals > 0 ? [{ label: 'Team goals', get: (p: MyPred) => p.pts_team_goals ?? 0 }] : []),
+    ...(weights.btts > 0 ? [{ label: 'Both scored', get: (p: MyPred) => p.pts_btts ?? 0 }] : []),
   ]
   return (
     <Card className="overflow-hidden">

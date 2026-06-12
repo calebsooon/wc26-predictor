@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scorePrediction, weightedMatchPoints, resolveWeights, DEFAULT_WEIGHTS, POINTS } from './scoring'
+import { scorePrediction, weightedMatchPoints, weightedGroupPoints, resolveWeights, DEFAULT_WEIGHTS, POINTS } from './scoring'
 
 const M = (rh: number, ra: number, extra = {}) =>
   ({ home_team: 'A', away_team: 'B', real_home_score: rh, real_away_score: ra, ...extra })
@@ -66,5 +66,9 @@ describe('weightedMatchPoints / resolveWeights', () => {
   it('resolveWeights ignores junk', () => {
     expect(resolveWeights(null)).toEqual(DEFAULT_WEIGHTS)
     expect(resolveWeights('nope')).toEqual(DEFAULT_WEIGHTS)
+  })
+
+  it('weighted group scoring can be disabled per league', () => {
+    expect(weightedGroupPoints(4, resolveWeights({ groupPosition: 0 }))).toBe(0)
   })
 })
