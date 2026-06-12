@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
 import {
   Card, Pill, Button, ScoreStepper, SectionHeader, Avatar, Skeleton,
-  LockIcon, Countdown, EmptyState, ConfettiBurst,
+  LockIcon, Countdown, EmptyState, ConfettiBurst, ChevDown,
 } from '@/components/ui'
 import { ScoreDisplay } from '@/components/football'
 import { type DBMatch } from '@/lib/match-ui'
@@ -48,6 +48,7 @@ export default function MatchDetailPage() {
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [revealPredictions, setRevealPredictions] = useState(false)
   const [confetti, setConfetti] = useState(0)
+  const [expandedPicks, setExpandedPicks] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
@@ -104,7 +105,7 @@ export default function MatchDetailPage() {
       // Fetch picks for this match scoped to league members.
       // Profiles fetched separately — the embedded join (profiles(username,avatar_url))
       // can fail silently on some Supabase plans, returning null data with no error shown.
-      const predSelect = 'user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer'
+      const predSelect = 'user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer'
       const predBase = supabase.from('predictions').select(predSelect).eq('match_id', id)
       const { data: predRows } = await (memberIds.length ? predBase.in('user_id', memberIds) : predBase)
 
@@ -345,18 +346,60 @@ export default function MatchDetailPage() {
               const pkPts = pk.points_awarded != null ? weightedMatchPoints(pk, weights) : null
               const scorerName = pk.pred_first_scorer_id ? players.find((p) => p.id === pk.pred_first_scorer_id)?.name : null
               const fgtLabel = pk.pred_first_goal_team === match.home_team ? home.code : pk.pred_first_goal_team === match.away_team ? away.code : pk.pred_first_goal_team === 'NONE' ? '–' : null
+              const isExpanded = expandedPicks.has(pk.user_id)
+              const hasBreakdown = pk.points_awarded != null
+              const toggleExpand = () => setExpandedPicks((s) => {
+                const next = new Set(s)
+                if (next.has(pk.user_id)) next.delete(pk.user_id); else next.add(pk.user_id)
+                return next
+              })
               return (
-                <div key={pk.user_id} className={`p-2.5 rounded-lg border ${you ? 'bg-blue/[0.07] border-blue/30' : 'bg-surface border-border'}`}>
-                  <div className="flex items-center gap-2.5">
+                <div key={pk.user_id} className={`rounded-lg border overflow-hidden ${you ? 'bg-blue/[0.07] border-blue/30' : 'bg-surface border-border'}`}>
+                  <button
+                    className="w-full flex items-center gap-2.5 p-2.5 text-left"
+                    onClick={hasBreakdown ? toggleExpand : undefined}
+                  >
                     <Avatar name={pk.profiles?.username ?? '?'} src={pk.profiles?.avatar_url} size={30} you={you} />
                     <span className="font-bold text-sm flex-1 truncate">{pk.profiles?.username ?? '?'}{you && ' (you)'}</span>
                     <span className={`font-extrabold tabular-nums ${correct ? 'text-primary' : 'text-textp'}`}>{pk.pred_home}–{pk.pred_away}</span>
                     {pkPts != null && <Pill tone={pkPts >= 6 ? 'green' : pkPts > 0 ? 'gold' : 'red'} className="!px-2 tabular-nums">+{pkPts}</Pill>}
-                  </div>
-                  {(fgtLabel || scorerName) && (
-                    <div className="flex items-center gap-3 mt-1.5 pl-9 text-[11px] text-texts font-medium">
+                    {hasBreakdown && <ChevDown size={12} className={`shrink-0 text-texts transition-transform duration-150 ${isExpanded ? 'rotate-180' : ''}`} />}
+                  </button>
+
+                  {!isExpanded && (fgtLabel || scorerName) && (
+                    <div className="flex items-center gap-3 pb-2 pl-[46px] pr-2.5 text-[11px] text-texts font-medium">
                       {fgtLabel && <span>⚡ {fgtLabel}</span>}
                       {scorerName && <span>⚽ {scorerName}</span>}
+                    </div>
+                  )}
+
+                  {isExpanded && hasBreakdown && (
+                    <div className="px-2.5 pb-2.5 border-t border-border/40">
+                      <div className="grid grid-cols-4 gap-1 mt-2 sm:grid-cols-8">
+                        {([
+                          { label: 'Outcome', pts: pk.pts_outcome },
+                          { label: 'Exact', pts: pk.pts_exact },
+                          { label: 'Goal diff', pts: pk.pts_goal_diff },
+                          { label: 'Tot goals', pts: pk.pts_total_goals },
+                          { label: 'Tm goals', pts: pk.pts_team_goals },
+                          { label: 'BTTS', pts: pk.pts_btts },
+                          { label: '1st team', pts: pk.pts_first_team },
+                          { label: '1st scorer', pts: pk.pts_first_scorer },
+                        ] as { label: string; pts: number | null | undefined }[]).map(({ label, pts }) => (
+                          <div key={label} className="flex flex-col items-center gap-0.5 py-1.5 px-1 rounded-md bg-surface/60">
+                            <span className="text-[8px] font-bold uppercase tracking-wider text-texts text-center leading-tight">{label}</span>
+                            <span className={`text-[11px] font-extrabold tabular-nums ${(pts ?? 0) > 0 ? 'text-primary' : 'text-texts/40'}`}>
+                              {(pts ?? 0) > 0 ? `+${pts}` : '–'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      {(fgtLabel || scorerName) && (
+                        <div className="flex items-center gap-3 mt-1.5 text-[11px] text-texts font-medium">
+                          {fgtLabel && <span>⚡ {fgtLabel}</span>}
+                          {scorerName && <span>⚽ {scorerName}</span>}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -201,21 +201,24 @@ export function LeagueBadge({
 /* ---------- ConfettiBurst (decorative; fires when `trigger` increments) ---------- */
 export function ConfettiBurst({ trigger }: { trigger: number }) {
   if (!trigger) return null
-  const colors = ['#22C55E', '#EAB308', '#3B82F6', '#EF4444', '#A855F7', '#F97316']
+  const colors = ['#22C55E', '#EAB308', '#3B82F6', '#EF4444', '#A855F7', '#F97316', '#06B6D4', '#F43F5E']
   return (
     <div key={trigger} aria-hidden className="pointer-events-none fixed inset-0 z-[60] overflow-hidden">
-      {Array.from({ length: 44 }).map((_, i) => {
-        const angle = (Math.PI * (Math.random() - 0.5)) - Math.PI / 2 // upward-ish
-        const dist = 140 + Math.random() * 320
+      {Array.from({ length: 70 }).map((_, i) => {
+        const angle = Math.random() * Math.PI * 2
+        const dist = 60 + Math.random() * 220
         const dx = Math.cos(angle) * dist
-        const dy = Math.sin(angle) * dist
+        const dy = -(60 + Math.random() * 280)
+        const w = 6 + Math.random() * 6
+        const h = 8 + Math.random() * 10
+        const rot = Math.random() * 900 - 450
         return (
           <motion.span
             key={i}
-            initial={{ opacity: 1, x: 0, y: 0, rotate: 0 }}
-            animate={{ opacity: [1, 1, 0], x: dx, y: [0, dy, dy + 380], rotate: Math.random() * 720 - 360 }}
-            transition={{ duration: 1.3 + Math.random() * 0.7, ease: 'easeOut', delay: Math.random() * 0.08 }}
-            style={{ position: 'absolute', left: '50%', top: '42%', width: 8, height: 12, borderRadius: 2, background: colors[i % colors.length] }}
+            initial={{ opacity: 1, x: 0, y: 0, rotate: 0, scale: 1 }}
+            animate={{ opacity: [1, 1, 0], x: [0, dx, dx], y: [0, dy, dy + 520], rotate: rot, scale: [1, 1, 0.4] }}
+            transition={{ duration: 1.5 + Math.random() * 0.7, ease: 'easeOut', delay: Math.random() * 0.15 }}
+            style={{ position: 'absolute', left: '50%', top: '45%', width: w, height: h, borderRadius: Math.random() > 0.5 ? '50%' : 2, background: colors[i % colors.length] }}
           />
         )
       })}
@@ -620,3 +623,25 @@ export const MoonIcon = ({ size = 18, className }: IcoProps) => (
 export const HelpIcon = ({ size = 20, className }: IcoProps) => (
   <Icon size={size} className={className} d={<><circle cx="12" cy="12" r="9" /><path d="M9.2 9.3a2.8 2.8 0 0 1 5.4 1c0 1.9-2.6 2.3-2.6 4" /><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none" /></>} />
 )
+
+/* ---------- Select (styled native select with label) ---------- */
+export function Select({
+  id, label, value, onChange, children, className = '',
+}: { id?: string; label?: string; value: string; onChange: (v: string) => void; children: ReactNode; className?: string }) {
+  return (
+    <div className={className}>
+      {label && <label htmlFor={id} className="block text-[11px] font-bold uppercase tracking-wider text-texts mb-1">{label}</label>}
+      <div className="relative">
+        <select
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full appearance-none rounded-lg border border-border bg-surface px-3 py-2 pr-8 text-sm font-bold text-textp focus:outline-none focus:border-primary transition-colors"
+        >
+          {children}
+        </select>
+        <ChevDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-texts" />
+      </div>
+    </div>
+  )
+}

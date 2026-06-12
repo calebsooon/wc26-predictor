@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -15,7 +15,7 @@ import { getTeam } from '@/lib/teams'
 import { SCORING_RULES, weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { computePrizeSnapshot, formatPrize, prizeTone, GW_NAMES, GW_PRIZES, OVERALL_PRIZES } from '@/lib/prizes'
 
-const SCORED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer, matches(gw_number)'
+const SCORED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, matches(gw_number)'
 
 interface RoundRow { id: string; name: string; order: number; matches: DBMatch[] }
 interface ScoredPredRow {
@@ -43,7 +43,9 @@ export default function DashboardPage() {
   const [leagueName, setLeagueName] = useState('')
   const [leagueLabel, setLeagueLabel] = useState<LeagueLabel | null>(null)
   const [bracketEnabled, setBracketEnabled] = useState(true)
+  const [banners, setBanners] = useState<string[]>([])
   const [rulesOpen, setRulesOpen] = useState(false)
+  const [newResultsBanner, setNewResultsBanner] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -63,7 +65,7 @@ export default function DashboardPage() {
             .order('match_date', { referencedTable: 'matches' }),
           supabase
             .from('predictions')
-            .select('match_id, pred_home, pred_away, points_awarded, pts_exact, pts_outcome, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer, pred_first_goal_team, pred_first_scorer_id')
+            .select('match_id, pred_home, pred_away, points_awarded, pts_exact, pts_outcome, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, pred_first_goal_team, pred_first_scorer_id')
             .eq('user_id', user.id),
         ])
         if (roundErr) throw roundErr
@@ -90,6 +92,14 @@ export default function DashboardPage() {
         setLeagueLabel(league?.league_labels ?? null)
         setBracketEnabled(league?.bracket_enabled !== false)
 
+        if (league?.banners_enabled && league.id) {
+          const { data: bannerData } = await supabase.from('league_banners')
+            .select('image_url')
+            .eq('league_id', league.id)
+            .order('display_order')
+          setBanners((bannerData ?? []).map((b) => (b as { image_url: string }).image_url))
+        }
+
         const ids = memberIds.length ? memberIds : [user.id]
         const [
           { data: scored },
@@ -108,6 +118,15 @@ export default function DashboardPage() {
         const allScored = (scored ?? []) as unknown as ScoredPredRow[]
         setScoredPreds(allScored)
         setLb(aggregateLeaderboard({ scoredPreds: allScored, profiles: memberProfiles as ProfileLite[], userId: user.id, weights: w }))
+
+        // New-results notification: show banner once per new batch of scored matches
+        const myNewScored = allScored.filter((r) => r.user_id === user.id)
+        const lsKey = `md_scored_${user.id}`
+        const prev = parseInt(typeof window !== 'undefined' ? localStorage.getItem(lsKey) ?? '0' : '0', 10)
+        if (myNewScored.length > prev) {
+          setNewResultsBanner(true)
+          if (typeof window !== 'undefined') localStorage.setItem(lsKey, String(myNewScored.length))
+        }
         setGwMatchRows((gwMatches ?? []) as unknown as MatchGWRow[])
         setHasTournamentPick(!!(tp && tp.length))
         setPrevRank((snapResult.data as { rank: number } | null)?.rank ?? null)
@@ -211,6 +230,25 @@ export default function DashboardPage() {
   return (
     <div className="space-y-7">
       <ConfettiBurst trigger={confetti} />
+
+      {newResultsBanner && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-primary/[0.08] border border-primary/25">
+          <div>
+            <p className="text-sm font-bold text-textp">New results in</p>
+            <p className="text-xs text-texts mt-0.5">Results have been posted — check your latest scores below.</p>
+          </div>
+          <button
+            onClick={() => setNewResultsBanner(false)}
+            className="shrink-0 text-texts hover:text-textp text-lg font-bold leading-none"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {banners.length > 0 && <BannerSlider banners={banners} />}
+
       <div className="flex items-end justify-between flex-wrap gap-3 pb-4 border-b border-border">
         <div>
           <div className="flex items-center gap-2 mb-1.5">
@@ -555,5 +593,61 @@ function FormAccuracy({ items, weights }: { items: (MyPred | undefined)[]; weigh
         </div>
       </div>
     </Card>
+  )
+}
+
+/* Auto-advancing image banner carousel */
+function BannerSlider({ banners }: { banners: string[] }) {
+  const [idx, setIdx] = useState(0)
+  const len = banners.length
+  const next = useCallback(() => setIdx((i) => (i + 1) % len), [len])
+  const prev = useCallback(() => setIdx((i) => (i - 1 + len) % len), [len])
+
+  useEffect(() => {
+    if (len <= 1) return
+    const t = setInterval(next, 5000)
+    return () => clearInterval(t)
+  }, [len, next])
+
+  if (!len) return null
+
+  return (
+    <div className="relative rounded-xl overflow-hidden bg-surface select-none" style={{ aspectRatio: '16/7' }}>
+      {banners.map((url, i) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={url}
+          src={url}
+          alt=""
+          draggable={false}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${i === idx ? 'opacity-100' : 'opacity-0'}`}
+        />
+      ))}
+
+      {len > 1 && (
+        <>
+          <button
+            onClick={prev}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/35 hover:bg-black/55 text-white text-lg font-bold grid place-items-center backdrop-blur-sm transition-colors"
+            aria-label="Previous banner"
+          >‹</button>
+          <button
+            onClick={next}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/35 hover:bg-black/55 text-white text-lg font-bold grid place-items-center backdrop-blur-sm transition-colors"
+            aria-label="Next banner"
+          >›</button>
+          <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
+            {banners.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setIdx(i)}
+                aria-label={`Banner ${i + 1}`}
+                className={`rounded-full transition-all duration-300 ${i === idx ? 'w-5 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/50 hover:bg-white/80'}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   )
 }

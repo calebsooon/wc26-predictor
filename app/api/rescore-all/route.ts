@@ -41,7 +41,7 @@ export async function POST() {
       pred_home: p.pred_home, pred_away: p.pred_away,
       points_awarded: b.total,
       pts_outcome: b.outcome, pts_exact: b.exact, pts_goal_diff: b.goalDiff,
-      pts_total_goals: b.totalGoals, pts_btts: b.btts,
+      pts_total_goals: b.totalGoals, pts_team_goals: b.teamGoals, pts_btts: b.btts,
       pts_first_team: b.firstTeam, pts_first_scorer: b.firstScorer,
     }
   }).filter(Boolean)

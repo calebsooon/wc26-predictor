@@ -21,8 +21,8 @@ interface GroupPred { group_name: string; ranked_codes: string[]; points_awarded
 interface ScoredPred {
   points_awarded: number
   pts_outcome: number | null; pts_exact: number | null; pts_goal_diff: number | null
-  pts_total_goals: number | null; pts_btts: number | null; pts_first_team: number | null
-  pts_first_scorer: number | null
+  pts_total_goals: number | null; pts_team_goals: number | null; pts_btts: number | null
+  pts_first_team: number | null; pts_first_scorer: number | null
 }
 
 const CATEGORIES = [
@@ -30,6 +30,7 @@ const CATEGORIES = [
   { key: 'pts_exact', label: 'Exact score' },
   { key: 'pts_goal_diff', label: 'Goal diff' },
   { key: 'pts_total_goals', label: 'Total goals' },
+  { key: 'pts_team_goals', label: "Team goals" },
   { key: 'pts_btts', label: 'Both scored' },
   { key: 'pts_first_team', label: 'First goal' },
   { key: 'pts_first_scorer', label: 'First scorer' },
@@ -64,7 +65,7 @@ export default function ProfilePage() {
         if (data) { const p = data as Profile; setProfile(p); setUsername(p.username ?? ''); setAvatarUrl(p.avatar_url ?? null) }
 
         const [{ data: mine }, { data: tp }, { data: gp }, leagueData] = await Promise.all([
-          supabase.from('predictions').select('points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer').eq('user_id', user.id).not('points_awarded', 'is', null),
+          supabase.from('predictions').select('points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer').eq('user_id', user.id).not('points_awarded', 'is', null),
           supabase.from('tournament_predictions').select('*').eq('user_id', user.id).eq('phase', 'pre').maybeSingle(),
           supabase.from('group_predictions').select('group_name, ranked_codes, points_awarded').eq('user_id', user.id).order('group_name'),
           getActiveLeague(supabase, user.id),
@@ -78,7 +79,7 @@ export default function ProfilePage() {
         const ids = memberIds.length ? memberIds : [user.id]
         const { data: all } = await supabase
           .from('predictions')
-          .select('user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_btts, pts_first_team, pts_first_scorer')
+          .select('user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
           .not('points_awarded', 'is', null)
           .in('user_id', ids)
         const agg = new Map<string, number>()
