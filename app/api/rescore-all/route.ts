@@ -21,7 +21,7 @@ export async function POST() {
   const matchIds = (matches as { id: string }[]).map((m) => m.id)
   const { data: predictions, error: predsErr } = await serviceSupabase
     .from('predictions')
-    .select('id, match_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff, pred_btts, pred_no_scorer')
+    .select('user_id, match_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff, pred_btts, pred_no_scorer')
     .in('match_id', matchIds)
   if (predsErr) return NextResponse.json({ error: predsErr.message }, { status: 500 })
   if (!predictions || predictions.length === 0) return NextResponse.json({ rescored: 0 })
@@ -31,12 +31,13 @@ export async function POST() {
     matchMap.set(m.id, m)
   }
 
-  const updates = (predictions as unknown as (PredictionInput & { id: string; match_id: string })[]).map((p) => {
+  type PredRow = PredictionInput & { user_id: string; match_id: string }
+  const updates = (predictions as unknown as PredRow[]).map((p) => {
     const result = matchMap.get(p.match_id)
     if (!result) return null
     const b = scorePrediction(p, result)
     return {
-      id: p.id, match_id: p.match_id,
+      user_id: p.user_id, match_id: p.match_id,
       pred_home: p.pred_home, pred_away: p.pred_away,
       points_awarded: b.total,
       pts_outcome: b.outcome, pts_exact: b.exact, pts_goal_diff: b.goalDiff,
@@ -49,7 +50,7 @@ export async function POST() {
   let total = 0
   for (let i = 0; i < updates.length; i += BATCH) {
     const batch = updates.slice(i, i + BATCH)
-    const { error } = await serviceSupabase.from('predictions').upsert(batch as object[], { onConflict: 'id' })
+    const { error } = await serviceSupabase.from('predictions').upsert(batch as object[], { onConflict: 'user_id,match_id' })
     if (error) return NextResponse.json({ error: error.message, rescored: total }, { status: 500 })
     total += batch.length
   }

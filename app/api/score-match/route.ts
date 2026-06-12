@@ -38,18 +38,19 @@ export async function POST(request: Request) {
 
   const { data: predictions, error: predsErr } = await serviceSupabase
     .from('predictions')
-    .select('id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff, pred_btts, pred_no_scorer')
+    .select('user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff, pred_btts, pred_no_scorer')
     .eq('match_id', match_id)
   if (predsErr) return NextResponse.json({ error: predsErr.message }, { status: 500 })
   if (!predictions || predictions.length === 0) return NextResponse.json({ match_id, scored: 0 })
 
-  const updates = predictions.map((p) => {
-    const b = scorePrediction(p as unknown as PredictionInput, result)
+  type PredRow = PredictionInput & { user_id: string }
+  const updates = (predictions as unknown as PredRow[]).map((p) => {
+    const b = scorePrediction(p, result)
     return {
-      id: (p as { id: string }).id,
+      user_id: p.user_id,
       match_id,
-      pred_home: (p as { pred_home: number }).pred_home,
-      pred_away: (p as { pred_away: number }).pred_away,
+      pred_home: p.pred_home,
+      pred_away: p.pred_away,
       points_awarded: b.total,
       pts_outcome: b.outcome, pts_exact: b.exact, pts_goal_diff: b.goalDiff,
       pts_total_goals: b.totalGoals, pts_team_goals: b.teamGoals, pts_btts: b.btts,
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
     }
   })
 
-  const { error: upsertErr } = await serviceSupabase.from('predictions').upsert(updates, { onConflict: 'id' })
+  const { error: upsertErr } = await serviceSupabase.from('predictions').upsert(updates, { onConflict: 'user_id,match_id' })
   if (upsertErr) return NextResponse.json({ error: upsertErr.message }, { status: 500 })
 
   return NextResponse.json({ match_id, scored: updates.length })

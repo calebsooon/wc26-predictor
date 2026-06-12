@@ -10,7 +10,7 @@ import { DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { GW_NAMES, GW_SHORT, GW_PRIZES, OVERALL_PRIZES, formatPrize, prizeTone } from '@/lib/prizes'
 import { getTeam } from '@/lib/teams'
 
-const PRED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, profiles(username, avatar_url), matches(gw_number)'
+const PRED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, matches(gw_number)'
 
 interface PredRow {
   user_id: string
@@ -22,7 +22,7 @@ interface PredRow {
   pts_btts: number | null
   pts_first_team: number | null
   pts_first_scorer: number | null
-  profiles: { username: string; avatar_url: string | null } | null
+  profiles?: { username: string; avatar_url: string | null } | null
   matches: { gw_number: number | null } | null
 }
 interface SnapRow { user_id: string; rank: number; snapshot_at: string }
