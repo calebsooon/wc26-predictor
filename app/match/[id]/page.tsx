@@ -11,7 +11,7 @@ import {
 } from '@/components/ui'
 import { ScoreDisplay } from '@/components/football'
 import { type DBMatch } from '@/lib/match-ui'
-import { POINTS, type MatchBreakdown } from '@/lib/scoring'
+import { POINTS, weightedMatchPoints, DEFAULT_WEIGHTS, type MatchBreakdown, type ScoringWeights } from '@/lib/scoring'
 import { getActiveLeague } from '@/lib/league'
 import { PlayerCardPicker, type PlayerForPicker } from '@/components/PlayerCardPicker'
 import { fmtDateTime } from '@/lib/date-format'
@@ -22,6 +22,10 @@ interface OtherPred extends MatchBreakdown {
   pred_away: number
   pred_first_goal_team: string | null
   pred_first_scorer_id: number | null
+  pred_no_scorer: boolean | null
+  pred_btts: boolean | null
+  pred_total_goals: number | null
+  pred_goal_diff: number | null
   points_awarded: number | null
   profiles: { username: string; avatar_url: string | null } | null
 }
@@ -32,6 +36,7 @@ export default function MatchDetailPage() {
   const { id } = useParams<{ id: string }>()
 
   const [match, setMatch] = useState<DBMatch | null>(null)
+  const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [userId, setUserId] = useState<string | null>(null)
   const [h, setH] = useState<number | null>(null)
   const [a, setA] = useState<number | null>(null)
@@ -45,7 +50,6 @@ export default function MatchDetailPage() {
   const [bttsManual, setBttsManual] = useState(false)
   const [players, setPlayers] = useState<PlayerForPicker[]>([])
   const [others, setOthers] = useState<OtherPred[]>([])
-  const [revealPredictions, setRevealPredictions] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
@@ -91,13 +95,12 @@ export default function MatchDetailPage() {
         if (p.pred_btts != null) { setPredBtts(p.pred_btts as boolean); setBttsManual(true) }
       }
 
-      const { league, memberIds } = await getActiveLeague(supabase, user.id)
-      setRevealPredictions(league?.reveal_predictions === true)
-
+      const { weights: leagueWeights, memberIds } = await getActiveLeague(supabase, user.id)
+      setWeights(leagueWeights)
       // Fetch picks for this match scoped to league members.
       // Profiles fetched separately — the embedded join (profiles(username,avatar_url))
       // can fail silently on some Supabase plans, returning null data with no error shown.
-      const predSelect = 'user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer'
+      const predSelect = 'user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_no_scorer, pred_btts, pred_total_goals, pred_goal_diff, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer'
       const predBase = supabase.from('predictions').select(predSelect).eq('match_id', id)
       const { data: predRows } = await (memberIds.length ? predBase.in('user_id', memberIds) : predBase)
 
@@ -203,8 +206,8 @@ export default function MatchDetailPage() {
         </div>
       </Card>
 
-      {/* consensus bar — always show for scored matches; gated on league flag pre-kickoff */}
-      {(scored || revealPredictions) && locked && others.length > 0 && (
+      {/* consensus bar — visible once match kicks off */}
+      {locked && others.length > 0 && (
         <ConsensusBar
           homeTeam={home.name}
           awayTeam={away.name}
@@ -328,43 +331,112 @@ export default function MatchDetailPage() {
         </Card>
       )}
 
-      {/* prediction wall — always visible for scored matches; gated on league flag otherwise */}
-      {(scored || revealPredictions) && locked && others.length > 0 ? (
+      {/* prediction wall — visible once match kicks off */}
+      {locked && others.length > 0 ? (
         <Card className="p-5">
           <SectionHeader
             title="Everyone's picks"
             sub={`${others.length} league member${others.length !== 1 ? 's' : ''} predicted this match`}
           />
-          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div className="mt-3 space-y-2">
             {others
               .sort((a, b) => (b.points_awarded ?? -1) - (a.points_awarded ?? -1))
               .map((o) => {
                 const isMe = o.user_id === userId
                 const scoredPred = o.points_awarded != null
-                const ptColor = scoredPred
-                  ? (o.points_awarded ?? 0) >= 8 ? 'text-primary' : (o.points_awarded ?? 0) > 0 ? 'text-gold' : 'text-error'
+                const displayPts = scoredPred ? weightedMatchPoints(o, weights) : null
+                const ptColor = displayPts != null
+                  ? displayPts >= 8 ? 'text-success' : displayPts > 0 ? 'text-gold' : 'text-error'
                   : 'text-texts'
+                const firstGoalTeam = o.pred_first_goal_team
+                  ? (o.pred_first_goal_team === 'NONE' ? 'No goal' : getTeam(o.pred_first_goal_team)?.flag ?? o.pred_first_goal_team)
+                  : null
+                const firstScorerName = o.pred_no_scorer
+                  ? 'No scorer'
+                  : o.pred_first_scorer_id
+                    ? (players.find((p) => p.id === o.pred_first_scorer_id)?.name ?? `#${o.pred_first_scorer_id}`)
+                    : null
                 return (
                   <div
                     key={o.user_id}
-                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-center ${isMe ? 'border-primary/40 bg-primary/[0.05]' : 'border-border bg-surface'}`}
+                    className={`p-3 rounded-xl border ${isMe ? 'border-primary/40 bg-primary/[0.05]' : 'border-border bg-surface'}`}
                   >
-                    <Avatar name={o.profiles?.username ?? '?'} src={o.profiles?.avatar_url} size={28} you={isMe} />
-                    <span className="text-[11px] font-bold text-textp truncate w-full">{o.profiles?.username ?? '?'}{isMe ? ' (you)' : ''}</span>
+                    {/* top row: avatar + name + pts */}
+                    <div className="flex items-center gap-2.5 mb-2">
+                      <Avatar name={o.profiles?.username ?? '?'} src={o.profiles?.avatar_url} size={28} you={isMe} />
+                      <span className="font-bold text-[13px] text-textp flex-1 truncate">
+                        {o.profiles?.username ?? '?'}{isMe ? ' (you)' : ''}
+                      </span>
+                      {scoredPred ? (
+                        <span className={`text-[13px] font-extrabold tabular-nums ${ptColor}`}>+{displayPts}pts</span>
+                      ) : (
+                        <span className="text-[11px] text-texts font-medium">pending</span>
+                      )}
+                    </div>
+
+                    {/* score + details */}
                     {o.pred_home != null && o.pred_away != null ? (
-                      <span className="text-sm font-extrabold tabular-nums text-textp">{o.pred_home}–{o.pred_away}</span>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {/* score */}
+                        <span className="text-[15px] font-extrabold tabular-nums text-textp">
+                          {home.flag} {o.pred_home}–{o.pred_away} {away.flag}
+                        </span>
+                        {/* first goal team */}
+                        {firstGoalTeam && (
+                          <span className="text-[11px] text-texts font-medium">
+                            1st goal: <span className="text-textp font-bold">{firstGoalTeam}</span>
+                          </span>
+                        )}
+                        {/* first scorer */}
+                        {firstScorerName && (
+                          <span className="text-[11px] text-texts font-medium">
+                            scorer: <span className="text-textp font-bold">{firstScorerName}</span>
+                          </span>
+                        )}
+                        {/* total goals */}
+                        {o.pred_total_goals != null && (
+                          <span className="text-[11px] text-texts font-medium">
+                            total: <span className="text-textp font-bold">{o.pred_total_goals}</span>
+                          </span>
+                        )}
+                        {/* BTTS — derive from score if not manually set */}
+                        {o.pred_home != null && o.pred_away != null && (
+                          <span className="text-[11px] text-texts font-medium">
+                            BTTS: <span className="text-textp font-bold">
+                              {(o.pred_btts ?? (o.pred_home > 0 && o.pred_away > 0)) ? 'Yes' : 'No'}
+                            </span>
+                          </span>
+                        )}
+                      </div>
                     ) : (
-                      <span className="text-[11px] text-texts italic">no pick</span>
+                      <span className="text-[11px] text-texts italic">No prediction submitted</span>
                     )}
+
+                    {/* pts breakdown — only once scored */}
                     {scoredPred && (
-                      <span className={`text-[11px] font-extrabold tabular-nums ${ptColor}`}>+{o.points_awarded}pts</span>
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-2 pt-2 border-t border-border/60">
+                        {[
+                          { label: 'Outcome',    val: o.pts_outcome,      w: weights.outcome },
+                          { label: 'Exact',      val: o.pts_exact,        w: weights.exact },
+                          { label: 'GD',         val: o.pts_goal_diff,    w: weights.goalDiff },
+                          { label: 'Goals',      val: o.pts_total_goals,  w: weights.totalGoals },
+                          { label: 'Team goals', val: o.pts_team_goals,   w: weights.teamGoals },
+                          { label: 'BTTS',       val: o.pts_btts,         w: weights.btts },
+                          { label: '1st team',   val: o.pts_first_team,   w: weights.firstTeam },
+                          { label: '1st scorer', val: o.pts_first_scorer, w: weights.firstScorer },
+                        ].filter((r) => (r.val ?? 0) > 0 && r.w > 0).map((r) => (
+                          <span key={r.label} className="text-[10px] font-bold text-success">
+                            +{r.w} {r.label}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
                 )
               })}
           </div>
         </Card>
-      ) : !revealPredictions && !locked ? (
+      ) : (
         <Card className="p-5">
           <SectionHeader title="League predictions" sub="Hidden until kickoff to keep it fair." />
           <div className="relative">
@@ -378,7 +450,7 @@ export default function MatchDetailPage() {
             <div className="absolute inset-0 grid place-items-center"><Pill tone="default" icon={<LockIcon size={12} />}>Unlocks at kickoff</Pill></div>
           </div>
         </Card>
-      ) : null}
+      )}
     </div>
   )
 }
