@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/require-admin'
 import { scorePrediction, type PredictionInput } from '@/lib/scoring'
 
@@ -7,6 +7,8 @@ export async function POST(request: Request) {
   const supabase = createServerSupabaseClient()
   const denied = await requireAdmin(supabase)
   if (denied) return denied
+
+  const serviceSupabase = createServiceSupabaseClient()
 
   let match_id: string | undefined
   try { match_id = (await request.json()).match_id } catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }) }
@@ -34,7 +36,7 @@ export async function POST(request: Request) {
     first_goal_team: m.first_goal_team, first_goal_player_id: m.first_goal_player_id,
   }
 
-  const { data: predictions, error: predsErr } = await supabase
+  const { data: predictions, error: predsErr } = await serviceSupabase
     .from('predictions')
     .select('id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff, pred_btts, pred_no_scorer')
     .eq('match_id', match_id)
@@ -55,7 +57,7 @@ export async function POST(request: Request) {
     }
   })
 
-  const { error: upsertErr } = await supabase.from('predictions').upsert(updates, { onConflict: 'id' })
+  const { error: upsertErr } = await serviceSupabase.from('predictions').upsert(updates, { onConflict: 'id' })
   if (upsertErr) return NextResponse.json({ error: upsertErr.message }, { status: 500 })
 
   return NextResponse.json({ match_id, scored: updates.length })
