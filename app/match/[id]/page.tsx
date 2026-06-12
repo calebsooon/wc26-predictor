@@ -101,16 +101,28 @@ export default function MatchDetailPage() {
       setWeights(w)
       setRevealPredictions(league?.reveal_predictions === true)
 
-      // Always fetch others — the display gate (locked || reveal) controls visibility.
-      // Fetching once at load avoids the stale-closure bug where kickedOff was false
-      // at load time but the match kicks off while the user is on the page.
-      let q = supabase
-        .from('predictions')
-        .select('user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, profiles(username, avatar_url)')
-        .eq('match_id', id)
-      if (memberIds.length) q = q.in('user_id', memberIds)
-      const { data: o } = await q
-      setOthers((o ?? []) as unknown as OtherPred[])
+      // Fetch picks for this match scoped to league members.
+      // Profiles fetched separately — the embedded join (profiles(username,avatar_url))
+      // can fail silently on some Supabase plans, returning null data with no error shown.
+      const predSelect = 'user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer'
+      const predBase = supabase.from('predictions').select(predSelect).eq('match_id', id)
+      const { data: predRows } = await (memberIds.length ? predBase.in('user_id', memberIds) : predBase)
+
+      // Fetch profiles for the returned prediction owners
+      const predUserIds = (predRows ?? []).map((p) => (p as { user_id: string }).user_id)
+      const profileMap = new Map<string, { username: string; avatar_url: string | null }>()
+      if (predUserIds.length) {
+        const { data: profs } = await supabase.from('profiles').select('id, username, avatar_url').in('id', predUserIds)
+        for (const pr of profs ?? []) {
+          const row = pr as { id: string; username: string; avatar_url: string | null }
+          profileMap.set(row.id, { username: row.username, avatar_url: row.avatar_url })
+        }
+      }
+
+      setOthers((predRows ?? []).map((p) => ({
+        ...p,
+        profiles: profileMap.get((p as { user_id: string }).user_id) ?? null,
+      })) as unknown as OtherPred[])
       setLoading(false)
     }
     load()
