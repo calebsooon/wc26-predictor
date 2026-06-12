@@ -98,7 +98,7 @@ export async function POST() {
   }
 
   // Snapshot ranks so movement arrows reflect the new results
-  const snapshotted = await snapshotLeagueRanks(supabase)
+  const snapshotted = await snapshotLeagueRanks(serviceSupabase)
 
   const errors = [...matchErrors, ...scoreErrors]
   return NextResponse.json({

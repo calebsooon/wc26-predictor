@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/require-admin'
 import { scoreGroupPrediction } from '@/lib/scoring'
 
@@ -41,6 +41,8 @@ export async function POST(req: Request) {
   const denied = await requireAdmin(supabase)
   if (denied) return denied
 
+  const serviceSupabase = createServiceSupabaseClient()
+
   let group_name: string | undefined
   try { group_name = (await req.json()).group_name } catch {}
   const groupsToScore = group_name ? [group_name] : GROUPS
@@ -76,7 +78,7 @@ export async function POST(req: Request) {
       points_awarded: scoreGroupPrediction((pred as { ranked_codes: string[] }).ranked_codes, actual),
     }))
     if (updates.length > 0) {
-      const { error: upErr } = await supabase.from('group_predictions').upsert(updates, { onConflict: 'user_id,group_name' })
+      const { error: upErr } = await serviceSupabase.from('group_predictions').upsert(updates, { onConflict: 'user_id,group_name' })
       if (upErr) { results[g] = { skipped: upErr.message, updated: 0 }; continue }
     }
     predictionsUpdated += updates.length
