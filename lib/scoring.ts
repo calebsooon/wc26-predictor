@@ -218,8 +218,8 @@ export function scorePrediction(pred: PredictionInput, m: MatchResult): ScoreBre
   if (ph === rh && pa === ra) z.exact = POINTS.exact
   if (predGD === rh - ra) z.goalDiff = POINTS.goalDiff
   if (predTG === rh + ra) z.totalGoals = POINTS.totalGoals
-  // Flat award if you nailed either team's exact goal count
-  if (ph === rh || pa === ra) z.teamGoals = POINTS.teamGoals
+  // Consolation point for nailing one team's exact goals — only when exact score wasn't hit
+  if (z.exact === 0 && (ph === rh || pa === ra)) z.teamGoals = POINTS.teamGoals
   if (predBTTS === (rh > 0 && ra > 0)) z.btts = POINTS.btts
 
   // m.first_goal_team=null means admin hasn't set it yet; 'NONE' means confirmed no goal

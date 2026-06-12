@@ -5,18 +5,18 @@ const M = (rh: number, ra: number, extra = {}) =>
   ({ home_team: 'A', away_team: 'B', real_home_score: rh, real_away_score: ra, ...extra })
 
 describe('scorePrediction', () => {
-  it('awards outcome + exact for a perfect call', () => {
+  it('awards outcome + exact for a perfect call — teamGoals does not stack with exact', () => {
     const z = scorePrediction({ pred_home: 2, pred_away: 1 }, M(2, 1))
     expect(z.outcome).toBe(POINTS.outcome)
     expect(z.exact).toBe(POINTS.exact)
     expect(z.goalDiff).toBe(POINTS.goalDiff)
     expect(z.totalGoals).toBe(POINTS.totalGoals)
-    expect(z.teamGoals).toBe(POINTS.teamGoals)
+    expect(z.teamGoals).toBe(0) // consolation only — not awarded when exact is hit
   })
 
-  it('team-goals is flat when either team exact (3-1 actual, 2-1 pred)', () => {
+  it('team-goals is consolation when one team exact but overall score wrong (3-1 actual, 2-1 pred)', () => {
     const z = scorePrediction({ pred_home: 2, pred_away: 1 }, M(3, 1))
-    expect(z.teamGoals).toBe(POINTS.teamGoals)
+    expect(z.teamGoals).toBe(POINTS.teamGoals) // away team (1) matches → consolation awarded
     expect(z.outcome).toBe(POINTS.outcome)
     expect(z.exact).toBe(0)
   })
