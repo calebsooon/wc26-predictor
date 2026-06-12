@@ -19,10 +19,23 @@ interface TournamentPred {
 }
 interface GroupPred { group_name: string; ranked_codes: string[]; points_awarded: number | null }
 interface ScoredPred {
+  match_id: string
   points_awarded: number
+  pred_home: number | null
+  pred_away: number | null
   pts_outcome: number | null; pts_exact: number | null; pts_goal_diff: number | null
   pts_total_goals: number | null; pts_team_goals: number | null; pts_btts: number | null
   pts_first_team: number | null; pts_first_scorer: number | null
+  match?: {
+    id: string
+    match_date: string
+    home_team: string
+    away_team: string
+    real_home_score: number | null
+    real_away_score: number | null
+    group_name: string | null
+    gw_number: number | null
+  } | null
 }
 
 const CATEGORIES = [
@@ -65,7 +78,7 @@ export default function ProfilePage() {
         if (data) { const p = data as Profile; setProfile(p); setUsername(p.username ?? ''); setAvatarUrl(p.avatar_url ?? null) }
 
         const [{ data: mine }, { data: tp }, { data: gp }, leagueData] = await Promise.all([
-          supabase.from('predictions').select('points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer').eq('user_id', user.id).not('points_awarded', 'is', null),
+          supabase.from('predictions').select('match_id, points_awarded, pred_home, pred_away, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, match:matches(id, match_date, home_team, away_team, real_home_score, real_away_score, group_name, gw_number)').eq('user_id', user.id).not('points_awarded', 'is', null),
           supabase.from('tournament_predictions').select('*').eq('user_id', user.id).eq('phase', 'pre').maybeSingle(),
           supabase.from('group_predictions').select('group_name, ranked_codes, points_awarded').eq('user_id', user.id).order('group_name'),
           getActiveLeague(supabase, user.id),
@@ -112,6 +125,16 @@ export default function ProfilePage() {
     const ranked = [...cats].sort((a, b) => b.pct - a.pct)
     return { scored, totalPts, exact, acc, cats, best: ranked[0], worst: ranked[ranked.length - 1] }
   }, [preds, weights])
+
+  const gwSeries = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const p of preds) {
+      const gw = p.match?.gw_number
+      if (gw == null) continue
+      map.set(gw, (map.get(gw) ?? 0) + p.points_awarded)
+    }
+    return Array.from({ length: 8 }, (_, i) => map.get(i + 1) ?? 0)
+  }, [preds])
 
   const badges = useMemo(() => {
     const c = (key: typeof CATEGORIES[number]['key']) => preds.filter((p) => (p[key] ?? 0) > 0).length
@@ -190,6 +213,30 @@ export default function ProfilePage() {
         <StatCard label="Outcome Accuracy" value={`${stats.acc}%`} sub={`${stats.scored} scored`} />
       </div>
 
+      {/* GW sparkline */}
+      {gwSeries.some((v) => v > 0) && (
+        <Card className="p-5">
+          <SectionHeader title="Points by gameweek" sub="Your scoring trend across all 8 gameweeks" />
+          <div className="mt-3 flex items-end gap-3">
+            <div className="flex-1 overflow-hidden">
+              <Sparkline data={gwSeries} width={320} height={48} />
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-xl font-extrabold text-primary tabular-nums">{stats.totalPts}</p>
+              <p className="text-[11px] text-texts font-medium">total pts</p>
+            </div>
+          </div>
+          <div className="flex justify-between mt-2">
+            {gwSeries.map((v, i) => (
+              <div key={i} className="text-center">
+                <p className="text-[10px] text-texts font-medium">GW{i + 1}</p>
+                <p className="text-[11px] font-extrabold tabular-nums text-textp">{v > 0 ? `+${v}` : '–'}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {/* category accuracy */}
       <Card className="p-5">
         <SectionHeader title="Accuracy by category" sub={stats.best ? `Strongest: ${stats.best.label} · Weakest: ${stats.worst?.label}` : 'Earn points to populate this.'} />
@@ -230,6 +277,44 @@ export default function ProfilePage() {
           ))}
         </div>
       </Card>
+
+      {/* per-match history */}
+      {preds.filter((p) => p.match).length > 0 && (
+        <Card className="p-5">
+          <SectionHeader
+            title="Match history"
+            sub={`${preds.filter((p) => p.match).length} scored matches`}
+          />
+          <div className="mt-3 space-y-2 max-h-80 overflow-y-auto pr-1">
+            {preds
+              .filter((p) => p.match)
+              .sort((a, b) => new Date(b.match!.match_date).getTime() - new Date(a.match!.match_date).getTime())
+              .map((p) => {
+                const m = p.match!
+                const homeTeam = getTeam(m.home_team)
+                const awayTeam = getTeam(m.away_team)
+                const ptColor = p.points_awarded >= 8 ? 'text-primary' : p.points_awarded > 0 ? 'text-gold' : 'text-error'
+                return (
+                  <div key={p.match_id} className="flex items-center gap-3 p-2.5 rounded-lg bg-surface border border-border/60">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <span className="text-base leading-none">{homeTeam.flag}</span>
+                      <span className="text-[11px] font-extrabold tabular-nums text-textp">{m.real_home_score}–{m.real_away_score}</span>
+                      <span className="text-base leading-none">{awayTeam.flag}</span>
+                    </div>
+                    {p.pred_home != null && p.pred_away != null && (
+                      <span className="text-[11px] text-texts font-medium">
+                        you: <span className="tabular-nums font-bold">{p.pred_home}–{p.pred_away}</span>
+                      </span>
+                    )}
+                    <span className={`text-[13px] font-extrabold tabular-nums shrink-0 ${ptColor}`}>
+                      +{p.points_awarded}
+                    </span>
+                  </div>
+                )
+              })}
+          </div>
+        </Card>
+      )}
 
       {/* tournament picks — for fun, no points */}
       <Card className="p-5">
@@ -314,5 +399,42 @@ export default function ProfilePage() {
 
       <Button variant="danger" className="w-full" onClick={logout}>Log out</Button>
     </div>
+  )
+}
+
+function Sparkline({ data, width = 200, height = 40, color = 'rgb(var(--primary))' }: {
+  data: number[]
+  width?: number
+  height?: number
+  color?: string
+}) {
+  if (data.length < 2) return null
+  const max = Math.max(...data, 1)
+  const min = Math.min(...data, 0)
+  const range = max - min || 1
+  const pad = 4
+  const w = width - pad * 2
+  const h = height - pad * 2
+  const pts = data.map((v, i) => {
+    const x = pad + (i / (data.length - 1)) * w
+    const y = pad + h - ((v - min) / range) * h
+    return `${x},${y}`
+  })
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
+      <polyline
+        points={pts.join(' ')}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {data.map((v, i) => {
+        const x = pad + (i / (data.length - 1)) * w
+        const y = pad + h - ((v - min) / range) * h
+        return <circle key={i} cx={x} cy={y} r="2.5" fill={color} />
+      })}
+    </svg>
   )
 }

@@ -48,7 +48,17 @@ export function MatchCard({ m, onClick, compact = false }: { m: UIMatch; onClick
     <Card hover onClick={onClick} className="p-4 cursor-pointer group">
       <div className="flex items-center justify-between mb-3">
         <Pill tone={m.knockout ? 'gold' : 'default'}>{stageLabel}</Pill>
-        <StatusBadge status={m.status} pts={m.pts} />
+        {m.status === 'locked' && kickedOff && !isScored ? (
+          <span className="flex items-center gap-1.5 text-[11px] font-extrabold text-success">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
+            </span>
+            Live
+          </span>
+        ) : (
+          <StatusBadge status={m.status} pts={m.pts} />
+        )}
       </div>
 
       <div className="flex items-center">
@@ -160,6 +170,7 @@ export interface LBRow {
   move?: number
   prize?: number
   you?: boolean
+  streak?: number
 }
 
 function MoveArrow({ move }: { move?: number }) {
@@ -205,6 +216,9 @@ export function LeaderboardTable({
                 <div className="flex items-center gap-2">
                   <span className={`font-bold truncate ${isFirst ? 'text-gold' : 'text-textp'}`}>{p.name}</span>
                   {p.you && <Pill tone="blue" className="!px-1.5 !py-0.5 !text-[9px]">YOU</Pill>}
+                  {(p.streak ?? 0) >= 3 && (
+                    <span className="text-[10px] ml-1" title={`${p.streak} in a row`}>🔥{p.streak}</span>
+                  )}
                 </div>
                 {!dense && showMeta && (
                   <div className="text-[11px] text-texts font-medium tabular-nums">{p.acc ?? 0}% acc · {p.exact ?? 0} exact</div>

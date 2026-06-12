@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
-import { Card, StatCard, SectionHeader, Button, Skeleton, BoltIcon, EmptyState, CalIcon, Pill, CountUp, ScoreStepper, Countdown, ProgressBar, LeagueBadge, ConfettiBurst } from '@/components/ui'
+import { Card, StatCard, SectionHeader, Button, Skeleton, BoltIcon, EmptyState, CalIcon, Pill, CountUp, ScoreStepper, Countdown, ProgressBar, LeagueBadge, ConfettiBurst, Avatar } from '@/components/ui'
 import { NextPredictCard, LeaderboardTable, type LBRow } from '@/components/football'
 import RulesModal from '@/components/RulesModal'
 import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
@@ -14,8 +14,20 @@ import { toUIMatch, isKnockout, type DBMatch, type MyPred } from '@/lib/match-ui
 import { getTeam } from '@/lib/teams'
 import { SCORING_RULES, weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { computePrizeSnapshot, formatPrize, prizeTone, GW_NAMES, GW_PRIZES, OVERALL_PRIZES } from '@/lib/prizes'
+import { useInstallPrompt, useAppBadge } from '@/lib/pwa'
 
 const SCORED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, matches(gw_number)'
+
+interface ActivityEvent {
+  id: string
+  event_type: string
+  user_id: string | null
+  match_id: string | null
+  payload: { pts?: number; pred_home?: number; pred_away?: number } | null
+  created_at: string
+  profiles?: { username: string; avatar_url: string | null } | null
+  matches?: { home_team: string; away_team: string } | null
+}
 
 interface RoundRow { id: string; name: string; order: number; matches: DBMatch[] }
 interface ScoredPredRow {
@@ -45,6 +57,7 @@ export default function DashboardPage() {
   const [leagueLabel, setLeagueLabel] = useState<LeagueLabel | null>(null)
   const [bracketEnabled, setBracketEnabled] = useState(true)
   const [banners, setBanners] = useState<string[]>([])
+  const [events, setEvents] = useState<ActivityEvent[]>([])
   const [rulesOpen, setRulesOpen] = useState(false)
   const [newResultsBanner, setNewResultsBanner] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -131,6 +144,17 @@ export default function DashboardPage() {
         setGwMatchRows((gwMatches ?? []) as unknown as MatchGWRow[])
         setHasTournamentPick(!!(tp && tp.length))
         setPrevRank((snapResult.data as { rank: number } | null)?.rank ?? null)
+
+        // Phase 3 — activity feed (non-critical, after main data)
+        if (league?.id) {
+          const { data: eventsData } = await supabase
+            .from('league_events')
+            .select('id, event_type, user_id, match_id, payload, created_at, profiles:profiles(username, avatar_url), matches:matches(home_team, away_team)')
+            .eq('league_id', league.id)
+            .order('created_at', { ascending: false })
+            .limit(20)
+          setEvents((eventsData ?? []) as unknown as ActivityEvent[])
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load dashboard')
         setLoading(false)
@@ -164,6 +188,7 @@ export default function DashboardPage() {
     .filter((m) => m.real_home_score === null && new Date(m.match_date) > new Date())
     .sort((a, b) => +new Date(a.match_date) - +new Date(b.match_date)), [matches])
   const missingCount = upcoming.filter((m) => !preds[m.id]).length
+  useAppBadge(missingCount)
   const hero = upcoming[0] ?? null
   const next = upcoming.slice(1, 5)
 
@@ -231,6 +256,8 @@ export default function DashboardPage() {
   return (
     <div className="space-y-7">
       <ConfettiBurst trigger={confetti} />
+
+      <InstallBanner missingCount={missingCount} />
 
       {newResultsBanner && (
         <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-primary/[0.08] border border-primary/25">
@@ -363,6 +390,37 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
+
+      {events.length > 0 && (
+        <section className="space-y-2">
+          <SectionHeader title="Recent activity" sub="Latest scoring highlights in your league" />
+          <div className="space-y-1.5">
+            {events.slice(0, 8).map((ev) => {
+              const username = ev.profiles?.username ?? 'Someone'
+              const matchLabel = ev.matches ? `${ev.matches.home_team} vs ${ev.matches.away_team}` : 'a match'
+              let message = ''
+              if (ev.event_type === 'exact_score') {
+                message = `${username} nailed the exact score on ${matchLabel} (+${ev.payload?.pts ?? 0}pts)`
+              } else if (ev.event_type === 'match_scored') {
+                message = `${matchLabel} has been scored`
+              } else {
+                message = `${username} ${ev.event_type.replace(/_/g, ' ')}`
+              }
+              return (
+                <div key={ev.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-surface border border-border/60">
+                  {ev.profiles && (
+                    <Avatar name={ev.profiles.username ?? '?'} src={ev.profiles.avatar_url} size={24} />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] font-medium text-textp leading-snug">{message}</p>
+                    <p className="text-[10px] text-texts mt-0.5">{new Date(ev.created_at).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Singapore' })}</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       <RulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} weights={weights} showPrizePool={isMoney} />
     </div>
@@ -649,6 +707,68 @@ function BannerSlider({ banners }: { banners: string[] }) {
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+/* ── InstallBanner ─────────────────────────────────────────────── */
+function InstallBanner({ missingCount }: { missingCount: number }) {
+  const { canInstall, isInstalled, triggerInstall } = useInstallPrompt()
+  const [show, setShow] = useState(false)
+  const [installing, setInstalling] = useState(false)
+
+  useEffect(() => {
+    if (isInstalled) { setShow(false); return }
+    const dismissed = sessionStorage.getItem('md_install_banner_dismissed')
+    if (!dismissed) setShow(true)
+  }, [isInstalled])
+
+  if (!show) return null
+
+  async function handleInstall() {
+    setInstalling(true)
+    const outcome = await triggerInstall()
+    setInstalling(false)
+    if (outcome === 'accepted') {
+      setShow(false)
+    }
+  }
+
+  function dismiss() {
+    sessionStorage.setItem('md_install_banner_dismissed', '1')
+    setShow(false)
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-surface border border-border">
+      <div className="flex items-center gap-3 min-w-0">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/icon-192.png" alt="MatchDay" className="w-9 h-9 rounded-xl shrink-0" />
+        <div className="min-w-0">
+          <p className="text-[13px] font-bold text-textp">Add MatchDay to your home screen</p>
+          <p className="text-[11px] text-texts mt-0.5">
+            {missingCount > 0
+              ? `${missingCount} prediction${missingCount !== 1 ? 's' : ''} still open — launch instantly anytime.`
+              : 'Launch instantly, full-screen, no browser bar.'}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {canInstall ? (
+          <button
+            onClick={handleInstall}
+            disabled={installing}
+            className="text-[12px] font-extrabold text-primary whitespace-nowrap px-2.5 py-1 rounded-lg border border-primary/30 hover:bg-primary/10 transition-colors disabled:opacity-50"
+          >
+            {installing ? 'Installing…' : 'Install'}
+          </button>
+        ) : (
+          <Link href="/install" className="text-[12px] font-extrabold text-primary whitespace-nowrap hover:underline">
+            How →
+          </Link>
+        )}
+        <button onClick={dismiss} className="text-texts hover:text-textp text-lg font-bold leading-none w-7 h-7 grid place-items-center" aria-label="Dismiss">×</button>
+      </div>
     </div>
   )
 }

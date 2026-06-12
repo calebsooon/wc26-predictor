@@ -7,11 +7,11 @@ import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
 import {
   Card, Pill, Button, ScoreStepper, SectionHeader, Avatar, Skeleton,
-  LockIcon, Countdown, EmptyState, ConfettiBurst, ChevDown,
+  LockIcon, Countdown, EmptyState, ConfettiBurst,
 } from '@/components/ui'
 import { ScoreDisplay } from '@/components/football'
 import { type DBMatch } from '@/lib/match-ui'
-import { POINTS, weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights, type MatchBreakdown } from '@/lib/scoring'
+import { POINTS, type MatchBreakdown } from '@/lib/scoring'
 import { getActiveLeague } from '@/lib/league'
 import { PlayerCardPicker, type PlayerForPicker } from '@/components/PlayerCardPicker'
 import { fmtDateTime } from '@/lib/date-format'
@@ -45,10 +45,8 @@ export default function MatchDetailPage() {
   const [bttsManual, setBttsManual] = useState(false)
   const [players, setPlayers] = useState<PlayerForPicker[]>([])
   const [others, setOthers] = useState<OtherPred[]>([])
-  const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [revealPredictions, setRevealPredictions] = useState(false)
   const [confetti, setConfetti] = useState(0)
-  const [expandedPicks, setExpandedPicks] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
@@ -98,8 +96,7 @@ export default function MatchDetailPage() {
         }
       }
 
-      const { league, weights: w, memberIds } = await getActiveLeague(supabase, user.id)
-      setWeights(w)
+      const { league, memberIds } = await getActiveLeague(supabase, user.id)
       setRevealPredictions(league?.reveal_predictions === true)
 
       // Fetch picks for this match scoped to league members.
@@ -157,6 +154,7 @@ export default function MatchDetailPage() {
   async function submit() {
     if (!userId || h == null || a == null) return
     setSaving(true)
+    setJustSaved(true) // optimistic — revert if error
     const { error } = await supabase.from('predictions').upsert({
       user_id: userId, match_id: id,
       pred_home: h, pred_away: a,
@@ -168,9 +166,12 @@ export default function MatchDetailPage() {
       pred_btts: bttsManual ? predBtts : null,
     }, { onConflict: 'user_id,match_id' })
     setSaving(false)
-    if (error) { toast.error(`Couldn't save: ${error.message}`); return }
+    if (error) {
+      setJustSaved(false) // revert optimistic
+      toast.error(`Couldn't save: ${error.message}`)
+      return
+    }
     toast.success(`Prediction locked in — ${home.code} ${h}–${a} ${away.code}`)
-    setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
   }
 
@@ -207,6 +208,17 @@ export default function MatchDetailPage() {
             : <span className="flex items-center gap-1.5 font-semibold text-texts"><LockIcon size={14} className="text-gold" /> Locks in <Countdown kickoff={match.match_date} /></span>}
         </div>
       </Card>
+
+      {/* consensus bar */}
+      {revealPredictions && locked && others.length > 0 && (
+        <ConsensusBar
+          homeTeam={home.name}
+          awayTeam={away.name}
+          homeName={match.home_team}
+          awayName={match.away_team}
+          others={others}
+        />
+      )}
 
       {/* prediction entry */}
       {!locked && (
@@ -322,10 +334,45 @@ export default function MatchDetailPage() {
         </Card>
       )}
 
-      {/* league predictions */}
-      <Card className="p-5">
-        <SectionHeader title="League predictions" sub={locked ? 'Revealed — picks are in.' : revealPredictions ? 'Visible pre-game in this league.' : 'Hidden until kickoff to keep it fair.'} />
-        {!locked && !revealPredictions ? (
+      {/* prediction wall */}
+      {revealPredictions && locked && others.length > 0 ? (
+        <Card className="p-5">
+          <SectionHeader
+            title="Everyone's picks"
+            sub={`${others.length} league member${others.length !== 1 ? 's' : ''} predicted this match`}
+          />
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {others
+              .sort((a, b) => (b.points_awarded ?? -1) - (a.points_awarded ?? -1))
+              .map((o) => {
+                const isMe = o.user_id === userId
+                const scoredPred = o.points_awarded != null
+                const ptColor = scoredPred
+                  ? (o.points_awarded ?? 0) >= 8 ? 'text-primary' : (o.points_awarded ?? 0) > 0 ? 'text-gold' : 'text-error'
+                  : 'text-texts'
+                return (
+                  <div
+                    key={o.user_id}
+                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-center ${isMe ? 'border-primary/40 bg-primary/[0.05]' : 'border-border bg-surface'}`}
+                  >
+                    <Avatar name={o.profiles?.username ?? '?'} src={o.profiles?.avatar_url} size={28} you={isMe} />
+                    <span className="text-[11px] font-bold text-textp truncate w-full">{o.profiles?.username ?? '?'}{isMe ? ' (you)' : ''}</span>
+                    {o.pred_home != null && o.pred_away != null ? (
+                      <span className="text-sm font-extrabold tabular-nums text-textp">{o.pred_home}–{o.pred_away}</span>
+                    ) : (
+                      <span className="text-[11px] text-texts italic">no pick</span>
+                    )}
+                    {scoredPred && (
+                      <span className={`text-[11px] font-extrabold tabular-nums ${ptColor}`}>+{o.points_awarded}pts</span>
+                    )}
+                  </div>
+                )
+              })}
+          </div>
+        </Card>
+      ) : !revealPredictions && !locked ? (
+        <Card className="p-5">
+          <SectionHeader title="League predictions" sub="Hidden until kickoff to keep it fair." />
           <div className="relative">
             <div className="grid sm:grid-cols-2 gap-2 blur-sm select-none pointer-events-none opacity-60">
               {[0, 1, 2, 3].map((i) => (
@@ -336,79 +383,60 @@ export default function MatchDetailPage() {
             </div>
             <div className="absolute inset-0 grid place-items-center"><Pill tone="default" icon={<LockIcon size={12} />}>Unlocks at kickoff</Pill></div>
           </div>
-        ) : others.length === 0 ? (
-          <EmptyState icon={<LockIcon size={22} />} title="No picks yet" desc="Predictions will show here once they're in." />
-        ) : (
-          <div className="grid sm:grid-cols-2 gap-2">
-            {others.map((pk) => {
-              const correct = scored && pk.pred_home === match.real_home_score && pk.pred_away === match.real_away_score
-              const you = pk.user_id === userId
-              const pkPts = pk.points_awarded != null ? weightedMatchPoints(pk, weights) : null
-              const scorerName = pk.pred_first_scorer_id ? players.find((p) => p.id === pk.pred_first_scorer_id)?.name : null
-              const fgtLabel = pk.pred_first_goal_team === match.home_team ? home.code : pk.pred_first_goal_team === match.away_team ? away.code : pk.pred_first_goal_team === 'NONE' ? '–' : null
-              const isExpanded = expandedPicks.has(pk.user_id)
-              const hasBreakdown = pk.points_awarded != null
-              const toggleExpand = () => setExpandedPicks((s) => {
-                const next = new Set(s)
-                if (next.has(pk.user_id)) next.delete(pk.user_id); else next.add(pk.user_id)
-                return next
-              })
-              return (
-                <div key={pk.user_id} className={`rounded-lg border overflow-hidden ${you ? 'bg-blue/[0.07] border-blue/30' : 'bg-surface border-border'}`}>
-                  <button
-                    className="w-full flex items-center gap-2.5 p-2.5 text-left"
-                    onClick={hasBreakdown ? toggleExpand : undefined}
-                  >
-                    <Avatar name={pk.profiles?.username ?? '?'} src={pk.profiles?.avatar_url} size={30} you={you} />
-                    <span className="font-bold text-sm flex-1 truncate">{pk.profiles?.username ?? '?'}{you && ' (you)'}</span>
-                    <span className={`font-extrabold tabular-nums ${correct ? 'text-primary' : 'text-textp'}`}>{pk.pred_home}–{pk.pred_away}</span>
-                    {pkPts != null && <Pill tone={pkPts >= 6 ? 'green' : pkPts > 0 ? 'gold' : 'red'} className="!px-2 tabular-nums">+{pkPts}</Pill>}
-                    {hasBreakdown && <ChevDown size={12} className={`shrink-0 text-texts transition-transform duration-150 ${isExpanded ? 'rotate-180' : ''}`} />}
-                  </button>
-
-                  {!isExpanded && (fgtLabel || scorerName) && (
-                    <div className="flex items-center gap-3 pb-2 pl-[46px] pr-2.5 text-[11px] text-texts font-medium">
-                      {fgtLabel && <span>⚡ {fgtLabel}</span>}
-                      {scorerName && <span>⚽ {scorerName}</span>}
-                    </div>
-                  )}
-
-                  {isExpanded && hasBreakdown && (
-                    <div className="px-2.5 pb-2.5 border-t border-border/40">
-                      <div className="grid grid-cols-4 gap-1 mt-2 sm:grid-cols-8">
-                        {([
-                          { label: 'Outcome', pts: pk.pts_outcome },
-                          { label: 'Exact', pts: pk.pts_exact },
-                          { label: 'Goal diff', pts: pk.pts_goal_diff },
-                          { label: 'Tot goals', pts: pk.pts_total_goals },
-                          ...(weights.teamGoals > 0 ? [{ label: 'Tm goals', pts: pk.pts_team_goals }] : []),
-                          { label: 'BTTS', pts: pk.pts_btts },
-                          { label: '1st team', pts: pk.pts_first_team },
-                          { label: '1st scorer', pts: pk.pts_first_scorer },
-                        ] as { label: string; pts: number | null | undefined }[]).map(({ label, pts }) => (
-                          <div key={label} className="flex flex-col items-center gap-0.5 py-1.5 px-1 rounded-md bg-surface/60">
-                            <span className="text-[8px] font-bold uppercase tracking-wider text-texts text-center leading-tight">{label}</span>
-                            <span className={`text-[11px] font-extrabold tabular-nums ${(pts ?? 0) > 0 ? 'text-primary' : 'text-texts/40'}`}>
-                              {(pts ?? 0) > 0 ? `+${pts}` : '–'}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                      {(fgtLabel || scorerName) && (
-                        <div className="flex items-center gap-3 mt-1.5 text-[11px] text-texts font-medium">
-                          {fgtLabel && <span>⚡ {fgtLabel}</span>}
-                          {scorerName && <span>⚽ {scorerName}</span>}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </Card>
+        </Card>
+      ) : null}
     </div>
   )
 }
 
+function ConsensusBar({
+  homeTeam, awayTeam, homeName, awayName, others,
+}: {
+  homeTeam: string
+  awayTeam: string
+  homeName: string
+  awayName: string
+  others: OtherPred[]
+}) {
+  const total = others.filter((o) => o.pred_home != null && o.pred_away != null).length
+  if (total === 0) return null
+
+  const counts = { home: 0, draw: 0, away: 0 }
+  for (const o of others) {
+    if (o.pred_home == null || o.pred_away == null) continue
+    if (o.pred_home > o.pred_away) counts.home++
+    else if (o.pred_home === o.pred_away) counts.draw++
+    else counts.away++
+  }
+
+  const pct = (n: number) => Math.round((n / total) * 100)
+
+  const bars: { label: string; code: string; count: number; color: string }[] = [
+    { label: homeTeam, code: homeName, count: counts.home, color: 'rgb(var(--primary))' },
+    { label: 'Draw', code: 'draw', count: counts.draw, color: 'rgb(var(--texts))' },
+    { label: awayTeam, code: awayName, count: counts.away, color: 'rgb(var(--gold))' },
+  ]
+  const max = Math.max(...bars.map((b) => b.count), 1)
+
+  return (
+    <Card className="p-5">
+      <SectionHeader title="League consensus" sub={`Based on ${total} pick${total !== 1 ? 's' : ''} in your league`} />
+      <div className="mt-3 space-y-2.5">
+        {bars.map((bar) => (
+          <div key={bar.code} className="flex items-center gap-3">
+            <span className="text-[12px] font-bold text-textp w-24 shrink-0 truncate">{bar.label}</span>
+            <div className="flex-1 h-5 bg-surface rounded-full overflow-hidden border border-border/60">
+              <div
+                className="h-full rounded-full transition-all duration-700"
+                style={{ width: `${(bar.count / max) * 100}%`, background: bar.color }}
+              />
+            </div>
+            <span className="text-[12px] font-extrabold tabular-nums text-textp w-10 text-right">
+              {pct(bar.count)}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}

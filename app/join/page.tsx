@@ -41,6 +41,12 @@ export default function JoinPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const c = params.get('code')
+    if (c) setCode(c.toUpperCase())
+  }, [])
+
   async function join(e: React.FormEvent) {
     e.preventDefault()
     if (!userId || !code.trim()) return
@@ -97,6 +103,19 @@ export default function JoinPage() {
               <TrophyIcon size={18} className={isMoneyLeague(l) ? 'text-gold' : 'text-primary'} />
               <span className="flex-1 font-bold text-sm truncate">{l.name}</span>
               <LeagueBadge name={l.league_labels?.name} color={l.league_labels?.color} money={isMoneyLeague(l)} />
+              {l.join_code && (
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}/join?code=${l.join_code}`
+                    navigator.clipboard.writeText(url).then(() => toast.success('Invite link copied!')).catch(() => toast.error('Copy failed'))
+                  }}
+                  className="flex items-center gap-1 text-[12px] font-bold text-texts hover:text-primary border border-border rounded-lg px-2 py-1 hover:border-primary/40 transition-colors"
+                  title="Copy invite link"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Share
+                </button>
+              )}
               <Button variant="surface" size="sm" onClick={() => makeActive(l.id)}>Open</Button>
             </Card>
           ))}

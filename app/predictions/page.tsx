@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
-import { PageHeader, ChipRow, EmptyState, Skeleton, CalIcon, StaggerList, StaggerItem } from '@/components/ui'
+import { PageHeader, ChipRow, EmptyState, Skeleton, CalIcon, StaggerList, StaggerItem, Button, ScoreStepper } from '@/components/ui'
 import { MatchCard } from '@/components/football'
 import { toUIMatch, type DBMatch, type MyPred } from '@/lib/match-ui'
 import { getActiveLeague } from '@/lib/league'
 import { DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { fmtDateKey } from '@/lib/date-format'
+import { getTeam } from '@/lib/teams'
 
 interface RoundRow { id: string; name: string; order: number; matches: DBMatch[] }
 
@@ -21,6 +23,9 @@ export default function FixturesPage() {
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [quickMatch, setQuickMatch] = useState<DBMatch | null>(null)
+  const [quickH, setQuickH] = useState<number | null>(null)
+  const [quickA, setQuickA] = useState<number | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -151,14 +156,109 @@ export default function FixturesPage() {
             <StaggerList className="grid sm:grid-cols-2 gap-3">
               {byDate[d].map((m) => (
                 <StaggerItem key={m.id}>
-                  <MatchCard m={toUIMatch(m, preds[m.id], weights)} onClick={() => router.push(`/match/${m.id}`)} />
+                  <MatchCard
+                    m={toUIMatch(m, preds[m.id], weights)}
+                    onClick={() => {
+                      const ui = toUIMatch(m, preds[m.id])
+                      if (ui.status === 'missing' || (ui.status !== 'locked' && ui.status !== 'scored')) {
+                        const existing = preds[m.id]
+                        setQuickMatch(m)
+                        setQuickH(existing?.pred_home ?? null)
+                        setQuickA(existing?.pred_away ?? null)
+                      } else {
+                        router.push(`/match/${m.id}`)
+                      }
+                    }}
+                  />
                 </StaggerItem>
               ))}
             </StaggerList>
           </div>
         ))
       )}
+
+      {quickMatch && (
+        <QuickPredictModal
+          match={quickMatch}
+          initialH={quickH}
+          initialA={quickA}
+          onClose={() => setQuickMatch(null)}
+          onSaved={(matchId, h, a) => {
+            setPreds((prev) => ({
+              ...prev,
+              [matchId]: { ...prev[matchId], pred_home: h, pred_away: a, match_id: matchId } as MyPred,
+            }))
+          }}
+        />
+      )}
     </div>
   )
 }
 
+function QuickPredictModal({
+  match, initialH, initialA, onClose, onSaved,
+}: {
+  match: DBMatch
+  initialH: number | null
+  initialA: number | null
+  onClose: () => void
+  onSaved: (matchId: string, h: number, a: number) => void
+}) {
+  const supabase = createClient()
+  const home = getTeam(match.home_team), away = getTeam(match.away_team)
+  const [h, setH] = useState<number | null>(initialH)
+  const [a, setA] = useState<number | null>(initialA)
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user || h == null || a == null) return
+    setSaving(true)
+    const { error } = await supabase.from('predictions').upsert({
+      user_id: user.id, match_id: match.id,
+      pred_home: h, pred_away: a,
+    }, { onConflict: 'user_id,match_id' })
+    setSaving(false)
+    if (error) { toast.error(`Couldn't save: ${error.message}`); return }
+    toast.success(`${home.code} ${h}–${a} ${away.code} saved`)
+    onSaved(match.id, h, a)
+    onClose()
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed bottom-0 inset-x-0 z-50 sm:inset-0 sm:flex sm:items-center sm:justify-center p-4">
+        <div className="bg-card border border-border rounded-2xl shadow-2xl p-5 w-full max-w-sm sm:mx-auto">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-texts">{match.group_name ? `Group ${match.group_name}` : 'Knockout'}</p>
+              <p className="text-sm font-extrabold text-textp">{home.name} vs {away.name}</p>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 grid place-items-center rounded-lg border border-border text-texts hover:text-textp text-lg">×</button>
+          </div>
+
+          <div className="flex items-center justify-center gap-5 py-3">
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-3xl">{home.flag}</span>
+              <ScoreStepper value={h} onChange={setH} />
+            </div>
+            <span className="text-xl font-black text-texts mt-6">:</span>
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-3xl">{away.flag}</span>
+              <ScoreStepper value={a} onChange={setA} />
+            </div>
+          </div>
+
+          <div className="flex gap-2 mt-4">
+            <Button variant="surface" className="flex-1" onClick={onClose}>Cancel</Button>
+            <Button variant="primary" className="flex-1" onClick={save} disabled={saving || h == null || a == null}>
+              {saving ? 'Saving…' : 'Save pick'}
+            </Button>
+          </div>
+          <p className="text-center text-[11px] text-texts mt-3">For full options (first scorer, BTTS etc), tap View match →</p>
+        </div>
+      </div>
+    </>
+  )
+}

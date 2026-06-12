@@ -2,11 +2,16 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/require-admin'
 import { scorePrediction, type PredictionInput, type MatchResult } from '@/lib/scoring'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 export async function POST() {
   const supabase = createServerSupabaseClient()
   const denied = await requireAdmin(supabase)
   if (denied) return denied
+
+  const { data: { user } } = await supabase.auth.getUser()
+  const { allowed, retryAfterMs } = checkRateLimit(`rescore-all:${user?.id ?? 'anon'}`)
+  if (!allowed) return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: { 'Retry-After': String(Math.ceil((retryAfterMs ?? 60000) / 1000)) } })
 
   const serviceSupabase = createServiceSupabaseClient()
 

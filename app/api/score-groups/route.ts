@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/require-admin'
 import { scoreGroupPrediction } from '@/lib/scoring'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 const GROUPS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
 
@@ -40,6 +41,10 @@ export async function POST(req: Request) {
   const supabase = createServerSupabaseClient()
   const denied = await requireAdmin(supabase)
   if (denied) return denied
+
+  const { data: { user } } = await supabase.auth.getUser()
+  const { allowed, retryAfterMs } = checkRateLimit(`score-groups:${user?.id ?? 'anon'}`)
+  if (!allowed) return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: { 'Retry-After': String(Math.ceil((retryAfterMs ?? 60000) / 1000)) } })
 
   const serviceSupabase = createServiceSupabaseClient()
 
@@ -84,6 +89,15 @@ export async function POST(req: Request) {
     predictionsUpdated += updates.length
     results[g] = { updated: updates.length }
   }
+
+  // Audit log — fire and forget
+  serviceSupabase.from('scoring_events').insert({
+    triggered_by: user!.id,
+    event_type: 'groups',
+    subject_id: group_name ?? null,
+    pts_distributed: null,
+    scored_count: predictionsUpdated,
+  }).then(() => {})
 
   return NextResponse.json({ groups: results, predictions_updated: predictionsUpdated })
 }

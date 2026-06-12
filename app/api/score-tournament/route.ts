@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/require-admin'
 import { TOURNAMENT_POINTS } from '@/lib/scoring'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 const ROUND_IDS = {
   QF: '00000000-0000-0000-0000-000000000004',
@@ -15,6 +16,10 @@ export async function POST() {
   const supabase = createServerSupabaseClient()
   const denied = await requireAdmin(supabase)
   if (denied) return denied
+
+  const { data: { user } } = await supabase.auth.getUser()
+  const { allowed, retryAfterMs } = checkRateLimit(`score-tournament:${user?.id ?? 'anon'}`)
+  if (!allowed) return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: { 'Retry-After': String(Math.ceil((retryAfterMs ?? 60000) / 1000)) } })
 
   const serviceSupabase = createServiceSupabaseClient()
 
@@ -81,6 +86,15 @@ export async function POST() {
 
   const { error: uErr } = await serviceSupabase.from('tournament_predictions').upsert(updates, { onConflict: 'user_id,phase' })
   if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 })
+
+  // Audit log — fire and forget
+  serviceSupabase.from('scoring_events').insert({
+    triggered_by: user!.id,
+    event_type: 'tournament',
+    subject_id: null,
+    pts_distributed: null,
+    scored_count: updates.length,
+  }).then(() => {})
 
   return NextResponse.json({
     updated: updates.length, champion, runner_up,

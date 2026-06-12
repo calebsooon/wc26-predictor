@@ -8,6 +8,7 @@
 
 import { useEffect, useRef, useState, type ReactNode, type ButtonHTMLAttributes } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import Image from 'next/image'
 import { getTeam } from '@/lib/teams'
 
 /* ---------- Flag + Team name ---------- */
@@ -28,12 +29,13 @@ export function Avatar({
   const color = you ? 'rgb(var(--blue))' : 'rgb(var(--primary))'
   if (src && !imgError) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
+      <Image
         src={src} alt={name}
+        width={size} height={size}
         className="rounded-full object-cover shrink-0"
-        style={{ width: size, height: size, border: ring ? `2px solid ${color}` : undefined }}
+        style={{ border: ring ? `2px solid ${color}` : undefined }}
         onError={() => setImgError(true)}
+        unoptimized
       />
     )
   }

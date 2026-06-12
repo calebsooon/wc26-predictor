@@ -36,9 +36,15 @@ describe('aggregateLeaderboard', () => {
   })
 
   it('more correct outcomes beats alphabetical', () => {
-    const a: AggRow = { id: 'a', name: 'Ann', avatar: null, pts: 5, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 1, you: false }
-    const z: AggRow = { id: 'z', name: 'Zed', avatar: null, pts: 5, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 2, you: false }
+    const a: AggRow = { id: 'a', name: 'Ann', avatar: null, pts: 5, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 1, streak: 0, you: false }
+    const z: AggRow = { id: 'z', name: 'Zed', avatar: null, pts: 5, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 2, streak: 0, you: false }
     expect([a, z].sort(compareLeaderboard)[0].name).toBe('Zed') // Zed has more outcomes despite Z > A
+  })
+
+  it('more exact scorelines breaks ties after outcomes', () => {
+    const a: AggRow = { id: 'a', name: 'Ann', avatar: null, pts: 6, exact: 1, acc: 0, scored: 0, correct: 0, outcomeWins: 1, streak: 0, you: false }
+    const z: AggRow = { id: 'z', name: 'Zed', avatar: null, pts: 6, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 1, streak: 0, you: false }
+    expect([z, a].sort(compareLeaderboard)[0].name).toBe('Ann')
   })
 
   it('filters by gameweek', () => {
