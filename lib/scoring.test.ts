@@ -5,23 +5,24 @@ const M = (rh: number, ra: number, extra = {}) =>
   ({ home_team: 'A', away_team: 'B', real_home_score: rh, real_away_score: ra, ...extra })
 
 describe('scorePrediction', () => {
-  it('awards outcome + exact for a perfect call', () => {
+  it('awards outcome + exact for a perfect call — teamGoals does not stack with exact', () => {
     const z = scorePrediction({ pred_home: 2, pred_away: 1 }, M(2, 1))
     expect(z.outcome).toBe(POINTS.outcome)
     expect(z.exact).toBe(POINTS.exact)
     expect(z.goalDiff).toBe(POINTS.goalDiff)
     expect(z.totalGoals).toBe(POINTS.totalGoals)
-    expect(z.teamGoals).toBe(POINTS.teamGoals)
+    expect(z.teamGoals).toBe(0) // consolation only — not awarded when exact is hit
+    expect(z.total).toBe(POINTS.outcome + POINTS.exact + POINTS.goalDiff + POINTS.totalGoals + POINTS.btts)
   })
 
-  it('team-goals is flat when either team exact (3-1 actual, 2-1 pred)', () => {
+  it('teamGoals is consolation when one team exact but overall score wrong', () => {
     const z = scorePrediction({ pred_home: 2, pred_away: 1 }, M(3, 1))
-    expect(z.teamGoals).toBe(POINTS.teamGoals)
+    expect(z.teamGoals).toBe(POINTS.teamGoals) // away (1) matches → consolation awarded
     expect(z.outcome).toBe(POINTS.outcome)
     expect(z.exact).toBe(0)
   })
 
-  it('team-goals is 0 when neither team exact', () => {
+  it('teamGoals is 0 when neither team exact', () => {
     expect(scorePrediction({ pred_home: 0, pred_away: 0 }, M(3, 1)).teamGoals).toBe(0)
   })
 
@@ -52,8 +53,8 @@ describe('scorePrediction', () => {
 describe('weightedMatchPoints / resolveWeights', () => {
   it('re-weights a stored breakdown', () => {
     const b = { pts_outcome: 3, pts_exact: 0, pts_team_goals: 1 }
-    expect(weightedMatchPoints(b, DEFAULT_WEIGHTS)).toBe(POINTS.outcome + POINTS.teamGoals)
-    expect(weightedMatchPoints(b, resolveWeights({ outcome: 5 }))).toBe(5 + DEFAULT_WEIGHTS.teamGoals)
+    expect(weightedMatchPoints(b, DEFAULT_WEIGHTS)).toBe(POINTS.outcome + DEFAULT_WEIGHTS.teamGoals) // teamGoals weight=0 by default
+    expect(weightedMatchPoints(b, resolveWeights({ outcome: 5, teamGoals: 1 }))).toBe(5 + 1)
   })
 
   it('resolveWeights merges partial overrides over defaults', () => {

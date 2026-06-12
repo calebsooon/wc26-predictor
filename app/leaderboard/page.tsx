@@ -19,6 +19,7 @@ interface PredRow {
   pts_exact: number | null
   pts_goal_diff: number | null
   pts_total_goals: number | null
+  pts_team_goals: number | null
   pts_btts: number | null
   pts_first_team: number | null
   pts_first_scorer: number | null

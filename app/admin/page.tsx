@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
@@ -235,7 +235,8 @@ function AdminActions() {
 }
 
 interface LabelRow { id: string; name: string; color: string }
-interface LeagueAdminRow { id: string; name: string; type: 'money' | 'points'; join_code: string; scoring: unknown; bracket_enabled: boolean; reveal_predictions: boolean; prize_pool: boolean; label_id: string | null; league_labels: { name: string; color: string } | null; memberIds: string[] }
+interface LeagueAdminRow { id: string; name: string; type: 'money' | 'points'; join_code: string; scoring: unknown; bracket_enabled: boolean; reveal_predictions: boolean; prize_pool: boolean; banners_enabled: boolean; label_id: string | null; league_labels: { name: string; color: string } | null; memberIds: string[] }
+interface BannerItem { id: string; image_url: string; storage_path: string; display_order: number }
 interface AdminProfile { id: string; username: string | null }
 
 function ScoringEditor({ league, onClose }: { league: LeagueAdminRow; onClose: () => void }) {
@@ -290,6 +291,51 @@ function LeagueManage({
   const [name, setName] = useState(league.name)
   const [code, setCode] = useState(league.join_code)
   const [memberSearch, setMemberSearch] = useState('')
+  const [banners, setBanners] = useState<BannerItem[]>([])
+  const [bannerUploading, setBannerUploading] = useState(false)
+  const bannerInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    supabase.from('league_banners')
+      .select('id, image_url, storage_path, display_order')
+      .eq('league_id', league.id)
+      .order('display_order')
+      .then(({ data }) => setBanners((data ?? []) as BannerItem[]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [league.id])
+
+  async function uploadBanner(file: File) {
+    setBannerUploading(true)
+    try {
+      const ext = file.name.split('.').pop() ?? 'jpg'
+      const storagePath = `${league.id}/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('banners').upload(storagePath, file)
+      if (upErr) { toast.error(upErr.message); return }
+      const { data: { publicUrl } } = supabase.storage.from('banners').getPublicUrl(storagePath)
+      const nextOrder = banners.length
+      const { data: inserted, error: dbErr } = await supabase.from('league_banners')
+        .insert({ league_id: league.id, image_url: publicUrl, storage_path: storagePath, display_order: nextOrder })
+        .select('id, image_url, storage_path, display_order')
+        .single()
+      if (dbErr) {
+        await supabase.storage.from('banners').remove([storagePath])
+        toast.error(dbErr.message)
+      } else {
+        setBanners((b) => [...b, inserted as BannerItem])
+        toast.success('Banner uploaded')
+      }
+    } finally {
+      setBannerUploading(false)
+    }
+  }
+
+  async function deleteBanner(item: BannerItem) {
+    const { error: storageErr } = await supabase.storage.from('banners').remove([item.storage_path])
+    if (storageErr) { toast.error(storageErr.message); return }
+    const { error } = await supabase.from('league_banners').delete().eq('id', item.id)
+    if (error) toast.error(error.message)
+    else { setBanners((b) => b.filter((x) => x.id !== item.id)); toast.success('Banner removed') }
+  }
 
   const nameById = useMemo(() => new Map(profiles.map((p) => [p.id, p.username ?? '?'])), [profiles])
   const otherLeagues = leagues.filter((l) => l.id !== league.id)
@@ -369,6 +415,49 @@ function LeagueManage({
             {league.reveal_predictions ? 'On' : 'Off'}
           </Button>
         </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-texts">Banners</span>
+          <Button size="sm" variant={league.banners_enabled ? 'primary' : 'surface'} onClick={() => patch({ banners_enabled: !league.banners_enabled }, league.banners_enabled ? 'Banners hidden.' : 'Banner slider enabled.')}>
+            {league.banners_enabled ? 'On' : 'Off'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Banner image management */}
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-texts mb-2">
+          Banners{!league.banners_enabled && <span className="normal-case font-normal text-texts/60 ml-1">(enable above to show on dashboard)</span>}
+        </p>
+
+        <div className="space-y-2">
+          {banners.map((item, i) => (
+            <div key={item.id} className="flex items-center gap-2.5 p-2 rounded-lg border border-border bg-surface">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={item.image_url} alt="" className="w-20 h-10 object-cover rounded-md shrink-0 bg-card" />
+              <span className="text-[12px] text-texts flex-1 truncate">Banner {i + 1}</span>
+              <Button size="sm" variant="danger" onClick={() => deleteBanner(item)}>Remove</Button>
+            </div>
+          ))}
+          {banners.length === 0 && <p className="text-[13px] text-texts">No banners uploaded yet.</p>}
+        </div>
+
+        <input
+          ref={bannerInputRef}
+          type="file"
+          accept="image/jpeg,image/jpg,image/png,image/webp"
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadBanner(f); e.target.value = '' }}
+        />
+        <Button
+          size="sm"
+          variant="surface"
+          className="mt-2"
+          disabled={bannerUploading}
+          onClick={() => bannerInputRef.current?.click()}
+        >
+          {bannerUploading ? 'Uploading…' : '+ Upload banner'}
+        </Button>
+        <p className="text-[11px] text-texts mt-1">JPEG/PNG/WebP · max 10 MB · images are shown at 16:7 aspect ratio</p>
       </div>
 
       {/* members */}
@@ -530,7 +619,7 @@ function LeagueAdmin() {
 
   async function load() {
     const [{ data: ls }, { data: ms }, { data: ps }, { data: lbs }] = await Promise.all([
-      supabase.from('leagues').select('id, name, type, join_code, scoring, bracket_enabled, reveal_predictions, prize_pool, label_id, league_labels(name, color)').order('created_at'),
+      supabase.from('leagues').select('id, name, type, join_code, scoring, bracket_enabled, reveal_predictions, prize_pool, banners_enabled, label_id, league_labels(name, color)').order('created_at'),
       supabase.from('league_members').select('league_id, user_id'),
       supabase.from('profiles').select('id, username').order('username'),
       supabase.from('league_labels').select('id, name, color').order('name'),
@@ -670,4 +759,3 @@ export default function AdminPage() {
     </div>
   )
 }
-

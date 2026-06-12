@@ -23,6 +23,7 @@ export interface League {
   bracket_enabled?: boolean
   reveal_predictions?: boolean
   prize_pool?: boolean
+  banners_enabled?: boolean
   label_id?: string | null
   league_labels?: LeagueLabel | null   // embedded label (name + colour)
 }
@@ -72,7 +73,7 @@ export async function getActiveLeague(supabase: SupabaseClient, userId: string):
   // NB: league_members.user_id FKs to auth.users, not profiles — so we can't embed
   // profiles via PostgREST. Fetch member ids first, then their profiles by id.
   const [{ data: leagueRow }, { data: members }] = await Promise.all([
-    supabase.from('leagues').select('id, name, type, join_code, scoring, bracket_enabled, reveal_predictions, prize_pool, label_id, league_labels(name, color)').eq('id', activeId).maybeSingle(),
+    supabase.from('leagues').select('id, name, type, join_code, scoring, bracket_enabled, reveal_predictions, prize_pool, banners_enabled, label_id, league_labels(name, color)').eq('id', activeId).maybeSingle(),
     supabase.from('league_members').select('user_id').eq('league_id', activeId),
   ])
 
