@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 /*
- * BRACKET XI — "Dark Stadium Analytics" design tokens.
+ * MatchDay — "Refined" design tokens.
  *
  * Colours are driven by CSS variables (defined in globals.css) as
  * space-separated RGB channels, so Tailwind opacity modifiers like
@@ -20,29 +20,38 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg: token("--bg"),
-        surface: token("--surface"),
-        card: token("--card"),
-        border: token("--border"),
-        primary: token("--primary"),
-        accent: token("--accent"),   // active league's label colour (falls back to primary)
-        gold: token("--gold"),
-        blue: token("--blue"),
-        textp: token("--textp"),
-        texts: token("--texts"),
-        error: token("--error"),
-        success: token("--success"),
-        // legacy aliases kept so any un-migrated markup still resolves
+        bg:       token("--bg"),
+        surface:  token("--surface"),
+        card:     token("--card"),
+        surface2: token("--surface2"),
+        surface3: token("--surface3"),
+        border:   token("--border"),
+        primary:  token("--primary"),
+        accent:   token("--accent"),   // active league colour (falls back to primary)
+        gold:     token("--gold"),
+        blue:     token("--blue"),
+        amber:    token("--amber"),
+        coral:    token("--coral"),
+        textp:    token("--textp"),
+        texts:    token("--texts"),
+        faint:    token("--faint"),
+        error:    token("--error"),
+        success:  token("--success"),
+        // legacy aliases
         background: token("--bg"),
         foreground: token("--textp"),
       },
       fontFamily: {
-        sans: ["var(--font-archivo)", "system-ui", "sans-serif"],
-        display: ["var(--font-space-grotesk)", "var(--font-archivo)", "sans-serif"],
+        sans:    ["var(--font-body)",    "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "var(--font-body)", "sans-serif"],
+      },
+      borderRadius: {
+        card: "16px",
+        chip: "11px",
       },
       keyframes: {
         shimmer: {
-          "0%": { backgroundPosition: "200% 0" },
+          "0%":   { backgroundPosition: "200% 0" },
           "100%": { backgroundPosition: "-200% 0" },
         },
       },

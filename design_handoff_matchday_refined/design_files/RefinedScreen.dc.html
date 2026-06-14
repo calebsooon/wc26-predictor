@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;600;700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  .scr::-webkit-scrollbar { display: none; }
+  .scr { -ms-overflow-style: none; scrollbar-width: none; }
+  .num { font-family: 'Schibsted Grotesk', system-ui, sans-serif; font-feature-settings: 'tnum' 1, 'lnum' 1; letter-spacing: -0.015em; }
+  .disp { font-family: 'Schibsted Grotesk', system-ui, sans-serif; letter-spacing: -0.02em; }
+  .eb { font-size:10.5px; text-transform:uppercase; letter-spacing:0.13em; font-weight:600; }
+
+  [data-rf]{
+    --bg:#0c0e13; --grad1:#13161d; --grad2:#0a0b10;
+    --surface:#15181f; --surface2:#1d212a; --surface3:#262b35;
+    --border:rgba(255,255,255,0.07); --hair:rgba(255,255,255,0.06);
+    --text:#f3f5f9; --muted:#9aa3b2; --faint:#69707e;
+    --accent:#1fc16b; --accentDeep:#1fc16b; --onAccent:#042614;
+    --accentSoft:rgba(31,193,107,0.14);
+    --heroFrom:#1aa85e; --heroTo:#0f7a48; --heroInk:#eafff3;
+    --sky:#5b9dff; --skySoft:rgba(91,157,255,0.15);
+    --amber:#ffb24d; --amberSoft:rgba(255,178,77,0.15);
+    --coral:#ff6b6b; --coralSoft:rgba(255,107,107,0.15);
+    --gold:#ffce5a;
+    --pos:#1fc16b; --neg:#ff6b6b;
+    --shadow:0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 26px -12px rgba(0,0,0,0.6);
+    --navBg:rgba(11,12,16,0.8);
+    --trackBg:#262b35;
+  }
+  [data-rf="light"]{
+    --bg:#f3f5f9; --grad1:#ffffff; --grad2:#eef1f6;
+    --surface:#ffffff; --surface2:#f4f6fa; --surface3:#e9edf3;
+    --border:rgba(16,22,40,0.07); --hair:rgba(16,22,40,0.06);
+    --text:#101521; --muted:#5c6473; --faint:#8a929f;
+    --accent:#0e9e55; --accentDeep:#0e9e55; --onAccent:#ffffff;
+    --accentSoft:rgba(14,158,85,0.10);
+    --heroFrom:#16a35d; --heroTo:#0c7a44; --heroInk:#eafff3;
+    --sky:#2f6fe0; --skySoft:rgba(47,111,224,0.10);
+    --amber:#c98318; --amberSoft:rgba(201,131,24,0.12);
+    --coral:#dd4b4b; --coralSoft:rgba(221,75,75,0.10);
+    --gold:#c08a1a;
+    --pos:#0e9e55; --neg:#dd4b4b;
+    --shadow:0 1px 2px rgba(16,22,40,0.05), 0 10px 26px -14px rgba(16,22,40,0.14);
+    --navBg:rgba(255,255,255,0.82);
+    --trackBg:#e9edf3;
+  }
+  .rfStag > * { opacity: 1; }
+</style>
+</helmet>
+
+<div style="width:312px; font-family:'Hanken Grotesk',system-ui,sans-serif;">
+  <div style="width:312px; height:648px; background:#06070a; border-radius:42px; padding:11px; box-shadow:0 30px 60px -18px rgba(10,12,24,0.6);">
+    <div data-rf="{{ rf }}" style="width:100%; height:100%; border-radius:32px; overflow:hidden; position:relative; color:var(--text); background:linear-gradient(180deg,var(--grad1),var(--grad2) 420px), var(--bg);">
+
+      <!-- status bar -->
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:13px 22px 5px;">
+        <span class="num" style="font-size:15px; font-weight:600;">9:41</span>
+        <div style="display:flex; gap:6px; align-items:center; color:var(--text);">
+          <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+          <svg width="16" height="11" viewBox="0 0 16 11" fill="currentColor"><path d="M8 2.2c2 0 3.9.8 5.3 2.1l1.2-1.3A9.4 9.4 0 0 0 8 .4 9.4 9.4 0 0 0 1.5 3l1.2 1.3A7.5 7.5 0 0 1 8 2.2Z"/><path d="M8 5.6c1.1 0 2.1.4 2.9 1.2l1.2-1.3A6 6 0 0 0 8 3.8a6 6 0 0 0-4.1 1.7L5 6.8A4.2 4.2 0 0 1 8 5.6Z"/><circle cx="8" cy="9.2" r="1.6"/></svg>
+          <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.6" y="0.6" width="20" height="10.8" rx="3" stroke="currentColor" stroke-opacity="0.5"/><rect x="2" y="2" width="16" height="8" rx="1.8" fill="currentColor"/><rect x="22" y="3.5" width="1.6" height="5" rx="0.8" fill="currentColor" fill-opacity="0.5"/></svg>
+        </div>
+      </div>
+
+      <div class="scr" style="height:calc(100% - 38px); overflow-y:auto; padding:4px 18px 96px;">
+
+        <!-- ===== DASHBOARD ===== -->
+        <sc-if value="{{ isDash }}" hint-placeholder-val="{{ true }}">
+          <div class="rfStag">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin:8px 2px 15px;">
+            <div>
+              <div class="eb" style="color:var(--faint);">Tuesday · Matchday 2</div>
+              <div class="disp" style="font-size:23px; font-weight:700; margin-top:3px;">Good evening</div>
+            </div>
+            <div class="disp" style="width:38px; height:38px; border-radius:50%; background:var(--surface2); border:1px solid var(--border); display:grid; place-items:center; font-weight:700; color:var(--accent); font-size:15px;">C</div>
+          </div>
+
+          <!-- HERO feature card (colored) -->
+          <div style="border-radius:20px; padding:18px; margin-bottom:11px; background:linear-gradient(145deg,var(--heroFrom),var(--heroTo)); box-shadow:0 14px 30px -14px rgba(15,122,72,0.7); position:relative; overflow:hidden;">
+            <div style="position:absolute; top:-40px; right:-30px; width:150px; height:150px; border-radius:50%; background:rgba(255,255,255,0.10);"></div>
+            <div style="position:absolute; bottom:-60px; right:20px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,0.06);"></div>
+            <div style="position:relative;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                  <div class="eb" style="color:rgba(234,255,243,0.75); white-space:nowrap;">Your season</div>
+                  <div style="display:flex; align-items:baseline; gap:8px; margin-top:7px;">
+                    <span class="num" style="font-size:42px; font-weight:800; line-height:1; color:var(--heroInk);">148</span>
+                    <span class="num" style="font-size:13px; font-weight:700; color:#d6ffe6;">▲ 14</span>
+                  </div>
+                  <div style="font-size:12.5px; color:rgba(234,255,243,0.8); font-weight:500; margin-top:3px;">points this season</div>
+                </div>
+                <div style="text-align:right;">
+                  <div class="num disp" style="font-size:30px; font-weight:800; color:var(--heroInk);">3rd</div>
+                  <div style="font-size:11px; color:rgba(234,255,243,0.75); font-weight:600;">of 7</div>
+                </div>
+              </div>
+              <!-- segmented season progress -->
+              <div style="display:flex; gap:4px; margin-top:16px;">
+                <div style="flex:1; height:5px; border-radius:3px; background:var(--heroInk);"></div>
+                <div style="flex:1; height:5px; border-radius:3px; background:var(--heroInk);"></div>
+                <div style="flex:1; height:5px; border-radius:3px; background:var(--heroInk);"></div>
+                <div style="flex:1; height:5px; border-radius:3px; background:rgba(255,255,255,0.28);"></div>
+                <div style="flex:1; height:5px; border-radius:3px; background:rgba(255,255,255,0.28);"></div>
+              </div>
+              <div style="display:flex; justify-content:space-between; margin-top:7px; font-size:10.5px; color:rgba(234,255,243,0.7); font-weight:500; white-space:nowrap;"><span>Group stage</span><span>38% complete</span></div>
+            </div>
+          </div>
+
+          <!-- stat trio (clean, colored values) -->
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:9px; margin-bottom:18px;">
+            <div style="background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:14px; padding:13px 12px;">
+              <div class="num" style="font-size:19px; font-weight:700;">61%</div>
+              <div style="font-size:10.5px; color:var(--muted); font-weight:500;">accuracy</div>
+            </div>
+            <div style="background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:14px; padding:13px 12px;">
+              <div class="num" style="font-size:19px; font-weight:700; color:var(--sky);">9</div>
+              <div style="font-size:10.5px; color:var(--muted); font-weight:500;">exact</div>
+            </div>
+            <div style="background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:14px; padding:13px 12px;">
+              <div class="num" style="font-size:19px; font-weight:700; color:var(--pos);">+$25</div>
+              <div style="font-size:10.5px; color:var(--muted); font-weight:500;">pool</div>
+            </div>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; margin:0 2px 9px;">
+            <div class="disp" style="font-size:16px; font-weight:700;">Next to predict</div>
+            <span style="font-size:11px; font-weight:600; color:var(--accentDeep); background:var(--accentSoft); padding:3px 9px; border-radius:999px; white-space:nowrap;">5 open</span>
+          </div>
+          <div style="background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:16px; padding:15px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:13px;">
+              <span class="eb" style="color:var(--sky); background:var(--skySoft); padding:4px 9px; border-radius:7px; white-space:nowrap;">Group C</span>
+              <span class="num" style="font-size:12px; font-weight:600; color:var(--amber); white-space:nowrap;">2h 14m left</span>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <div style="display:flex; flex-direction:column; align-items:center; gap:7px; width:70px;">
+                <div style="width:40px; height:28px; border-radius:6px; box-shadow:0 0 0 1px var(--border); background:linear-gradient(90deg,#0055A4 0 33.33%,#F4F5F7 33.33% 66.66%,#EF4135 66.66%);"></div>
+                <span style="font-size:12.5px; font-weight:600;">France</span>
+              </div>
+              <div style="text-align:center;">
+                <div class="num" style="font-size:12.5px; font-weight:600; color:var(--muted);">20:00</div>
+                <div style="font-size:10.5px; color:var(--sky); font-weight:600; margin-top:2px;">pick 2–1</div>
+              </div>
+              <div style="display:flex; flex-direction:column; align-items:center; gap:7px; width:70px;">
+                <div style="width:40px; height:28px; border-radius:6px; box-shadow:0 0 0 1px var(--border); background:linear-gradient(180deg,#AA151B 0 25%,#F1BF00 25% 75%,#AA151B 75%);"></div>
+                <span style="font-size:12.5px; font-weight:600;">Spain</span>
+              </div>
+            </div>
+            <button style="width:100%; margin-top:15px; height:42px; border:none; border-radius:12px; background:var(--accent); color:var(--onAccent); font-family:inherit; font-size:13.5px; font-weight:700; cursor:pointer;">Review prediction</button>
+          </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== MATCH ===== -->
+        <sc-if value="{{ isMatch }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin:4px 0 20px;">
+            <div style="width:36px; height:36px; border-radius:11px; background:var(--surface2); border:1px solid var(--border); display:grid; place-items:center; color:var(--text);"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></div>
+            <span class="eb" style="color:var(--sky); background:var(--skySoft); padding:5px 11px; border-radius:8px; white-space:nowrap;">Group C · MD 2</span>
+            <div style="width:36px;"></div>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:center; gap:18px; margin-bottom:5px;">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:9px; width:92px;">
+              <div style="width:56px; height:38px; border-radius:8px; box-shadow:0 0 0 1px var(--border); background:linear-gradient(90deg,#0055A4 0 33.33%,#F4F5F7 33.33% 66.66%,#EF4135 66.66%);"></div>
+              <span class="disp" style="font-size:15px; font-weight:700;">France</span>
+            </div>
+            <span style="font-size:13px; font-weight:600; color:var(--faint);">vs</span>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:9px; width:92px;">
+              <div style="width:56px; height:38px; border-radius:8px; box-shadow:0 0 0 1px var(--border); background:linear-gradient(180deg,#AA151B 0 25%,#F1BF00 25% 75%,#AA151B 75%);"></div>
+              <span class="disp" style="font-size:15px; font-weight:700;">Spain</span>
+            </div>
+          </div>
+          <div style="text-align:center; font-size:12px; font-weight:600; color:var(--amber); margin-bottom:18px;">Locks in 2h 14m · 20:00</div>
+
+          <div style="background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:18px; padding:18px 16px; margin-bottom:11px;">
+            <div class="eb" style="color:var(--faint); text-align:center; margin-bottom:14px;">Your scoreline</div>
+            <div style="display:flex; align-items:center; justify-content:center; gap:14px;">
+              <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+                <span style="font-size:12px; font-weight:600; color:var(--muted);">FRA</span>
+                <button onClick="{{ incHome }}" style="width:38px; height:38px; border-radius:11px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:20px; font-weight:500; cursor:pointer;">+</button>
+                <span class="num" style="font-size:38px; font-weight:800; line-height:1; min-width:36px; text-align:center;">{{ homeScore }}</span>
+                <button onClick="{{ decHome }}" style="width:38px; height:38px; border-radius:11px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:20px; font-weight:500; cursor:pointer;">−</button>
+              </div>
+              <span class="num" style="font-size:32px; font-weight:700; color:var(--faint); align-self:center;">:</span>
+              <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+                <span style="font-size:12px; font-weight:600; color:var(--muted);">ESP</span>
+                <button onClick="{{ incAway }}" style="width:38px; height:38px; border-radius:11px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:20px; font-weight:500; cursor:pointer;">+</button>
+                <span class="num" style="font-size:38px; font-weight:800; line-height:1; min-width:36px; text-align:center;">{{ awayScore }}</span>
+                <button onClick="{{ decAway }}" style="width:38px; height:38px; border-radius:11px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:20px; font-weight:500; cursor:pointer;">−</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:18px; padding:16px; display:flex; flex-direction:column; gap:15px;">
+            <div>
+              <div style="font-size:13px; font-weight:600; margin-bottom:9px;">First goal <span style="color:var(--faint); font-weight:500;">+2</span></div>
+              <div style="display:flex; gap:8px;">
+                <button style="flex:1; height:38px; border-radius:11px; border:none; background:var(--accent); color:var(--onAccent); font-family:inherit; font-size:12.5px; font-weight:700; cursor:pointer;">France</button>
+                <button style="flex:1; height:38px; border-radius:11px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer;">Spain</button>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <div style="font-size:13px; font-weight:600;">Both teams score <span style="color:var(--faint); font-weight:500;">+1</span></div>
+              <div style="width:48px; height:29px; border-radius:999px; background:var(--accent); position:relative;"><div style="position:absolute; top:3px; right:3px; width:23px; height:23px; border-radius:50%; background:#fff;"></div></div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <div style="font-size:13px; font-weight:600;">First scorer <span style="color:var(--faint); font-weight:500;">+4</span></div>
+              <div style="display:flex; align-items:center; gap:7px; background:var(--surface2); border:1px solid var(--border); padding:6px 11px; border-radius:11px;"><span style="font-size:12.5px; font-weight:500;">K. Mbappé</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>
+            </div>
+          </div>
+
+          <button style="width:100%; margin-top:14px; height:46px; border:none; border-radius:13px; background:var(--accent); color:var(--onAccent); font-family:inherit; font-size:14px; font-weight:700; cursor:pointer;">Submit prediction</button>
+          <div style="text-align:center; font-size:12px; color:var(--faint); margin-top:11px;">Locks automatically at kickoff</div>
+        </sc-if>
+
+        <!-- ===== LEADERBOARD ===== -->
+        <sc-if value="{{ isLb }}" hint-placeholder-val="{{ false }}">
+          <div style="margin:6px 0 3px;"><h2 class="disp" style="font-size:24px; font-weight:700;">Leaderboard</h2></div>
+          <div style="font-size:12.5px; color:var(--muted); font-weight:500; margin-bottom:14px;">7 players · settled to GW3</div>
+          <div style="display:inline-flex; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:3px; gap:2px; margin-bottom:14px;">
+            <button onClick="{{ setOverall }}" style="border:none; border-radius:9px; padding:7px 14px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; background:{{ overallBg }}; color:{{ overallFg }}; box-shadow:{{ overallShadow }};">Overall</button>
+            <button onClick="{{ setGw }}" style="border:none; border-radius:9px; padding:7px 14px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; background:{{ gwBg }}; color:{{ gwFg }}; box-shadow:{{ gwShadow }};">This gameweek</button>
+          </div>
+          <div style="background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:16px; padding:3px;">
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="7">
+              <div style="display:flex; align-items:center; gap:11px; padding:11px 13px; border-radius:13px; background:{{ r.bg }};">
+                <span class="num" style="width:17px; text-align:center; font-size:13.5px; font-weight:700; color:{{ r.posColor }};">{{ r.pos }}</span>
+                <div class="disp" style="width:31px; height:31px; border-radius:10px; background:{{ r.avBg }}; display:grid; place-items:center; font-size:12.5px; font-weight:700; color:{{ r.avColor }};">{{ r.initial }}</div>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-size:13.5px; font-weight:600; display:flex; align-items:center; gap:6px;">{{ r.name }}<sc-if value="{{ r.you }}" hint-placeholder-val="{{ false }}"><span style="font-size:9px; font-weight:700; color:var(--accentDeep); background:var(--accentSoft); padding:2px 6px; border-radius:999px;">YOU</span></sc-if></div>
+                  <div style="font-size:11px; color:var(--muted); font-weight:500;">{{ r.meta }}</div>
+                </div>
+                <div style="text-align:right;">
+                  <div class="num" style="font-size:14px; font-weight:700; color:{{ r.ptsColor }};">{{ r.pts }}</div>
+                  <div class="num" style="font-size:10px; font-weight:600; color:{{ r.prizeColor }};">{{ r.prize }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- ===== BRACKET ===== -->
+        <sc-if value="{{ isBracket }}" hint-placeholder-val="{{ false }}">
+          <div style="margin:6px 0 3px;"><h2 class="disp" style="font-size:24px; font-weight:700;">Bracket</h2></div>
+          <div style="font-size:12.5px; color:var(--muted); font-weight:500; margin-bottom:18px;">Knockout picks · up to <span class="num" style="color:var(--text); font-weight:600;">47</span> pts</div>
+
+          <div class="eb" style="color:var(--faint); margin:0 2px 8px;">Final</div>
+          <div style="background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:15px; overflow:hidden; margin-bottom:16px;">
+            <div style="display:flex; align-items:center; gap:11px; padding:13px 14px;">
+              <span style="width:22px; display:grid; place-items:center; color:var(--gold);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M9 18h6M10 18v-3M14 18v-3M8 21h8"/></svg></span>
+              <div style="width:26px; height:19px; border-radius:5px; box-shadow:0 0 0 1px var(--border); flex:none; background:linear-gradient(90deg,#0055A4 0 33.33%,#F4F5F7 33.33% 66.66%,#EF4135 66.66%);"></div>
+              <div style="flex:1;"><div style="font-size:14px; font-weight:600;">France</div><div style="font-size:11px; color:var(--muted); font-weight:500;">Champion</div></div>
+              <span class="num" style="font-size:12px; font-weight:700; color:var(--accentDeep);">+15</span>
+            </div>
+            <div style="height:1px; background:var(--hair); margin:0 14px;"></div>
+            <div style="display:flex; align-items:center; gap:11px; padding:13px 14px;">
+              <span style="width:22px;"></span>
+              <div style="width:26px; height:19px; border-radius:5px; box-shadow:0 0 0 1px var(--border); flex:none; background:radial-gradient(circle at 50% 50%,#FEDF00 0 33%,#009B3A 34%);"></div>
+              <div style="flex:1;"><div style="font-size:14px; font-weight:600;">Brazil</div><div style="font-size:11px; color:var(--muted); font-weight:500;">Runner-up</div></div>
+              <span class="num" style="font-size:12px; font-weight:700; color:var(--muted);">+8</span>
+            </div>
+          </div>
+
+          <div class="eb" style="color:var(--faint); margin:0 2px 8px;">Semi-finalists · +4 each</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px;">
+            <div style="display:flex; align-items:center; gap:9px; padding:11px 12px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:12px;"><div style="width:24px; height:17px; border-radius:4px; box-shadow:0 0 0 1px var(--border); flex:none; background:linear-gradient(180deg,#74ACDF 0 33.33%,#fff 33.33% 66.66%,#74ACDF 66.66%);"></div><span style="font-size:12.5px; font-weight:600;">Argentina</span></div>
+            <div style="display:flex; align-items:center; gap:9px; padding:11px 12px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:12px;"><div style="width:24px; height:17px; border-radius:4px; box-shadow:0 0 0 1px var(--border); flex:none; background:#fff; background-image:linear-gradient(#CE1124,#CE1124),linear-gradient(#CE1124,#CE1124); background-size:100% 32%,32% 100%; background-position:center; background-repeat:no-repeat;"></div><span style="font-size:12.5px; font-weight:600;">England</span></div>
+          </div>
+
+          <div class="eb" style="color:var(--faint); margin:0 2px 8px;">Quarter-finalists · +2 each</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div style="display:flex; align-items:center; gap:9px; padding:11px 12px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:12px;"><div style="width:24px; height:17px; border-radius:4px; box-shadow:0 0 0 1px var(--border); flex:none; background:linear-gradient(180deg,#AA151B 0 25%,#F1BF00 25% 75%,#AA151B 75%);"></div><span style="font-size:12.5px; font-weight:600;">Spain</span></div>
+            <div style="display:flex; align-items:center; gap:9px; padding:11px 12px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:12px;"><div style="width:24px; height:17px; border-radius:4px; box-shadow:0 0 0 1px var(--border); flex:none; background:linear-gradient(90deg,#006600 0 40%,#FF0000 40%);"></div><span style="font-size:12.5px; font-weight:600;">Portugal</span></div>
+            <div style="display:flex; align-items:center; gap:9px; padding:11px 12px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:12px;"><div style="width:24px; height:17px; border-radius:4px; box-shadow:0 0 0 1px var(--border); flex:none; background:linear-gradient(180deg,#AE1C28 0 33.33%,#fff 33.33% 66.66%,#21468B 66.66%);"></div><span style="font-size:12.5px; font-weight:600;">Netherlands</span></div>
+            <div style="display:flex; align-items:center; gap:9px; padding:11px 12px; background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:12px;"><div style="width:24px; height:17px; border-radius:4px; box-shadow:0 0 0 1px var(--border); flex:none; background:linear-gradient(180deg,#111 0 33.33%,#DD0000 33.33% 66.66%,#FFCE00 66.66%);"></div><span style="font-size:12.5px; font-weight:600;">Germany</span></div>
+          </div>
+        </sc-if>
+
+        <!-- ===== PROFILE ===== -->
+        <sc-if value="{{ isProfile }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; align-items:center; gap:14px; margin:10px 2px 18px;">
+            <div class="disp" style="width:56px; height:56px; border-radius:16px; background:linear-gradient(145deg,var(--heroFrom),var(--heroTo)); display:grid; place-items:center; font-size:24px; font-weight:800; color:var(--heroInk); box-shadow:0 8px 22px -8px rgba(15,122,72,0.7);">C</div>
+            <div style="flex:1;">
+              <div class="disp" style="font-size:20px; font-weight:700;">Caleb Soon</div>
+              <div style="font-size:12.5px; color:var(--muted); font-weight:500; margin-top:1px;">Premier League · joined June</div>
+            </div>
+            <div style="width:34px; height:34px; border-radius:11px; background:var(--surface2); border:1px solid var(--border); display:grid; place-items:center; color:var(--muted);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-bottom:18px;">
+            <div style="background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:15px; padding:14px 15px;"><div class="num" style="font-size:22px; font-weight:700;">148</div><div style="font-size:11.5px; color:var(--muted); font-weight:500;">Points</div></div>
+            <div style="background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:15px; padding:14px 15px;"><div class="num" style="font-size:22px; font-weight:700;">3rd</div><div style="font-size:11.5px; color:var(--muted); font-weight:500;">Rank of 7</div></div>
+            <div style="background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:15px; padding:14px 15px;"><div class="num" style="font-size:22px; font-weight:700; color:var(--sky);">61%</div><div style="font-size:11.5px; color:var(--muted); font-weight:500;">Accuracy</div></div>
+            <div style="background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:15px; padding:14px 15px;"><div class="num" style="font-size:22px; font-weight:700; color:var(--pos);">+$25</div><div style="font-size:11.5px; color:var(--muted); font-weight:500;">Net pool</div></div>
+          </div>
+
+          <div class="eb" style="color:var(--faint); margin:0 2px 8px;">Points per gameweek</div>
+          <div style="background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:16px; padding:16px 15px; margin-bottom:18px;">
+            <div style="display:flex; align-items:flex-end; justify-content:space-between; height:66px; gap:7px;">
+              <div style="flex:1; height:32px; border-radius:5px; background:var(--accent); opacity:0.45;"></div>
+              <div style="flex:1; height:48px; border-radius:5px; background:var(--accent); opacity:0.55;"></div>
+              <div style="flex:1; height:24px; border-radius:5px; background:var(--accent); opacity:0.45;"></div>
+              <div style="flex:1; height:64px; border-radius:5px; background:var(--accent);"></div>
+              <div style="flex:1; height:43px; border-radius:5px; background:var(--accent); opacity:0.55;"></div>
+              <div style="flex:1; height:56px; border-radius:5px; background:var(--accent); opacity:0.7;"></div>
+              <div style="flex:1; height:37px; border-radius:5px; background:var(--accent); opacity:0.5;"></div>
+              <div style="flex:1; height:51px; border-radius:5px; background:var(--accent); opacity:0.6;"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:8px;"><span class="num" style="flex:1; text-align:center; font-size:9.5px; color:var(--faint);">1</span><span class="num" style="flex:1; text-align:center; font-size:9.5px; color:var(--faint);">2</span><span class="num" style="flex:1; text-align:center; font-size:9.5px; color:var(--faint);">3</span><span class="num" style="flex:1; text-align:center; font-size:9.5px; color:var(--faint);">4</span><span class="num" style="flex:1; text-align:center; font-size:9.5px; color:var(--faint);">5</span><span class="num" style="flex:1; text-align:center; font-size:9.5px; color:var(--faint);">6</span><span class="num" style="flex:1; text-align:center; font-size:9.5px; color:var(--faint);">7</span><span class="num" style="flex:1; text-align:center; font-size:9.5px; color:var(--faint);">8</span></div>
+          </div>
+
+          <div class="eb" style="color:var(--faint); margin:0 2px 8px;">Recent</div>
+          <div style="background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:16px; overflow:hidden;">
+            <div style="display:flex; align-items:center; gap:10px; padding:12px 14px;">
+              <div style="width:24px; height:17px; border-radius:4px; box-shadow:0 0 0 1px var(--border); flex:none; background:radial-gradient(circle at 50% 50%,#FEDF00 0 33%,#009B3A 34%);"></div>
+              <span class="num" style="font-size:13.5px; font-weight:700;">2–1</span>
+              <div style="width:24px; height:17px; border-radius:4px; box-shadow:0 0 0 1px var(--border); flex:none; background:linear-gradient(180deg,#74ACDF 0 33.33%,#fff 33.33% 66.66%,#74ACDF 66.66%);"></div>
+              <span style="flex:1; font-size:11.5px; color:var(--muted); font-weight:500;">picked 2–1</span>
+              <span class="num" style="font-size:11px; font-weight:700; color:var(--pos); background:var(--accentSoft); padding:3px 8px; border-radius:999px;">+14</span>
+            </div>
+            <div style="height:1px; background:var(--hair); margin:0 14px;"></div>
+            <div style="display:flex; align-items:center; gap:10px; padding:12px 14px;">
+              <div style="width:24px; height:17px; border-radius:4px; box-shadow:0 0 0 1px var(--border); flex:none; background:linear-gradient(90deg,#0055A4 0 33.33%,#F4F5F7 33.33% 66.66%,#EF4135 66.66%);"></div>
+              <span class="num" style="font-size:13.5px; font-weight:700;">1–1</span>
+              <div style="width:24px; height:17px; border-radius:4px; box-shadow:0 0 0 1px var(--border); flex:none; background:linear-gradient(180deg,#AA151B 0 25%,#F1BF00 25% 75%,#AA151B 75%);"></div>
+              <span style="flex:1; font-size:11.5px; color:var(--muted); font-weight:500;">picked 2–1</span>
+              <span class="num" style="font-size:11px; font-weight:700; color:var(--muted); background:var(--surface2); padding:3px 8px; border-radius:999px;">+5</span>
+            </div>
+            <div style="height:1px; background:var(--hair); margin:0 14px;"></div>
+            <div style="display:flex; align-items:center; gap:10px; padding:12px 14px;">
+              <div style="width:24px; height:17px; border-radius:4px; box-shadow:0 0 0 1px var(--border); flex:none; background:linear-gradient(90deg,#006600 0 40%,#FF0000 40%);"></div>
+              <span class="num" style="font-size:13.5px; font-weight:700;">3–0</span>
+              <div style="width:24px; height:17px; border-radius:4px; box-shadow:0 0 0 1px var(--border); flex:none; background:linear-gradient(180deg,#111 0 33.33%,#DD0000 33.33% 66.66%,#FFCE00 66.66%);"></div>
+              <span style="flex:1; font-size:11.5px; color:var(--muted); font-weight:500;">picked 2–0</span>
+              <span class="num" style="font-size:11px; font-weight:700; color:var(--pos); background:var(--accentSoft); padding:3px 8px; border-radius:999px;">+9</span>
+            </div>
+          </div>
+        </sc-if>
+
+      </div>
+
+      <!-- bottom nav -->
+      <div style="position:absolute; bottom:0; left:0; right:0; height:74px; background:var(--navBg); backdrop-filter:blur(16px) saturate(140%); -webkit-backdrop-filter:blur(16px) saturate(140%); border-top:1px solid var(--border); display:flex; align-items:flex-start; justify-content:space-around; padding-top:11px;">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:4px; color:{{ navHome }};"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span style="font-size:9.5px; font-weight:600;">Home</span></div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:4px; color:{{ navFix }};"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg><span style="font-size:9.5px; font-weight:600;">Fixtures</span></div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:4px; color:{{ navBracket }};"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h6M4 18h6M10 6v12M10 12h5M15 12h5"/></svg><span style="font-size:9.5px; font-weight:600;">Bracket</span></div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:4px; color:{{ navRanks }};"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M9 18h6M10 18v-3M14 18v-3M8 21h8"/></svg><span style="font-size:9.5px; font-weight:600;">Ranks</span></div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:4px; color:{{ navProfile }};"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span style="font-size:9.5px; font-weight:600;">Profile</span></div>
+      </div>
+      <div style="position:absolute; bottom:7px; left:50%; transform:translateX(-50%); width:124px; height:5px; border-radius:999px; background:var(--text); opacity:0.26;"></div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:340,&quot;height&quot;:680},&quot;screen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dashboard&quot;,&quot;match&quot;,&quot;leaderboard&quot;,&quot;bracket&quot;,&quot;profile&quot;],&quot;default&quot;:&quot;dashboard&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;rf&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { homeScore: 2, awayScore: 1, tab: 'overall' };
+
+  buildRows() {
+    const overall = [
+      { pos: 1, initial: 'M', name: 'Marcus', meta: '64% · 9 exact', pts: 181, prize: '+$40' },
+      { pos: 2, initial: 'L', name: 'Lena',   meta: '59% · 7 exact', pts: 163, prize: '+$20' },
+      { pos: 3, initial: 'C', name: 'Caleb',  meta: '61% · 9 exact', pts: 148, prize: '+$10', you: true },
+      { pos: 4, initial: 'P', name: 'Priya',  meta: '55% · 6 exact', pts: 140, prize: '$0' },
+      { pos: 5, initial: 'T', name: 'Tom',    meta: '52% · 5 exact', pts: 132, prize: '-$10' },
+      { pos: 6, initial: 'S', name: 'Sara',   meta: '48% · 4 exact', pts: 119, prize: '-$20' },
+      { pos: 7, initial: 'D', name: 'Dan',    meta: '44% · 3 exact', pts: 104, prize: '-$40' },
+    ];
+    const gw = [
+      { pos: 1, initial: 'C', name: 'Caleb',  meta: 'GW3 · 4 exact', pts: 38, prize: '+$15', you: true },
+      { pos: 2, initial: 'L', name: 'Lena',   meta: 'GW3 · 3 exact', pts: 34, prize: '+$10' },
+      { pos: 3, initial: 'M', name: 'Marcus', meta: 'GW3 · 3 exact', pts: 29, prize: '+$5' },
+      { pos: 4, initial: 'P', name: 'Priya',  meta: 'GW3 · 2 exact', pts: 24, prize: '$0' },
+      { pos: 5, initial: 'S', name: 'Sara',   meta: 'GW3 · 2 exact', pts: 20, prize: '-$5' },
+      { pos: 6, initial: 'T', name: 'Tom',    meta: 'GW3 · 1 exact', pts: 17, prize: '-$10' },
+      { pos: 7, initial: 'D', name: 'Dan',    meta: 'GW3 · 1 exact', pts: 12, prize: '-$15' },
+    ];
+    const src = this.state.tab === 'overall' ? overall : gw;
+    return src.map((r) => {
+      const first = r.pos === 1;
+      const prizeColor = r.prize.startsWith('+') ? 'var(--pos)' : r.prize.startsWith('-') ? 'var(--neg)' : 'var(--muted)';
+      return {
+        ...r,
+        you: !!r.you,
+        bg: r.you ? 'var(--accentSoft)' : 'transparent',
+        posColor: first ? 'var(--gold)' : r.you ? 'var(--accentDeep)' : 'var(--muted)',
+        avBg: r.you ? 'var(--accent)' : first ? 'rgba(255,206,90,0.18)' : 'var(--surface3)',
+        avColor: r.you ? 'var(--onAccent)' : first ? 'var(--gold)' : 'var(--text)',
+        ptsColor: first ? 'var(--gold)' : 'var(--text)',
+        prizeColor,
+      };
+    });
+  }
+
+  renderVals() {
+    const s = this.props.screen || 'dashboard';
+    const A = 'var(--accentDeep)', D = 'var(--faint)';
+    const clamp = (n) => Math.max(0, Math.min(20, n));
+    const overall = this.state.tab === 'overall';
+    const onShadow = 'var(--shadow)';
+    return {
+      rf: this.props.rf || 'dark',
+      isDash: s === 'dashboard', isMatch: s === 'match', isLb: s === 'leaderboard',
+      isBracket: s === 'bracket', isProfile: s === 'profile',
+      navHome: s === 'dashboard' ? A : D,
+      navFix: s === 'match' ? A : D,
+      navBracket: s === 'bracket' ? A : D,
+      navRanks: s === 'leaderboard' ? A : D,
+      navProfile: s === 'profile' ? A : D,
+      homeScore: this.state.homeScore,
+      awayScore: this.state.awayScore,
+      incHome: () => this.setState((x) => ({ homeScore: clamp(x.homeScore + 1) })),
+      decHome: () => this.setState((x) => ({ homeScore: clamp(x.homeScore - 1) })),
+      incAway: () => this.setState((x) => ({ awayScore: clamp(x.awayScore + 1) })),
+      decAway: () => this.setState((x) => ({ awayScore: clamp(x.awayScore - 1) })),
+      setOverall: () => this.setState({ tab: 'overall' }),
+      setGw: () => this.setState({ tab: 'gw' }),
+      overallBg: overall ? 'var(--surface)' : 'transparent',
+      overallFg: overall ? 'var(--text)' : 'var(--muted)',
+      overallShadow: overall ? onShadow : 'none',
+      gwBg: overall ? 'transparent' : 'var(--surface)',
+      gwFg: overall ? 'var(--muted)' : 'var(--text)',
+      gwShadow: overall ? 'none' : onShadow,
+      rows: this.buildRows(),
+    };
+  }
+}
+</script>
+</body>
+</html>

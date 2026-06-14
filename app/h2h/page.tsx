@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { PageHeader, Card, Avatar, Skeleton, EmptyState, UsersIcon, ProgressBar, Select } from '@/components/ui'
+import { PageHeader, Card, Avatar, Skeleton, EmptyState, UsersIcon, ProgressBar, Select, Flag } from '@/components/ui'
 import { getActiveLeague } from '@/lib/league'
 import { weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights, type MatchBreakdown } from '@/lib/scoring'
 import type { ProfileLite } from '@/lib/leaderboard'
@@ -335,11 +335,11 @@ export default function H2HPage() {
                           <div className="text-center min-w-0">
                             {match ? (
                               <div className="flex items-center justify-center gap-1 text-[11px] font-semibold">
-                                <span>{home?.flag}</span>
+                                {home && <Flag code={home.code} size={16} />}
                                 {match.real_home_score != null
                                   ? <span className="tabular-nums font-extrabold text-textp">{match.real_home_score}–{match.real_away_score}</span>
                                   : <span className="text-texts">vs</span>}
-                                <span>{away?.flag}</span>
+                                {away && <Flag code={away.code} size={16} />}
                               </div>
                             ) : (
                               <span className="text-[11px] text-texts tabular-nums">{match_id.slice(0, 6)}</span>

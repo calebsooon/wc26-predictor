@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
 import {
   Card, Pill, Button, ScoreStepper, SectionHeader, Avatar, Skeleton,
-  LockIcon, Countdown, EmptyState,
+  LockIcon, Countdown, EmptyState, Flag,
 } from '@/components/ui'
 import { ScoreDisplay } from '@/components/football'
 import { type DBMatch } from '@/lib/match-ui'
@@ -185,7 +185,7 @@ export default function MatchDetailPage() {
         </div>
         <div className="flex items-center justify-between">
           <div className="flex-1 flex flex-col items-center gap-2.5">
-            <span className="text-[56px] leading-none">{home.flag}</span>
+            <Flag code={match.home_team} size={44} />
             <span className="font-extrabold text-textp text-center leading-tight">{home.name}</span>
           </div>
           <div className="px-3 text-center shrink-0">
@@ -195,7 +195,7 @@ export default function MatchDetailPage() {
             <div className="text-[11px] text-texts font-bold mt-1.5">{fmtDateTime(match.match_date)}</div>
           </div>
           <div className="flex-1 flex flex-col items-center gap-2.5">
-            <span className="text-[56px] leading-none">{away.flag}</span>
+            <Flag code={match.away_team} size={44} />
             <span className="font-extrabold text-textp text-center leading-tight">{away.name}</span>
           </div>
         </div>
@@ -224,12 +224,12 @@ export default function MatchDetailPage() {
 
           <div className="flex items-center justify-center gap-4 sm:gap-7 py-3">
             <div className="flex flex-col items-center gap-2">
-              <span className="text-[34px] leading-none">{home.flag}</span>
+              <Flag code={match.home_team} size={32} />
               <ScoreStepper value={h} onChange={setH} />
             </div>
             <span className="text-2xl font-black text-texts mt-7">:</span>
             <div className="flex flex-col items-center gap-2">
-              <span className="text-[34px] leading-none">{away.flag}</span>
+              <Flag code={match.away_team} size={32} />
               <ScoreStepper value={a} onChange={setA} />
             </div>
           </div>
@@ -349,7 +349,7 @@ export default function MatchDetailPage() {
                   ? displayPts >= 8 ? 'text-success' : displayPts > 0 ? 'text-gold' : 'text-error'
                   : 'text-texts'
                 const firstGoalTeam = o.pred_first_goal_team
-                  ? (o.pred_first_goal_team === 'NONE' ? 'No goal' : getTeam(o.pred_first_goal_team)?.flag ?? o.pred_first_goal_team)
+                  ? (o.pred_first_goal_team === 'NONE' ? 'No goal' : getTeam(o.pred_first_goal_team)?.name ?? o.pred_first_goal_team)
                   : null
                 const firstScorerName = o.pred_no_scorer
                   ? 'No scorer'
@@ -378,8 +378,8 @@ export default function MatchDetailPage() {
                     {o.pred_home != null && o.pred_away != null ? (
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         {/* score */}
-                        <span className="text-[15px] font-extrabold tabular-nums text-textp">
-                          {home.flag} {o.pred_home}–{o.pred_away} {away.flag}
+                        <span className="inline-flex items-center gap-1.5 text-[15px] font-extrabold tabular-nums text-textp">
+                          <Flag code={match.home_team} size={16} /> {o.pred_home}–{o.pred_away} <Flag code={match.away_team} size={16} />
                         </span>
                         {/* first goal team */}
                         {firstGoalTeam && (

@@ -6,7 +6,7 @@ import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam, TEAMS } from '@/lib/teams'
 import MatchModal, { type ModalMatch } from '@/components/MatchModal'
-import { PageHeader, Card, Tabs, Skeleton, EmptyState, TreeIcon, Pill, Button, SectionHeader, SearchIcon, LockIcon } from '@/components/ui'
+import { PageHeader, Card, Tabs, Skeleton, EmptyState, TreeIcon, Pill, Button, SectionHeader, SearchIcon, LockIcon, Flag, TrophyIcon } from '@/components/ui'
 import { getActiveLeague } from '@/lib/league'
 import { fmtDateTime } from '@/lib/date-format'
 
@@ -63,7 +63,7 @@ function BracketCard({ match, onClick }: { match: Match | undefined; onClick?: (
     const t = getTeam(code)
     return (
       <div className={`flex items-center gap-2 px-2.5 py-2 ${win ? 'bg-primary/15' : ''}`}>
-        <span className="text-base leading-none shrink-0">{isTBC ? '🏳️' : t.flag}</span>
+        {isTBC ? <span className="w-[32px] h-[22px] inline-block rounded-[3px] bg-surface3 border border-border shrink-0" /> : <Flag code={t.code} size={22} />}
         <span className={`text-xs font-bold flex-1 truncate ${win ? 'text-primary' : 'text-textp'}`}>{isTBC ? 'TBD' : t.name}</span>
         {hasScore && <span className={`text-xs font-extrabold tabular-nums ${win ? 'text-primary' : 'text-texts'}`}>{score}</span>}
       </div>
@@ -133,7 +133,7 @@ function TeamPicker({ value, onChange, exclude = [], placeholder = 'Pick a team�
                 <span className="text-lg">{t.flag}</span>
                 <span className="text-sm font-semibold text-textp flex-1">{t.name}</span>
                 <span className="text-xs text-texts">{t.code}</span>
-                {value === t.code && <span className="text-primary">✓</span>}
+                {value === t.code && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-primary shrink-0"><path d="m5 12 5 5L20 7"/></svg>}
               </button>
             ))}
             {options.length === 0 && <div className="px-3 py-4 text-sm text-texts text-center">No teams found</div>}
@@ -227,15 +227,15 @@ function PhasePicks({
 
       <div className="space-y-5 mt-4">
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-texts mb-1.5">🏆 Champion</label>
+          <label className="eyebrow mb-1.5 flex items-center gap-1.5"><TrophyIcon size={11} className="text-gold" /> Champion</label>
           <TeamPicker value={pick.champion} onChange={(c) => setPick((p) => ({ ...p, champion: c }))} exclude={allTaken.filter((t) => t !== pick.champion)} placeholder="Pick tournament winner…" disabled={locked} />
         </div>
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-texts mb-1.5">🥈 Runner-Up</label>
+          <label className="eyebrow mb-1.5">Runner-Up</label>
           <TeamPicker value={pick.runner_up} onChange={(c) => setPick((p) => ({ ...p, runner_up: c }))} exclude={allTaken.filter((t) => t !== pick.runner_up)} placeholder="Pick finalist…" disabled={locked} />
         </div>
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-texts mb-1.5">🏅 Semi-Finalists</label>
+          <label className="eyebrow mb-1.5">Semi-Finalists</label>
           <div className="grid grid-cols-2 gap-2">
             {[0, 1].map((i) => (
               <TeamPicker key={i} value={pick.semi[i] ?? null} onChange={(c) => setSemi(i, c)} exclude={allTaken.filter((t) => t !== pick.semi[i])} placeholder={`Semi #${i + 1}…`} disabled={locked} />
@@ -243,7 +243,7 @@ function PhasePicks({
           </div>
         </div>
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-texts mb-1.5">🎖 Quarter-Finalists</label>
+          <label className="eyebrow mb-1.5">Quarter-Finalists</label>
           <div className="grid grid-cols-2 gap-2">
             {[0, 1, 2, 3].map((i) => (
               <TeamPicker key={i} value={pick.quarter[i] ?? null} onChange={(c) => setQuarter(i, c)} exclude={allTaken.filter((t) => t !== pick.quarter[i])} placeholder={`Quarter #${i + 1}…`} disabled={locked} />

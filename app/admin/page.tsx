@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
 import {
-  PageHeader, Card, Button, Pill, ScoreStepper, ChipRow, Skeleton, ChevDown, SearchIcon, SectionHeader, LeagueBadge,
+  PageHeader, Card, Button, Pill, ScoreStepper, ChipRow, Skeleton, ChevDown, SearchIcon, SectionHeader, LeagueBadge, Flag,
 } from '@/components/ui'
 import { WEIGHT_FIELDS, resolveWeights, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { fmtDateTime } from '@/lib/date-format'
@@ -102,9 +102,9 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
       <div className="flex items-center gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 text-sm font-bold">
-            <span>{home.flag}</span><span className="truncate">{home.name}</span>
+            <Flag code={home.code} size={18} /><span className="truncate">{home.name}</span>
             <span className="text-texts">v</span>
-            <span>{away.flag}</span><span className="truncate">{away.name}</span>
+            <Flag code={away.code} size={18} /><span className="truncate">{away.name}</span>
           </div>
           <div className="text-[11px] text-texts mt-0.5">{fmtDateTime(m.match_date)} · {m.rounds?.name ?? '—'}</div>
         </div>
@@ -145,8 +145,8 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
                   <button onClick={() => { setScorerId(null); setScorerOpen(false) }} className="w-full px-3 h-10 text-left text-sm text-texts hover:bg-surface">— Clear —</button>
                   {scorerOptions.map((o) => (
                     <button key={o.id} onClick={() => { setScorerId(o.id); setScorerOpen(false); setSearch('') }} className="w-full px-3 h-10 flex items-center gap-2 hover:bg-surface text-left">
-                      <span>{getTeam(o.team_code).flag}</span><span className="text-sm text-textp flex-1">{o.name}</span>
-                      {scorerId === o.id && <span className="text-primary">✓</span>}
+                      <Flag code={o.team_code} size={16} /><span className="text-sm text-textp flex-1">{o.name}</span>
+                      {scorerId === o.id && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-primary shrink-0"><path d="m5 12 5 5L20 7"/></svg>}
                     </button>
                   ))}
                 </div>
@@ -167,7 +167,7 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
                     className={`h-10 rounded-lg border text-sm font-bold flex items-center justify-center gap-1.5 transition-all
                       ${matchWinner === o.k ? 'border-gold bg-gold/10 text-gold' : 'border-border bg-surface text-texts'}`}
                   >
-                    <span>{o.t.flag}</span>{o.t.code}
+                    <Flag code={o.t.code} size={16} />{o.t.code}
                   </button>
                 ))}
               </div>

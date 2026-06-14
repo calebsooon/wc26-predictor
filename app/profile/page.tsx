@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { motion } from 'framer-motion'
 import {
-  PageHeader, Card, StatCard, Button, Avatar, ProgressBar, Skeleton, Pill, SectionHeader, EmptyState, TrophyIcon,
+  PageHeader, Card, StatCard, Button, Avatar, ProgressBar, Skeleton, Pill, SectionHeader, EmptyState, TrophyIcon, Flag, LockIcon, ChartIcon, BoltIcon,
 } from '@/components/ui'
 import { getTeam } from '@/lib/teams'
 import { weightedMatchPoints, weightedGroupPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
@@ -36,6 +36,15 @@ interface ScoredPred {
     group_name: string | null
     gw_number: number | null
   } | null
+}
+
+const BADGE_ICONS: Record<string, React.ReactNode> = {
+  sniper: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="3" x2="12" y2="7"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="3" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="21" y2="12"/></svg>,
+  boot: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M9 18h6M10 18v-3M14 18v-3M8 21h8"/></svg>,
+  prophet: <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>,
+  genius: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>,
+  merchant: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>,
+  fraud: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18.364 5.636 5.636 18.364M5.636 5.636l12.728 12.728"/></svg>,
 }
 
 const CATEGORIES = [
@@ -139,12 +148,12 @@ export default function ProfilePage() {
   const badges = useMemo(() => {
     const c = (key: typeof CATEGORIES[number]['key']) => preds.filter((p) => (p[key] ?? 0) > 0).length
     return [
-      { id: 'sniper', name: 'Scoreline Sniper', icon: '🎯', earned: stats.exact >= 5, hint: '5 exact scores' },
-      { id: 'boot', name: 'Golden Boot Guru', icon: '⚽', earned: c('pts_first_scorer') >= 3, hint: '3 first scorers' },
-      { id: 'prophet', name: 'First Blood Prophet', icon: '🩸', earned: c('pts_first_team') >= 10, hint: '10 first-goal team calls' },
-      { id: 'genius', name: 'Group Stage Genius', icon: '📊', earned: stats.totalPts >= 100, hint: '100 points' },
-      { id: 'merchant', name: 'Upset Merchant', icon: '💣', earned: stats.scored >= 20 && stats.acc >= 60, hint: '60% over 20 picks' },
-      { id: 'fraud', name: 'Fraud Watch', icon: '🤡', earned: stats.scored >= 10 && stats.acc < 30, hint: 'Sub-30% accuracy' },
+      { id: 'sniper', name: 'Scoreline Sniper', earned: stats.exact >= 5, hint: '5 exact scores' },
+      { id: 'boot', name: 'Golden Boot Guru', earned: c('pts_first_scorer') >= 3, hint: '3 first scorers' },
+      { id: 'prophet', name: 'First Blood Prophet', earned: c('pts_first_team') >= 10, hint: '10 first-goal team calls' },
+      { id: 'genius', name: 'Group Stage Genius', earned: stats.totalPts >= 100, hint: '100 points' },
+      { id: 'merchant', name: 'Upset Merchant', earned: stats.scored >= 20 && stats.acc >= 60, hint: '60% over 20 picks' },
+      { id: 'fraud', name: 'Fraud Watch', earned: stats.scored >= 10 && stats.acc < 30, hint: 'Sub-30% accuracy' },
     ]
   }, [preds, stats])
 
@@ -270,7 +279,9 @@ export default function ProfilePage() {
               transition={b.earned ? { type: 'spring', stiffness: 500, damping: 18, delay: i * 0.05 } : { duration: 0.2 }}
               className={`flex flex-col items-center text-center gap-2 p-4 rounded-xl border ${b.earned ? 'border-gold/30 bg-gold/[0.06]' : 'border-border bg-surface'}`}
             >
-              <div className={`text-2xl grid place-items-center w-11 h-11 rounded-lg ${b.earned ? 'bg-gold/10' : 'bg-card'}`}>{b.earned ? b.icon : '🔒'}</div>
+              <div className={`grid place-items-center w-11 h-11 rounded-[11px] ${b.earned ? 'bg-gold/10 text-gold' : 'bg-surface2 text-faint'}`}>
+                {b.earned ? (BADGE_ICONS[b.id] ?? <TrophyIcon size={20} />) : <LockIcon size={18} />}
+              </div>
               <span className="text-[11px] font-bold text-textp leading-tight">{b.name}</span>
               <span className="text-[10px] text-texts">{b.hint}</span>
             </motion.div>
@@ -297,9 +308,9 @@ export default function ProfilePage() {
                 return (
                   <div key={p.match_id} className="flex items-center gap-3 p-2.5 rounded-lg bg-surface border border-border/60">
                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                      <span className="text-base leading-none">{homeTeam.flag}</span>
+                      <Flag code={m.home_team} size={18} />
                       <span className="text-[11px] font-extrabold tabular-nums text-textp">{m.real_home_score}–{m.real_away_score}</span>
-                      <span className="text-base leading-none">{awayTeam.flag}</span>
+                      <Flag code={m.away_team} size={18} />
                     </div>
                     {p.pred_home != null && p.pred_away != null && (
                       <span className="text-[11px] text-texts font-medium">
@@ -324,36 +335,36 @@ export default function ProfilePage() {
         ) : (
           <div className="space-y-3 mt-3">
             {[
-              { label: '🏆 Champion', value: tournamentPred.champion },
-              { label: '🥈 Runner-Up', value: tournamentPred.runner_up },
+              { label: 'Champion', value: tournamentPred.champion },
+              { label: 'Runner-Up', value: tournamentPred.runner_up },
             ].map((row) => row.value && (
-              <div key={row.label} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-surface border border-border">
-                <span className="text-lg">{getTeam(row.value).flag}</span>
+              <div key={row.label} className="flex items-center gap-2.5 p-2.5 rounded-xl bg-surface2 border border-border">
+                <Flag code={row.value} size={22} />
                 <div>
-                  <p className="text-[11px] text-texts font-bold uppercase tracking-wider">{row.label}</p>
+                  <p className="eyebrow">{row.label}</p>
                   <p className="text-sm font-bold text-textp">{getTeam(row.value).name}</p>
                 </div>
               </div>
             ))}
             {tournamentPred.semi?.length > 0 && (
-              <div className="p-2.5 rounded-lg bg-surface border border-border">
-                <p className="text-[11px] text-texts font-bold uppercase tracking-wider mb-2">🏅 Semi-Finalists</p>
+              <div className="p-2.5 rounded-xl bg-surface2 border border-border">
+                <p className="eyebrow mb-2">Semi-Finalists</p>
                 <div className="flex flex-wrap gap-2">
                   {tournamentPred.semi.map((code) => (
                     <div key={code} className="flex items-center gap-1.5 text-sm font-semibold">
-                      <span>{getTeam(code).flag}</span><span>{getTeam(code).name}</span>
+                      <Flag code={code} size={18} /><span>{getTeam(code).name}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
             {tournamentPred.quarter?.length > 0 && (
-              <div className="p-2.5 rounded-lg bg-surface border border-border">
-                <p className="text-[11px] text-texts font-bold uppercase tracking-wider mb-2">🎖 Quarter-Finalists</p>
+              <div className="p-2.5 rounded-xl bg-surface2 border border-border">
+                <p className="eyebrow mb-2">Quarter-Finalists</p>
                 <div className="flex flex-wrap gap-2">
                   {tournamentPred.quarter.map((code) => (
                     <div key={code} className="flex items-center gap-1.5 text-sm font-semibold">
-                      <span>{getTeam(code).flag}</span><span>{getTeam(code).name}</span>
+                      <Flag code={code} size={18} /><span>{getTeam(code).name}</span>
                     </div>
                   ))}
                 </div>
@@ -373,7 +384,7 @@ export default function ProfilePage() {
                 <p className="text-xs font-extrabold text-texts mb-1">Group {gp.group_name}</p>
                 <div className="flex justify-center gap-0.5 mb-1.5">
                   {(gp.ranked_codes ?? []).slice(0, 4).map((code) => (
-                    <span key={code} className="text-sm">{getTeam(code).flag}</span>
+                    <Flag key={code} code={code} size={14} />
                   ))}
                 </div>
                 {gp.points_awarded !== null ? (
