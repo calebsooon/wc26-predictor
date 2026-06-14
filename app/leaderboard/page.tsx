@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { PageHeader, Tabs, Card, Skeleton, EmptyState, TrophyIcon, Avatar, LeagueBadge, Pill, ChipRow } from '@/components/ui'
+import { PageHeader, Tabs, Card, Skeleton, EmptyState, TrophyIcon, Avatar, LeagueBadge, Pill, ChipRow, Flag, BoltIcon } from '@/components/ui'
 import { LeaderboardTable, type LBRow } from '@/components/football'
 import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
 import { getActiveLeague, getMyLeagues, setActiveLeague, isMoneyLeague, type League, type LeagueLabel } from '@/lib/league'
@@ -317,6 +317,7 @@ export default function LeaderboardPage() {
             <EmptyState icon={<TrophyIcon size={22} />} title="No players yet" desc="Players will appear here once they sign up." />
           ) : (
             <>
+              <InsightStrip board={board} hasSnapshots={hasSnapshots} />
               {podium.length >= 3 && (
                 <div className="grid grid-cols-3 gap-3">
                   {[podium[1], podium[0], podium[2]].map((p, idx) => {
@@ -328,7 +329,7 @@ export default function LeaderboardPage() {
                     const prizeColor = tone === 'green' ? 'rgb(var(--success))' : tone === 'red' ? 'rgb(var(--error))' : 'rgb(var(--texts))'
                     return (
                       <Card key={p.id} className={`p-4 text-center ${place === 1 ? 'sm:-mt-3' : ''} ${p.you ? 'border-blue/40' : ''}`}>
-                        <div className="text-xs font-black mb-2" style={{ color }}>{place === 1 ? '🥇' : place === 2 ? '🥈' : '🥉'}</div>
+                        <div className="text-[11px] font-black mb-2 tabular-nums" style={{ color }}>{place === 1 ? '1st' : place === 2 ? '2nd' : '3rd'}</div>
                         <div className="flex justify-center mb-2"><Avatar name={p.name} src={p.avatar} size={44} ring={place === 1} you={p.you} /></div>
                         <div className="font-bold text-sm truncate" style={place === 1 ? { color } : undefined}>{p.name}</div>
                         <div className="text-2xl font-extrabold tabular-nums mt-1" style={{ color }}>{p.pts}</div>
@@ -358,6 +359,49 @@ export default function LeaderboardPage() {
           )}
         </>
       )}
+    </div>
+  )
+}
+
+/* ── Insight strip ─────────────────────────────── */
+function InsightStrip({ board, hasSnapshots }: { board: LBRow[]; hasSnapshots: boolean }) {
+  const leader = board[0]
+  const bigMover = hasSnapshots
+    ? [...board].filter((r) => r.move != null && r.move !== 0).sort((a, b) => Math.abs(b.move!) - Math.abs(a.move!))[0]
+    : null
+  const topExact = [...board].sort((a, b) => (b.exact ?? 0) - (a.exact ?? 0))[0]
+
+  if (!leader) return null
+
+  const items = [
+    leader && {
+      icon: <TrophyIcon size={13} className="text-gold shrink-0" />,
+      label: 'Leading',
+      value: `${leader.name} · ${leader.pts}pts`,
+    },
+    bigMover && {
+      icon: <span className={`text-[11px] font-bold shrink-0 tabular-nums ${(bigMover.move ?? 0) > 0 ? 'text-success' : 'text-error'}`}>{(bigMover.move ?? 0) > 0 ? '▲' : '▼'}{Math.abs(bigMover.move ?? 0)}</span>,
+      label: 'Biggest move',
+      value: bigMover.name,
+    },
+    topExact && (topExact.exact ?? 0) > 0 && {
+      icon: <BoltIcon size={13} className="text-amber shrink-0" />,
+      label: 'Most exact',
+      value: `${topExact.name} · ${topExact.exact}`,
+    },
+  ].filter(Boolean) as { icon: React.ReactNode; label: string; value: string }[]
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      {items.map((item) => (
+        <div key={item.label} className="flex items-center gap-2.5 p-2.5 rounded-xl bg-surface border border-border">
+          {item.icon}
+          <div className="min-w-0">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-texts leading-none mb-0.5">{item.label}</p>
+            <p className="text-[12px] font-extrabold text-textp truncate">{item.value}</p>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -430,12 +474,12 @@ function PicksView({
             {/* Teams */}
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <span className="text-2xl leading-none">{home.flag}</span>
+                <Flag code={home.code} size={20} />
                 <span className="font-bold text-textp">{home.name}</span>
               </div>
               <span className="text-texts font-bold text-sm px-2">vs</span>
               <div className="flex items-center gap-2 flex-row-reverse">
-                <span className="text-2xl leading-none">{away.flag}</span>
+                <Flag code={away.code} size={20} />
                 <span className="font-bold text-textp text-right">{away.name}</span>
               </div>
             </div>

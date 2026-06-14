@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
-import { PageHeader, Card, Tabs, Button, Skeleton, Pill } from '@/components/ui'
+import { PageHeader, Card, Tabs, Button, Skeleton, Pill, Flag } from '@/components/ui'
 import { getActiveLeague } from '@/lib/league'
 import { DEFAULT_WEIGHTS, weightedGroupPoints, type ScoringWeights } from '@/lib/scoring'
 
@@ -15,6 +15,7 @@ interface Match {
   real_away_score: number | null
   group_name: string
   gameweek: number
+  match_date: string
 }
 
 interface TeamRow { team: string; p: number; w: number; d: number; l: number; gf: number; ga: number; gd: number; pts: number }
@@ -62,7 +63,7 @@ export default function GroupsPage() {
         setUserId(user?.id ?? null)
         const { data, error: matchErr } = await supabase
           .from('matches')
-          .select('id, home_team, away_team, real_home_score, real_away_score, group_name, gameweek')
+          .select('id, home_team, away_team, real_home_score, real_away_score, group_name, gameweek, match_date')
           .not('group_name', 'is', null)
           .order('match_date')
         if (matchErr) throw matchErr
@@ -149,6 +150,16 @@ export default function GroupsPage() {
   const ptsAwarded = currentPred?.points_awarded ?? null
   const groupScoringActive = weights.groupPosition > 0
 
+  // Side panel data
+  const topTwo = table.slice(0, 2)
+  const upcomingInGroup = useMemo(() =>
+    matches.filter((m) => m.group_name === group && m.real_home_score === null)
+      .sort((a, b) => +new Date(a.match_date) - +new Date(b.match_date))
+      .slice(0, 3),
+    [matches, group],
+  )
+  const myPredForGroup = savedPreds[group]
+
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="World Cup 2026" title="Groups" sub={leagueName ? `Live standings and ${leagueName} group-pick settings.` : 'Live standings and your predicted finishing order.'} />
@@ -170,91 +181,176 @@ export default function GroupsPage() {
 
       <Tabs tabs={[{ key: 'standings', label: 'Standings' }, { key: 'predict', label: 'My Prediction' }]} value={mode} onChange={setMode} />
 
-      {mode === 'standings' ? (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-texts border-b border-border">
-                <th className="text-left py-2.5 px-3 font-bold w-6">#</th>
-                <th className="text-left py-2.5 px-3 font-bold">Team</th>
-                {['P', 'W', 'D', 'L', 'GF', 'GA', 'GD'].map((h) => <th key={h} className="py-2.5 px-2 font-bold text-center">{h}</th>)}
-                <th className="py-2.5 px-3 font-bold text-right">Pts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {table.map((row, i) => {
-                const t = getTeam(row.team)
-                const qualify = i < 2
-                return (
-                  <tr key={row.team} className={`border-b border-border/50 last:border-0 ${qualify ? '' : 'opacity-60'}`}>
-                    <td className="py-2.5 px-3 text-texts font-bold text-xs">{i + 1}</td>
-                    <td className="py-2.5 px-3 font-bold text-textp">
-                      <div className="flex items-center gap-2">
-                        {qualify && <div className="w-1 h-4 rounded-full bg-primary" />}
-                        <span>{t.flag}</span><span className="truncate">{t.name}</span>
-                      </div>
-                    </td>
-                    <td className="py-2.5 px-2 text-center text-texts">{row.p}</td>
-                    <td className="py-2.5 px-2 text-center text-texts">{row.w}</td>
-                    <td className="py-2.5 px-2 text-center text-texts">{row.d}</td>
-                    <td className="py-2.5 px-2 text-center text-texts">{row.l}</td>
-                    <td className="py-2.5 px-2 text-center text-texts">{row.gf}</td>
-                    <td className="py-2.5 px-2 text-center text-texts">{row.ga}</td>
-                    <td className="py-2.5 px-2 text-center text-texts">{row.gd > 0 ? `+${row.gd}` : row.gd}</td>
-                    <td className="py-2.5 px-3 text-right font-extrabold text-textp">{row.pts}</td>
+      <div className="flex flex-col lg:flex-row gap-5">
+        {/* Main content */}
+        <div className="flex-1 min-w-0">
+          {mode === 'standings' ? (
+            <Card className="overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-texts border-b border-border">
+                    <th className="text-left py-2.5 px-3 font-bold w-6">#</th>
+                    <th className="text-left py-2.5 px-3 font-bold">Team</th>
+                    {['P', 'W', 'D', 'L', 'GF', 'GA', 'GD'].map((h) => <th key={h} className="py-2.5 px-2 font-bold text-center">{h}</th>)}
+                    <th className="py-2.5 px-3 font-bold text-right">Pts</th>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          <p className="text-[10px] text-texts px-3 py-2 border-t border-border/50">Green bar = qualify for Round of 32 · Sorted by Pts → GD → GF</p>
-        </Card>
-      ) : (
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-texts">Reorder how you think Group {group} finishes.</p>
-            <div className="flex items-center gap-2">
-              {groupScoringActive && ptsAwarded !== null && (
-                <Pill tone={ptsAwarded > 0 ? 'gold' : 'default'}>
-                  +{weightedGroupPoints(ptsAwarded, weights)} pts
-                </Pill>
-              )}
-              {groupScoringActive && ptsAwarded === null && groupComplete && (
-                <Pill tone="default">Awaiting scoring</Pill>
-              )}
-              {!groupScoringActive && <Pill tone="default">For fun</Pill>}
-              {savingMsg && <Pill tone={savingMsg.includes('✓') ? 'green' : 'default'}>{savingMsg}</Pill>}
-            </div>
-          </div>
-          <div className="space-y-2">
-            {order.map((code, i) => {
-              const t = getTeam(code)
-              const saved = currentPred?.ranked_codes?.[i]
-              const correct = groupComplete && saved === table[i]?.team
-              return (
-                <div key={code} className={`flex items-center gap-3 p-2.5 rounded-lg border ${i < 2 ? 'border-primary/30 bg-primary/[0.06]' : 'border-border bg-surface'} ${correct ? 'border-green-500/40 bg-green-500/[0.05]' : ''}`}>
-                  <span className="w-6 text-center text-sm font-extrabold tabular-nums" style={{ color: i < 2 ? 'rgb(var(--primary))' : 'rgb(var(--texts))' }}>{i + 1}</span>
-                  <span className="text-lg">{t.flag}</span>
-                  <span className="font-bold text-sm flex-1 truncate">{t.name}</span>
-                  {correct && <span className="text-xs font-bold text-primary">✓</span>}
-                  <div className="flex gap-1">
-                    <button onClick={() => move(i, -1)} disabled={i === 0} className="w-8 h-8 grid place-items-center rounded-md border border-border text-texts hover:text-textp disabled:opacity-30">↑</button>
-                    <button onClick={() => move(i, 1)} disabled={i === order.length - 1} className="w-8 h-8 grid place-items-center rounded-md border border-border text-texts hover:text-textp disabled:opacity-30">↓</button>
-                  </div>
+                </thead>
+                <tbody>
+                  {table.map((row, i) => {
+                    const t = getTeam(row.team)
+                    const qualify = i < 2
+                    return (
+                      <tr key={row.team} className={`border-b border-border/50 last:border-0 ${qualify ? '' : 'opacity-60'}`}>
+                        <td className="py-2.5 px-3 text-texts font-bold text-xs">{i + 1}</td>
+                        <td className="py-2.5 px-3 font-bold text-textp">
+                          <div className="flex items-center gap-2">
+                            {qualify && <div className="w-1 h-4 rounded-full bg-primary" />}
+                            <Flag code={t.code} size={18} /><span className="truncate">{t.name}</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-2 text-center text-texts">{row.p}</td>
+                        <td className="py-2.5 px-2 text-center text-texts">{row.w}</td>
+                        <td className="py-2.5 px-2 text-center text-texts">{row.d}</td>
+                        <td className="py-2.5 px-2 text-center text-texts">{row.l}</td>
+                        <td className="py-2.5 px-2 text-center text-texts">{row.gf}</td>
+                        <td className="py-2.5 px-2 text-center text-texts">{row.ga}</td>
+                        <td className="py-2.5 px-2 text-center text-texts">{row.gd > 0 ? `+${row.gd}` : row.gd}</td>
+                        <td className="py-2.5 px-3 text-right font-extrabold text-textp">{row.pts}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              <p className="text-[10px] text-texts px-3 py-2 border-t border-border/50">Green bar = qualify for Round of 32 · Sorted by Pts → GD → GF</p>
+            </Card>
+          ) : (
+            <Card className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm text-texts">Reorder how you think Group {group} finishes.</p>
+                <div className="flex items-center gap-2">
+                  {groupScoringActive && ptsAwarded !== null && (
+                    <Pill tone={ptsAwarded > 0 ? 'gold' : 'default'}>
+                      +{weightedGroupPoints(ptsAwarded, weights)} pts
+                    </Pill>
+                  )}
+                  {groupScoringActive && ptsAwarded === null && groupComplete && (
+                    <Pill tone="default">Awaiting scoring</Pill>
+                  )}
+                  {!groupScoringActive && <Pill tone="default">For fun</Pill>}
+                  {savingMsg && <Pill tone={savingMsg.includes('✓') ? 'green' : 'default'}>{savingMsg}</Pill>}
                 </div>
-              )
-            })}
-          </div>
-          <div className="flex items-center justify-between mt-4 gap-2">
-            <p className="text-[11px] text-texts">
-              {groupScoringActive
-                ? `+${weights.groupPosition} pts per team in correct finishing position · max ${weights.groupPosition * 4} pts per group · scored once the group completes`
-                : 'Group picks are for fun in this league and do not affect standings.'}
-            </p>
-            <Button onClick={savePrediction} disabled={!userId || order.length === 0}>Save</Button>
-          </div>
-        </Card>
-      )}
+              </div>
+              <div className="space-y-2">
+                {order.map((code, i) => {
+                  const t = getTeam(code)
+                  const saved = currentPred?.ranked_codes?.[i]
+                  const correct = groupComplete && saved === table[i]?.team
+                  return (
+                    <div key={code} className={`flex items-center gap-3 p-2.5 rounded-lg border ${i < 2 ? 'border-primary/30 bg-primary/[0.06]' : 'border-border bg-surface'} ${correct ? 'border-green-500/40 bg-green-500/[0.05]' : ''}`}>
+                      <span className="w-6 text-center text-sm font-extrabold tabular-nums" style={{ color: i < 2 ? 'rgb(var(--primary))' : 'rgb(var(--texts))' }}>{i + 1}</span>
+                      <Flag code={t.code} size={20} />
+                      <span className="font-bold text-sm flex-1 truncate">{t.name}</span>
+                      {correct && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-primary shrink-0"><path d="m5 12 5 5L20 7"/></svg>}
+                      <div className="flex gap-1">
+                        <button onClick={() => move(i, -1)} disabled={i === 0} className="w-8 h-8 grid place-items-center rounded-md border border-border text-texts hover:text-textp disabled:opacity-30">↑</button>
+                        <button onClick={() => move(i, 1)} disabled={i === order.length - 1} className="w-8 h-8 grid place-items-center rounded-md border border-border text-texts hover:text-textp disabled:opacity-30">↓</button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="flex items-center justify-between mt-4 gap-2">
+                <p className="text-[11px] text-texts">
+                  {groupScoringActive
+                    ? `+${weights.groupPosition} pts per team in correct finishing position · max ${weights.groupPosition * 4} pts per group · scored once the group completes`
+                    : 'Group picks are for fun in this league and do not affect standings.'}
+                </p>
+                <Button onClick={savePrediction} disabled={!userId || order.length === 0}>Save</Button>
+              </div>
+            </Card>
+          )}
+        </div>
+
+        {/* Desktop side panel */}
+        <div className="hidden lg:flex flex-col gap-4 w-56 shrink-0">
+          {/* Qualification outlook */}
+          <Card className="p-4">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-texts mb-3">Group {group} Outlook</p>
+            {topTwo.length > 0 ? (
+              <div className="space-y-2">
+                {topTwo.map((row, i) => {
+                  const t = getTeam(row.team)
+                  return (
+                    <div key={t.code} className="flex items-center gap-2">
+                      <div className="w-1 h-4 rounded-full bg-primary shrink-0" />
+                      <Flag code={t.code} size={16} />
+                      <span className="text-[12px] font-bold text-textp truncate flex-1">{t.name}</span>
+                      <span className="text-[11px] font-bold tabular-nums text-primary shrink-0">{row.pts}p</span>
+                    </div>
+                  )
+                })}
+                <p className="text-[10px] text-texts pt-1">Top 2 currently qualifying</p>
+              </div>
+            ) : (
+              <p className="text-[12px] text-texts italic">No matches played yet</p>
+            )}
+          </Card>
+
+          {/* My prediction */}
+          {myPredForGroup?.ranked_codes && myPredForGroup.ranked_codes.length > 0 && (
+            <Card className="p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-texts mb-3">My Prediction</p>
+              <div className="space-y-2">
+                {myPredForGroup.ranked_codes.slice(0, 4).map((code, i) => {
+                  const t = getTeam(code)
+                  return (
+                    <div key={code} className="flex items-center gap-2">
+                      <span className="w-4 text-[11px] font-extrabold tabular-nums shrink-0" style={{ color: i < 2 ? 'rgb(var(--primary))' : 'rgb(var(--texts))' }}>{i + 1}</span>
+                      <Flag code={t.code} size={16} />
+                      <span className="text-[12px] font-bold text-textp truncate">{t.name}</span>
+                    </div>
+                  )
+                })}
+              </div>
+              {myPredForGroup.points_awarded != null && (
+                <div className="mt-3 pt-2 border-t border-border/50">
+                  <p className="text-[11px] font-bold text-primary">+{weightedGroupPoints(myPredForGroup.points_awarded, weights)} pts earned</p>
+                </div>
+              )}
+            </Card>
+          )}
+
+          {/* Upcoming matches in group */}
+          {upcomingInGroup.length > 0 && (
+            <Card className="p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-texts mb-3">Upcoming</p>
+              <div className="space-y-3">
+                {upcomingInGroup.map((m) => {
+                  const home = getTeam(m.home_team), away = getTeam(m.away_team)
+                  return (
+                    <div key={m.id} className="space-y-1">
+                      <div className="flex items-center justify-between gap-1 text-[11px]">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Flag code={home.code} size={13} />
+                          <span className="font-bold text-textp truncate">{home.name}</span>
+                        </div>
+                        <span className="text-texts font-bold shrink-0">vs</span>
+                        <div className="flex items-center gap-1.5 min-w-0 flex-row-reverse">
+                          <Flag code={away.code} size={13} />
+                          <span className="font-bold text-textp truncate text-right">{away.name}</span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-texts">
+                        {new Date(m.match_date).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore', hour12: false })}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

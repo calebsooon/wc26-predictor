@@ -137,7 +137,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <ActiveLeagueProvider value={providerValue}>
     <div className="min-h-screen bg-bg text-textp" style={accentStyle}>
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-60 border-r border-border bg-surface/50 z-30">
+      <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-60 border-r border-border bg-surface z-30">
         <Link href="/dashboard" className="h-16 flex items-center gap-2.5 px-5 border-b border-border">
           <Logo />
           <span className="font-extrabold tracking-tight">MATCHDAY</span>
@@ -155,7 +155,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={it.href}
                 href={it.href}
-                className={`w-full flex items-center gap-3 h-11 px-3 rounded-xl font-bold text-sm transition-all ${active ? 'bg-accent/12 text-accent' : 'text-texts hover:text-textp hover:bg-card'}`}
+                className={`w-full flex items-center gap-3 h-11 px-3 rounded-xl font-bold text-sm transition-all border ${active ? 'bg-accent/[0.10] border-accent/[0.22] text-accent' : 'text-texts hover:text-textp hover:bg-surface2 border-transparent'}`}
               >
                 <Ic size={20} className={active ? 'text-accent' : ''} />
                 <span className="flex-1">{it.label}</span>
@@ -218,7 +218,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Mobile bottom nav */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-surface/95 backdrop-blur-lg border-t border-border">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-bg/85 backdrop-blur-xl border-t border-border" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="grid grid-cols-4 h-16 max-w-md mx-auto">
           {BOTTOM.map((it) => {
             const Ic = it.icon

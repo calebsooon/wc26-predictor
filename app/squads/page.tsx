@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { TEAMS, getTeam, type TeamInfo, normalisePosition, POSITION_ORDER, POSITION_ABBR } from '@/lib/teams'
-import { PageHeader, Card, Skeleton, SearchIcon, Pill, EmptyState, UsersIcon } from '@/components/ui'
+import { PageHeader, Card, Skeleton, SearchIcon, Pill, EmptyState, UsersIcon, Flag } from '@/components/ui'
 
 interface Player { id: number; name: string; position: string | null; jersey_number: number | null; nationality: string | null; team_name: string }
 
@@ -25,7 +25,7 @@ function SquadDetail({ team, players }: { team: TeamInfo; players: Player[] }) {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <span className="text-5xl leading-none">{team.flag}</span>
+        <Flag code={team.code} size={40} />
         <div><h2 className="text-xl font-extrabold text-textp">{team.fullName}</h2><p className="text-sm text-texts">{sorted.length} players</p></div>
       </div>
       {sorted.length === 0 ? <p className="text-sm text-texts italic">No squad data available.</p> : (
@@ -124,7 +124,7 @@ export default function SquadsPage() {
                 return (
                   <button key={team.code} onClick={() => { setSelected(team.code); setMobileOpen(true) }}
                     className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${idx < filteredTeams.length - 1 ? 'border-b border-border/60' : ''} ${isSel ? 'bg-primary/12' : 'hover:bg-surface'}`}>
-                    <span className="text-xl leading-none shrink-0">{team.flag}</span>
+                    <Flag code={team.code} size={22} />
                     <span className={`text-sm font-bold flex-1 truncate ${isSel ? 'text-primary' : 'text-textp'}`}>{team.name}</span>
                     <span className="text-xs tabular-nums shrink-0 text-texts">{count > 0 ? count : '–'}</span>
                   </button>

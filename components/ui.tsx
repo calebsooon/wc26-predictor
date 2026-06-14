@@ -1,23 +1,35 @@
 'use client'
 
 /* ============================================================
-   MatchDay — UI primitives (Dark Stadium Analytics)
-   Ported from the Claude Design bundle to typed React/Tailwind.
+   MatchDay — UI primitives ("Refined" design system)
    All colours are token-driven so they flip light/dark automatically.
    ============================================================ */
 
 import { useEffect, useRef, useState, type ReactNode, type ButtonHTMLAttributes } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
-import { getTeam } from '@/lib/teams'
+import { getTeam, FLAG_GRADIENTS } from '@/lib/teams'
 
-/* ---------- Flag + Team name ---------- */
-export function Flag({ code, size = 26 }: { code: string; size?: number }) {
+/* ---------- Flag chip (CSS gradient, no emoji) ---------- */
+export function Flag({ code, size = 22 }: { code: string; size?: number }) {
   const t = getTeam(code)
+  const gradient = FLAG_GRADIENTS[code] ?? 'linear-gradient(135deg,#888 50%,#555 50%)'
   return (
-    <span style={{ fontSize: size, lineHeight: 1 }} className="select-none" aria-label={t.name}>
-      {t.flag}
-    </span>
+    <span
+      aria-label={t.name}
+      title={t.name}
+      role="img"
+      style={{
+        display: 'inline-block',
+        width: Math.round(size * 1.45),
+        height: size,
+        background: gradient,
+        borderRadius: Math.max(3, Math.round(size * 0.14)),
+        border: '1px solid rgba(0,0,0,0.10)',
+        flexShrink: 0,
+        verticalAlign: 'middle',
+      }}
+    />
   )
 }
 
@@ -27,13 +39,15 @@ export function Avatar({
 }: { name: string; src?: string | null; size?: number; ring?: boolean; you?: boolean }) {
   const [imgError, setImgError] = useState(false)
   const color = you ? 'rgb(var(--blue))' : 'rgb(var(--primary))'
+  /* squircle radius: ~30% gives the rounded-rect "squircle" feel from the design */
+  const radius = Math.round(size * 0.30)
   if (src && !imgError) {
     return (
       <Image
         src={src} alt={name}
         width={size} height={size}
-        className="rounded-full object-cover shrink-0"
-        style={{ border: ring ? `2px solid ${color}` : undefined }}
+        className="object-cover shrink-0"
+        style={{ borderRadius: radius, border: ring ? `2px solid ${color}` : undefined }}
         onError={() => setImgError(true)}
         unoptimized
       />
@@ -41,10 +55,11 @@ export function Avatar({
   }
   return (
     <div
-      className="grid place-items-center rounded-full font-bold shrink-0 uppercase"
+      className="grid place-items-center font-bold shrink-0 uppercase"
       style={{
         width: size, height: size, fontSize: size * 0.38,
-        background: 'rgb(var(--surface))', color,
+        borderRadius: radius,
+        background: 'rgb(var(--surface3))', color,
         border: ring ? `2px solid ${color}` : `1px solid rgb(var(--border))`,
       }}
     >
@@ -88,10 +103,10 @@ export function Modal({
       role="dialog"
       aria-modal="true"
     >
-      <div ref={panelRef} className={`w-full ${maxWidth} bg-card border border-border rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]`}>
+      <div ref={panelRef} className={`w-full ${maxWidth} bg-card border border-border rounded-t-[24px] sm:rounded-[20px] shadow-card overflow-hidden flex flex-col max-h-[90vh]`}>
         <div className="flex items-center justify-between gap-3 px-5 h-14 shrink-0 border-b border-border bg-surface">
-          <h2 className="font-extrabold text-textp text-[15px] truncate">{title}</h2>
-          <button onClick={onClose} aria-label="Close" className="text-texts hover:text-textp p-1 -mr-1 shrink-0">✕</button>
+          <h2 className="font-bold font-display text-textp text-[15px] truncate">{title}</h2>
+          <button onClick={onClose} aria-label="Close" className="w-8 h-8 grid place-items-center rounded-lg bg-surface2 text-texts hover:text-textp shrink-0 text-sm">✕</button>
         </div>
         <div className="flex-1 overflow-y-auto">{children}</div>
       </div>
@@ -107,21 +122,21 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 }
 export function Button({ children, variant = 'primary', size = 'md', className = '', icon, ...rest }: ButtonProps) {
   const sizes = {
-    sm: 'h-9 px-3.5 text-[13px] gap-1.5 rounded-md',
-    md: 'h-10 px-4 text-sm gap-2 rounded-md',
-    lg: 'h-12 px-6 text-[15px] gap-2 rounded-md',
+    sm: 'h-9 px-3.5 text-[13px] gap-1.5 rounded-xl',
+    md: 'h-11 px-4 text-[13.5px] gap-2 rounded-xl',
+    lg: 'h-[46px] px-6 text-[14px] gap-2 rounded-[13px]',
   }
   const variants = {
-    primary: 'bg-primary text-[#04210F] font-bold hover:opacity-90',
+    primary: 'bg-primary text-[#042614] font-bold hover:opacity-90 active:-translate-y-px transition-[opacity,transform,box-shadow] hover:shadow-[0_4px_14px_-4px_rgba(31,193,107,0.5)]',
     gold: 'bg-gold text-[#231a00] font-bold hover:opacity-90',
-    outline: 'border border-border bg-transparent text-textp font-semibold hover:bg-card',
-    ghost: 'text-texts hover:text-textp hover:bg-surface font-semibold',
-    surface: 'bg-surface text-textp font-semibold border border-border hover:bg-card',
+    outline: 'border border-border bg-transparent text-textp font-semibold hover:bg-surface2',
+    ghost: 'text-texts hover:text-textp hover:bg-surface2 font-semibold',
+    surface: 'bg-surface2 text-textp font-semibold border border-border hover:bg-surface3',
     danger: 'bg-error/15 text-error border border-error/30 font-semibold hover:bg-error/25',
   }
   return (
     <button
-      className={`inline-flex items-center justify-center whitespace-nowrap transition-all duration-100 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none ${sizes[size]} ${variants[variant]} ${className}`}
+      className={`inline-flex items-center justify-center whitespace-nowrap transition-all duration-150 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none ${sizes[size]} ${variants[variant]} ${className}`}
       {...rest}
     >
       {icon}
@@ -136,7 +151,7 @@ export function Card({
 }: { children: ReactNode; className?: string; hover?: boolean; glow?: boolean } & React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`bg-card border rounded-xl ${hover ? 'transition-colors duration-150 hover:border-texts/40 cursor-pointer' : ''} ${glow ? 'border-primary/30' : 'border-border'} ${className}`}
+      className={`bg-card border rounded-[16px] shadow-card ${hover ? 'transition-all duration-150 hover:border-texts/40 hover:-translate-y-px cursor-pointer' : ''} ${glow ? 'border-primary/30' : 'border-border'} ${className}`}
       {...rest}
     >
       {children}
@@ -156,18 +171,18 @@ export function StatCard({
   }
   const c = accents[accent]
   return (
-    <div className="bg-card border border-border rounded-xl p-4 relative overflow-hidden">
+    <div className="bg-card border border-border rounded-[16px] shadow-card p-4 relative overflow-hidden pl-5">
       {accent !== 'default' && (
         <>
-          <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: c }} />
-          <div className="absolute -right-8 -top-10 w-28 h-28 rounded-full blur-2xl opacity-[0.10] pointer-events-none" style={{ background: c }} />
+          <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full" style={{ background: c }} />
+          <div className="absolute -right-8 -top-10 w-28 h-28 rounded-full blur-2xl opacity-[0.07] pointer-events-none" style={{ background: c }} />
         </>
       )}
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-texts">{label}</span>
-        {icon && <span className="text-texts/70">{icon}</span>}
+        <span className="eyebrow">{label}</span>
+        {icon && <span className="text-faint">{icon}</span>}
       </div>
-      <div className="mt-2.5 text-[30px] font-extrabold tabular-nums leading-none" style={{ color: c }}>{value}</div>
+      <div className="mt-2.5 text-[28px] font-extrabold tabular-nums leading-none font-display" style={{ color: c }}>{value}</div>
       {sub && <div className="mt-2 text-xs text-texts font-medium">{sub}</div>}
     </div>
   )
@@ -195,38 +210,11 @@ export function LeagueBadge({
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold border whitespace-nowrap ${className}`}
       style={{ color: c, borderColor: hexAlpha(c, 0.4), background: hexAlpha(c, 0.12) }}
     >
-      {label}{money && ' 💰'}
+      {label}{money && <span className="ml-0.5 font-black">$</span>}
     </span>
   )
 }
 
-/* ---------- ConfettiBurst (decorative; fires when `trigger` increments) ---------- */
-export function ConfettiBurst({ trigger }: { trigger: number }) {
-  if (!trigger) return null
-  const colors = ['#22C55E', '#EAB308', '#3B82F6', '#EF4444', '#A855F7', '#F97316', '#06B6D4', '#F43F5E']
-  return (
-    <div key={trigger} aria-hidden className="pointer-events-none fixed inset-0 z-[60] overflow-hidden">
-      {Array.from({ length: 70 }).map((_, i) => {
-        const angle = Math.random() * Math.PI * 2
-        const dist = 60 + Math.random() * 220
-        const dx = Math.cos(angle) * dist
-        const dy = -(60 + Math.random() * 280)
-        const w = 6 + Math.random() * 6
-        const h = 8 + Math.random() * 10
-        const rot = Math.random() * 900 - 450
-        return (
-          <motion.span
-            key={i}
-            initial={{ opacity: 1, x: 0, y: 0, rotate: 0, scale: 1 }}
-            animate={{ opacity: [1, 1, 0], x: [0, dx, dx], y: [0, dy, dy + 520], rotate: rot, scale: [1, 1, 0.4] }}
-            transition={{ duration: 1.5 + Math.random() * 0.7, ease: 'easeOut', delay: Math.random() * 0.15 }}
-            style={{ position: 'absolute', left: '50%', top: '45%', width: w, height: h, borderRadius: Math.random() > 0.5 ? '50%' : 2, background: colors[i % colors.length] }}
-          />
-        )
-      })}
-    </div>
-  )
-}
 
 /* ---------- CountUp (animated number, respects reduced motion) ---------- */
 export function CountUp({ value, duration = 700, prefix = '', className = '' }: { value: number; duration?: number; prefix?: string; className?: string }) {
@@ -256,12 +244,12 @@ export function Pill({
   children, tone = 'default', className = '', icon,
 }: { children: ReactNode; tone?: 'default' | 'green' | 'gold' | 'red' | 'blue' | 'live'; className?: string; icon?: ReactNode }) {
   const tones = {
-    default: 'bg-surface text-texts border-border',
-    green: 'bg-primary/12 text-primary border-primary/25',
-    gold: 'bg-gold/12 text-gold border-gold/25',
-    red: 'bg-error/12 text-error border-error/30',
-    blue: 'bg-blue/12 text-blue border-blue/25',
-    live: 'bg-error/15 text-error border-error/30',
+    default: 'bg-surface2 text-texts border-border',
+    green: 'bg-primary/12 text-primary border-primary/20',
+    gold: 'bg-gold/12 text-gold border-gold/20',
+    red: 'bg-coral/12 text-coral border-coral/20',
+    blue: 'bg-blue/12 text-blue border-blue/20',
+    live: 'bg-coral/15 text-coral border-coral/25',
   }
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border whitespace-nowrap ${tones[tone]} ${className}`}>
@@ -275,8 +263,8 @@ export function Pill({
 export type PredStatus = 'missing' | 'submitted' | 'locked' | 'scored'
 export function StatusBadge({ status, pts }: { status: PredStatus; pts?: number | null }) {
   const pill =
-    status === 'missing'   ? <Pill tone="red" icon={<span>●</span>}>Missing</Pill> :
-    status === 'submitted' ? <Pill tone="blue">✓ Submitted</Pill> :
+    status === 'missing'   ? <Pill tone="red" icon={<svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>}>Missing</Pill> :
+    status === 'submitted' ? <Pill tone="blue" icon={<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5L20 7"/></svg>}>Submitted</Pill> :
     status === 'locked'    ? <Pill tone="default" icon={<LockIcon size={11} />}>Locked</Pill> :
     status === 'scored'    ? <Pill tone="green">+{pts ?? 0} pts</Pill> : null
 
@@ -313,10 +301,10 @@ export function Tabs({ tabs, value, onChange, className = '' }: { tabs: Tab[]; v
           <button
             key={key}
             onClick={() => onChange(key)}
-            className={`relative px-4 h-10 text-[13px] font-bold whitespace-nowrap transition-colors ${active ? 'text-textp' : 'text-texts hover:text-textp'}`}
+            className={`relative px-4 h-10 text-[13px] font-semibold whitespace-nowrap transition-colors ${active ? 'text-textp' : 'text-texts hover:text-textp'}`}
           >
             {label}
-            {active && <span className="absolute bottom-0 left-1 right-1 h-[2px] bg-primary" />}
+            {active && <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-primary" />}
           </button>
         )
       })}
@@ -338,10 +326,10 @@ export function ChipRow({ chips, value, onChange }: { chips: Chip[]; value: stri
           <button
             key={key}
             onClick={() => onChange(key)}
-            className={`shrink-0 inline-flex items-center gap-1.5 px-3.5 h-9 rounded-full text-[13px] font-bold border transition-all ${active ? 'bg-textp text-bg border-textp' : 'bg-card text-texts border-border hover:text-textp'}`}
+            className={`shrink-0 inline-flex items-center gap-1.5 px-3.5 h-9 rounded-full text-[13px] font-semibold border transition-all ${active ? 'bg-textp text-bg border-textp' : 'bg-surface2 text-texts border-border hover:text-textp'}`}
           >
             {label}
-            {count != null && <span className={`text-[11px] tabular-nums ${active ? 'text-bg/60' : 'text-texts/70'}`}>{count}</span>}
+            {count != null && <span className={`text-[11px] tabular-nums ${active ? 'text-bg/60' : 'text-faint'}`}>{count}</span>}
           </button>
         )
       })}
@@ -407,7 +395,7 @@ export function ScoreStepper({
         onClick={() => set((value ?? 0) - 1)}
         disabled={disabled || (value ?? 0) <= min}
         aria-label="Decrease"
-        className={`${btn} grid place-items-center border border-border bg-surface text-texts font-bold hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:pointer-events-none transition-colors`}
+        className={`${btn} grid place-items-center border border-border bg-surface2 text-texts font-bold hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:pointer-events-none transition-colors`}
       >
         −
       </motion.button>
@@ -443,7 +431,7 @@ export function ScoreStepper({
         onClick={() => set((value ?? 0) + 1)}
         disabled={disabled || (value ?? 0) >= max}
         aria-label="Increase"
-        className={`${btn} grid place-items-center border border-border bg-surface text-texts font-bold hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:pointer-events-none transition-colors`}
+        className={`${btn} grid place-items-center border border-border bg-surface2 text-texts font-bold hover:border-primary/50 hover:text-primary disabled:opacity-30 disabled:pointer-events-none transition-colors`}
       >
         +
       </motion.button>
@@ -469,15 +457,15 @@ export function Countdown({ kickoff, className = '' }: { kickoff: string; classN
   else if (h > 0) txt = `${h}h ${m}m ${String(s).padStart(2, '0')}s`
   else txt = `${m}:${String(s).padStart(2, '0')}`
   const urgent = secs < 3600
-  return <span className={`tabular-nums font-bold ${urgent ? 'text-gold' : 'text-texts'} ${className}`}>{txt}</span>
+  return <span className={`tabular-nums font-bold font-display ${urgent ? 'text-amber' : 'text-texts'} ${className}`}>{txt}</span>
 }
 
 /* ---------- Skeleton ---------- */
 export function Skeleton({ className = '' }: { className?: string }) {
   return (
     <div
-      className={`rounded-lg animate-shimmer ${className}`}
-      style={{ background: 'linear-gradient(90deg, rgb(var(--surface)), rgb(var(--card)), rgb(var(--surface)))', backgroundSize: '200% 100%' }}
+      className={`rounded-[12px] animate-shimmer ${className}`}
+      style={{ background: 'linear-gradient(90deg, rgb(var(--surface2)), rgb(var(--surface3)), rgb(var(--surface2)))', backgroundSize: '200% 100%' }}
     />
   )
 }
@@ -485,7 +473,7 @@ export function Skeleton({ className = '' }: { className?: string }) {
 /* ---------- Progress bar ---------- */
 export function ProgressBar({ pct, color = 'rgb(var(--primary))', height = 8 }: { pct: number; color?: string; height?: number }) {
   return (
-    <div className="w-full rounded-full overflow-hidden bg-surface" style={{ height }}>
+    <div className="w-full rounded-full overflow-hidden bg-surface3" style={{ height }}>
       <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: color }} />
     </div>
   )
@@ -496,7 +484,7 @@ export function SectionHeader({ title, action, sub }: { title: ReactNode; action
   return (
     <div className="flex items-end justify-between mb-3 gap-3">
       <div>
-        <h2 className="text-lg font-extrabold tracking-tight text-textp">{title}</h2>
+        <h2 className="text-[17px] font-bold font-display tracking-tight text-textp">{title}</h2>
         {sub && <p className="text-xs text-texts mt-0.5">{sub}</p>}
       </div>
       {action}
@@ -508,8 +496,8 @@ export function PageHeader({ eyebrow, title, sub, action }: { eyebrow?: ReactNod
   return (
     <div className="flex items-end justify-between flex-wrap gap-3 pb-4 border-b border-border">
       <div>
-        {eyebrow && <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-primary mb-1.5">{eyebrow}</div>}
-        <h1 className="text-2xl sm:text-[28px] font-black tracking-tight leading-none">{title}</h1>
+        {eyebrow && <div className="eyebrow mb-2 text-primary">{eyebrow}</div>}
+        <h1 className="text-2xl sm:text-[28px] font-extrabold font-display tracking-tight leading-none">{title}</h1>
         {sub && <div className="text-texts font-medium mt-2 text-sm">{sub}</div>}
       </div>
       {action}
@@ -550,9 +538,9 @@ export function StaggerItem({ children, className = '' }: { children: ReactNode;
 export function EmptyState({ icon, title, desc, action }: { icon?: ReactNode; title: string; desc?: string; action?: ReactNode }) {
   return (
     <Card className="p-10 text-center">
-      {icon && <div className="w-12 h-12 mx-auto mb-4 grid place-items-center rounded-md border border-border bg-surface text-texts">{icon}</div>}
-      <h3 className="text-lg font-extrabold text-textp">{title}</h3>
-      {desc && <p className="text-sm text-texts font-medium mt-1 max-w-sm mx-auto">{desc}</p>}
+      {icon && <div className="w-12 h-12 mx-auto mb-4 grid place-items-center rounded-[12px] border border-border bg-surface2 text-faint">{icon}</div>}
+      <h3 className="text-[17px] font-bold font-display text-textp">{title}</h3>
+      {desc && <p className="text-sm text-texts font-medium mt-1.5 max-w-sm mx-auto">{desc}</p>}
       {action && <div className="mt-4">{action}</div>}
     </Card>
   )
@@ -560,10 +548,16 @@ export function EmptyState({ icon, title, desc, action }: { icon?: ReactNode; ti
 
 /* ---------- Logo ---------- */
 export function Logo({ size = 28 }: { size?: number }) {
+  const radius = Math.round(size * 0.22)
   return (
-    <div className="grid place-items-center rounded-md shrink-0 bg-primary" style={{ width: size, height: size }}>
-      <span style={{ fontSize: size * 0.5 }} className="font-black text-[#04210F] tracking-tight">MD</span>
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/icon.svg"
+      alt="MatchDay"
+      width={size}
+      height={size}
+      style={{ borderRadius: radius, flexShrink: 0 }}
+    />
   )
 }
 
@@ -632,13 +626,13 @@ export function Select({
 }: { id?: string; label?: string; value: string; onChange: (v: string) => void; children: ReactNode; className?: string }) {
   return (
     <div className={className}>
-      {label && <label htmlFor={id} className="block text-[11px] font-bold uppercase tracking-wider text-texts mb-1">{label}</label>}
+      {label && <label htmlFor={id} className="block eyebrow mb-1.5">{label}</label>}
       <div className="relative">
         <select
           id={id}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full appearance-none rounded-lg border border-border bg-surface px-3 py-2 pr-8 text-sm font-bold text-textp focus:outline-none focus:border-primary transition-colors"
+          className="w-full appearance-none rounded-xl border border-border bg-surface2 px-3 py-2 pr-8 text-sm font-semibold text-textp focus:outline-none focus:border-primary transition-colors"
         >
           {children}
         </select>

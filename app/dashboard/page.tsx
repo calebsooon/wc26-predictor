@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
-import { Card, StatCard, SectionHeader, Button, Skeleton, BoltIcon, EmptyState, CalIcon, Pill, CountUp, ScoreStepper, Countdown, ProgressBar, LeagueBadge, Avatar } from '@/components/ui'
+import { Card, StatCard, SectionHeader, Button, Skeleton, BoltIcon, EmptyState, CalIcon, Pill, CountUp, ScoreStepper, Countdown, ProgressBar, LeagueBadge, Avatar, Flag } from '@/components/ui'
 import { NextPredictCard, LeaderboardTable, type LBRow } from '@/components/football'
 import RulesModal from '@/components/RulesModal'
 import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
@@ -178,7 +178,7 @@ export default function DashboardPage() {
     if (celebratedRef.current || loading) return
     if (rankMove != null && rankMove > 0 && myRank != null) {
       celebratedRef.current = true
-      toast.success(`📈 You climbed ${rankMove} spot${rankMove !== 1 ? 's' : ''} to ${ordinal(myRank)}!`)
+      toast.success(`You climbed ${rankMove} spot${rankMove !== 1 ? 's' : ''} to ${ordinal(myRank)}`)
     }
   }, [rankMove, myRank, loading])
 
@@ -540,7 +540,7 @@ function HeroMatch({
 
         <div className="flex items-center justify-between gap-3">
           <button onClick={onOpen} className="flex flex-col items-center gap-2 flex-1 min-w-0 group">
-            <span className="text-[44px] sm:text-[54px] leading-none">{home.flag}</span>
+            <Flag code={m.home_team} size={40} />
             <span className="font-bold text-textp text-sm truncate max-w-full group-hover:text-primary transition-colors">{home.name}</span>
           </button>
 
@@ -556,7 +556,7 @@ function HeroMatch({
           </div>
 
           <button onClick={onOpen} className="flex flex-col items-center gap-2 flex-1 min-w-0 group">
-            <span className="text-[44px] sm:text-[54px] leading-none">{away.flag}</span>
+            <Flag code={m.away_team} size={40} />
             <span className="font-bold text-textp text-sm truncate max-w-full group-hover:text-primary transition-colors">{away.name}</span>
           </button>
         </div>
@@ -585,9 +585,9 @@ function RecentResults({ items, weights, onOpen }: { items: { m: DBMatch; pred?:
           return (
             <button key={m.id} onClick={() => onOpen(m.id)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface/60 transition-colors text-left">
               <div className="flex-1 min-w-0 flex items-center gap-1.5 text-[13px] font-bold text-textp">
-                <span>{home.flag}</span><span className="tabular-nums">{m.real_home_score}</span>
+                <Flag code={m.home_team} size={16} /><span className="tabular-nums">{m.real_home_score}</span>
                 <span className="text-texts">–</span>
-                <span className="tabular-nums">{m.real_away_score}</span><span>{away.flag}</span>
+                <span className="tabular-nums">{m.real_away_score}</span><Flag code={m.away_team} size={16} />
               </div>
               {pred && (
                 <span className="text-[10px] text-texts font-semibold tabular-nums shrink-0">you {pred.pred_home}-{pred.pred_away}</span>
