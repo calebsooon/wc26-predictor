@@ -112,14 +112,19 @@ export const WEIGHT_FIELDS: { key: keyof ScoringWeights; label: string; group: '
 /** Merge a league's stored (possibly null/partial) weights over the defaults. */
 export function resolveWeights(raw: unknown): ScoringWeights {
   if (!raw || typeof raw !== 'object') return { ...DEFAULT_WEIGHTS }
-  const r = raw as Partial<Record<keyof ScoringWeights, unknown>> & { disable_gd?: unknown }
+  const r = raw as Partial<Record<keyof ScoringWeights, unknown>>
   const out = { ...DEFAULT_WEIGHTS }
   for (const k of Object.keys(DEFAULT_WEIGHTS) as (keyof ScoringWeights)[]) {
     const v = r[k]
     if (typeof v === 'number' && Number.isFinite(v)) out[k] = v
   }
-  if (r.disable_gd) out.goalDiff = 0
   return out
+}
+
+/** Whether users can manually override their goal-difference prediction for this league. */
+export function allowGdManualOverride(scoring: unknown): boolean {
+  if (!scoring || typeof scoring !== 'object') return true
+  return !(scoring as Record<string, unknown>).disable_gd
 }
 
 /** Per-category hit flags (any prediction row carrying the pts_* breakdown). */

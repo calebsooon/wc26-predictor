@@ -426,12 +426,12 @@ function LeagueManage({
           </Button>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-texts">Goal diff scoring</span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-texts">Manual GD edit</span>
           {(() => {
             const scoring = (typeof league.scoring === 'object' && league.scoring !== null) ? league.scoring as Record<string, unknown> : {}
             const disabled = !!scoring.disable_gd
             return (
-              <Button size="sm" variant={disabled ? 'surface' : 'primary'} onClick={() => patch({ scoring: { ...scoring, disable_gd: !disabled } }, disabled ? 'Goal diff scoring enabled.' : 'Goal diff scoring disabled.')}>
+              <Button size="sm" variant={disabled ? 'surface' : 'primary'} onClick={() => patch({ scoring: { ...scoring, disable_gd: !disabled } }, disabled ? 'Manual GD override enabled.' : 'Manual GD override disabled.')}>
                 {disabled ? 'Off' : 'On'}
               </Button>
             )
