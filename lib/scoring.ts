@@ -121,6 +121,12 @@ export function resolveWeights(raw: unknown): ScoringWeights {
   return out
 }
 
+/** Whether users can manually override their goal-difference prediction for this league. */
+export function allowGdManualOverride(scoring: unknown): boolean {
+  if (!scoring || typeof scoring !== 'object') return true
+  return !(scoring as Record<string, unknown>).disable_gd
+}
+
 /** Per-category hit flags (any prediction row carrying the pts_* breakdown). */
 export interface MatchBreakdown {
   pts_outcome?: number | null

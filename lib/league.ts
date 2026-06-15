@@ -8,7 +8,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ProfileLite } from '@/lib/leaderboard'
-import { resolveWeights, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
+import { resolveWeights, allowGdManualOverride, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 
 export type LeagueType = 'money' | 'points'
 
@@ -37,6 +37,7 @@ export function isMoneyLeague(l: Pick<League, 'prize_pool' | 'type'> | null | un
 export interface ActiveLeague {
   league: League | null
   weights: ScoringWeights
+  allowGdManual: boolean
   memberIds: string[]
   memberProfiles: ProfileLite[]
 }
@@ -68,7 +69,7 @@ export async function getActiveLeague(supabase: SupabaseClient, userId: string):
     const mine = await getMyLeagues(supabase, userId)
     activeId = mine[0]?.id ?? null
   }
-  if (!activeId) return { league: null, weights: DEFAULT_WEIGHTS, memberIds: [], memberProfiles: [] }
+  if (!activeId) return { league: null, weights: DEFAULT_WEIGHTS, allowGdManual: true, memberIds: [], memberProfiles: [] }
 
   // NB: league_members.user_id FKs to auth.users, not profiles — so we can't embed
   // profiles via PostgREST. Fetch member ids first, then their profiles by id.
@@ -88,6 +89,7 @@ export async function getActiveLeague(supabase: SupabaseClient, userId: string):
   return {
     league,
     weights: resolveWeights(league?.scoring),
+    allowGdManual: allowGdManualOverride(league?.scoring),
     memberIds,
     memberProfiles,
   }

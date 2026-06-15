@@ -37,6 +37,7 @@ export default function MatchDetailPage() {
 
   const [match, setMatch] = useState<DBMatch | null>(null)
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
+  const [allowGdManual, setAllowGdManual] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
   const [h, setH] = useState<number | null>(null)
   const [a, setA] = useState<number | null>(null)
@@ -95,8 +96,9 @@ export default function MatchDetailPage() {
         if (p.pred_btts != null) { setPredBtts(p.pred_btts as boolean); setBttsManual(true) }
       }
 
-      const { weights: leagueWeights, memberIds } = await getActiveLeague(supabase, user.id)
+      const { weights: leagueWeights, allowGdManual: gdManualAllowed, memberIds } = await getActiveLeague(supabase, user.id)
       setWeights(leagueWeights)
+      setAllowGdManual(gdManualAllowed)
       // Fetch picks for this match scoped to league members.
       // Profiles fetched separately — the embedded join (profiles(username,avatar_url))
       // can fail silently on some Supabase plans, returning null data with no error shown.
@@ -160,7 +162,7 @@ export default function MatchDetailPage() {
       pred_first_scorer_id: typeof scorerId === 'number' ? scorerId : null,
       pred_no_scorer: scorerId === 'none',
       pred_total_goals: predTotalGoals,
-      pred_goal_diff: predGoalDiff,
+      pred_goal_diff: allowGdManual ? predGoalDiff : null,
       pred_btts: bttsManual ? predBtts : null,
     }, { onConflict: 'user_id,match_id' })
     setSaving(false)
@@ -237,7 +239,7 @@ export default function MatchDetailPage() {
           {/* scoring category overrides */}
           {h != null && a != null && (
             <div className="mt-4 space-y-2">
-              <div className="grid grid-cols-3 gap-2">
+              <div className={`grid gap-2 ${allowGdManual ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 {/* Total Goals — editable */}
                 <div className="flex flex-col items-center gap-1 py-2 px-1 rounded-xl bg-surface border border-border/60">
                   <p className="text-[9px] font-bold uppercase tracking-wider text-texts">Total goals</p>
@@ -278,20 +280,22 @@ export default function MatchDetailPage() {
                     )
                   })()}
                 </div>
-                {/* Goal Diff — editable, supports negative */}
-                <div className="flex flex-col items-center gap-1 py-2 px-1 rounded-xl bg-surface border border-border/60">
-                  <p className="text-[9px] font-bold uppercase tracking-wider text-texts">Goal diff</p>
-                  <ScoreStepper
-                    value={predGoalDiff}
-                    onChange={(v) => { setPredGoalDiff(v); setGdManual(v !== h - a) }}
-                    compact min={-20} max={20}
-                  />
-                  {gdManual && predGoalDiff !== h - a ? (
-                    <button onClick={() => { setGdManual(false); setPredGoalDiff(h - a) }} className="text-[9px] text-primary">↺ Auto</button>
-                  ) : (
-                    <p className="text-[9px] text-texts">+{POINTS.goalDiff} if correct</p>
-                  )}
-                </div>
+                {/* Goal Diff — only shown when league allows manual override */}
+                {allowGdManual && (
+                  <div className="flex flex-col items-center gap-1 py-2 px-1 rounded-xl bg-surface border border-border/60">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-texts">Goal diff</p>
+                    <ScoreStepper
+                      value={predGoalDiff}
+                      onChange={(v) => { setPredGoalDiff(v); setGdManual(v !== h - a) }}
+                      compact min={-20} max={20}
+                    />
+                    {gdManual && predGoalDiff !== h - a ? (
+                      <button onClick={() => { setGdManual(false); setPredGoalDiff(h - a) }} className="text-[9px] text-primary">↺ Auto</button>
+                    ) : (
+                      <p className="text-[9px] text-texts">+{POINTS.goalDiff} if correct</p>
+                    )}
+                  </div>
+                )}
               </div>
               {((tgManual && predTotalGoals !== h + a) || (gdManual && predGoalDiff !== h - a) || (bttsManual && predBtts !== (h > 0 && a > 0))) && (
                 <p className="text-[10px] text-gold text-center font-medium">Custom overrides active — earn pts even if your score is wrong</p>
