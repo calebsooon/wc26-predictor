@@ -1,33 +1,29 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
-import { Card, StatCard, SectionHeader, Button, Skeleton, BoltIcon, EmptyState, CalIcon, Pill, CountUp, ScoreStepper, Countdown, ProgressBar, LeagueBadge, Avatar, Flag } from '@/components/ui'
-import { NextPredictCard, LeaderboardTable, type LBRow } from '@/components/football'
+import {
+  Skeleton, BoltIcon, EmptyState, CalIcon,
+  Pill, CountUp, Countdown, Avatar,
+} from '@/components/ui'
+import { type LBRow } from '@/components/football'
 import RulesModal from '@/components/RulesModal'
+import FlagChip from '@/components/FlagChip'
+import { BarChart, RankLine, DonutChart } from '@/components/charts'
+import PredictionModal from '@/components/PredictionModal'
 import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
-import { getActiveLeague, isMoneyLeague, type LeagueLabel } from '@/lib/league'
-import { toUIMatch, isKnockout, type DBMatch, type MyPred } from '@/lib/match-ui'
+import { getActiveLeague, isMoneyLeague } from '@/lib/league'
+import { isKnockout, type DBMatch, type MyPred } from '@/lib/match-ui'
 import { getTeam } from '@/lib/teams'
 import { SCORING_RULES, weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { computePrizeSnapshot, formatPrize, prizeTone, GW_NAMES, GW_PRIZES, OVERALL_PRIZES } from '@/lib/prizes'
-import { useInstallPrompt, useAppBadge } from '@/lib/pwa'
+import { useAppBadge } from '@/lib/pwa'
+import { fmtDateOnlyKey, fmtTime, getUserTimeZone } from '@/lib/date-format'
 
 const SCORED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, matches(gw_number)'
-
-interface ActivityEvent {
-  id: string
-  event_type: string
-  user_id: string | null
-  match_id: string | null
-  payload: { pts?: number; pred_home?: number; pred_away?: number } | null
-  created_at: string
-  profiles?: { username: string; avatar_url: string | null } | null
-  matches?: { home_team: string; away_team: string } | null
-}
 
 interface RoundRow { id: string; name: string; order: number; matches: DBMatch[] }
 interface ScoredPredRow {
@@ -35,10 +31,14 @@ interface ScoredPredRow {
   pts_outcome: number | null; pts_exact: number | null; pts_goal_diff: number | null
   pts_total_goals: number | null; pts_team_goals: number | null; pts_btts: number | null
   pts_first_team: number | null; pts_first_scorer: number | null
-  profiles: { username: string; avatar_url: string | null } | null
   matches: { gw_number: number | null } | null
 }
 interface MatchGWRow { gw_number: number | null; real_home_score: number | null }
+
+function ordinal(n: number) {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100
+  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0])
+}
 
 export default function DashboardPage() {
   const supabase = createClient()
@@ -54,14 +54,19 @@ export default function DashboardPage() {
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [isMoney, setIsMoney] = useState(false)
   const [leagueName, setLeagueName] = useState('')
-  const [leagueLabel, setLeagueLabel] = useState<LeagueLabel | null>(null)
   const [bracketEnabled, setBracketEnabled] = useState(true)
-  const [banners, setBanners] = useState<string[]>([])
-  const [events, setEvents] = useState<ActivityEvent[]>([])
   const [rulesOpen, setRulesOpen] = useState(false)
-  const [newResultsBanner, setNewResultsBanner] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Modal
+  const [modalMatchId, setModalMatchId] = useState<string | null>(null)
+  // Trajectory toggle
+  const [trajMode, setTrajMode] = useState<'points' | 'rank'>('points')
+  const [timeZone, setTimeZone] = useState('Asia/Singapore')
+
+  useEffect(() => {
+    setTimeZone(getUserTimeZone())
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -70,17 +75,9 @@ export default function DashboardPage() {
         if (!user) { router.replace('/login'); return }
         setUserId(user.id)
 
-        // Phase 1 — critical path: matches + my picks (shows hero card fast)
         const [{ data: roundData, error: roundErr }, { data: myData, error: myErr }] = await Promise.all([
-          supabase
-            .from('rounds')
-            .select('id, name, "order", matches (id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, gameweek)')
-            .order('"order"')
-            .order('match_date', { referencedTable: 'matches' }),
-          supabase
-            .from('predictions')
-            .select('match_id, pred_home, pred_away, points_awarded, pts_exact, pts_outcome, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, pred_first_goal_team, pred_first_scorer_id')
-            .eq('user_id', user.id),
+          supabase.from('rounds').select('id, name, "order", matches (id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, gameweek)').order('"order"').order('match_date', { referencedTable: 'matches' }),
+          supabase.from('predictions').select('match_id, pred_home, pred_away, points_awarded, pts_exact, pts_outcome, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, pred_first_goal_team, pred_first_scorer_id').eq('user_id', user.id),
         ])
         if (roundErr) throw roundErr
         if (myErr) throw myErr
@@ -94,67 +91,28 @@ export default function DashboardPage() {
         const map: Record<string, MyPred> = {}
         for (const p of myData ?? []) map[(p as { match_id: string }).match_id] = p as unknown as MyPred
         setPreds(map)
-
-        // Show hero card immediately — phase 2 loads behind it
         setLoading(false)
 
-        // Phase 2 — deferred: league, leaderboard, prize, rank snapshot (parallel)
         const { league, weights: w, memberIds, memberProfiles } = await getActiveLeague(supabase, user.id)
         setWeights(w)
         setIsMoney(isMoneyLeague(league))
         setLeagueName(league?.name ?? '')
-        setLeagueLabel(league?.league_labels ?? null)
         setBracketEnabled(league?.bracket_enabled !== false)
 
-        if (league?.banners_enabled && league.id) {
-          const { data: bannerData } = await supabase.from('league_banners')
-            .select('image_url')
-            .eq('league_id', league.id)
-            .order('display_order')
-          setBanners((bannerData ?? []).map((b) => (b as { image_url: string }).image_url))
-        }
-
         const ids = memberIds.length ? memberIds : [user.id]
-        const [
-          { data: scored },
-          { data: gwMatches },
-          { data: tp },
-          snapResult,
-        ] = await Promise.all([
+        const [{ data: scored }, { data: gwMatches }, { data: tp }, snapResult] = await Promise.all([
           supabase.from('predictions').select(SCORED_COLS).not('points_awarded', 'is', null).in('user_id', ids),
           supabase.from('matches').select('gw_number, real_home_score').not('gw_number', 'is', null),
           supabase.from('tournament_predictions').select('user_id').eq('user_id', user.id).limit(1),
-          league
-            ? supabase.from('rank_snapshots').select('rank, snapshot_at').eq('user_id', user.id).eq('league_id', league.id).order('snapshot_at', { ascending: false }).limit(1).maybeSingle()
-            : Promise.resolve({ data: null }),
+          league ? supabase.from('rank_snapshots').select('rank, snapshot_at').eq('user_id', user.id).eq('league_id', league.id).order('snapshot_at', { ascending: false }).limit(1).maybeSingle() : Promise.resolve({ data: null }),
         ])
 
         const allScored = (scored ?? []) as unknown as ScoredPredRow[]
         setScoredPreds(allScored)
         setLb(aggregateLeaderboard({ scoredPreds: allScored, profiles: memberProfiles as ProfileLite[], userId: user.id, weights: w }))
-
-        // New-results notification: show banner once per new batch of scored matches
-        const myNewScored = allScored.filter((r) => r.user_id === user.id)
-        const lsKey = `md_scored_${user.id}`
-        const prev = parseInt(typeof window !== 'undefined' ? localStorage.getItem(lsKey) ?? '0' : '0', 10)
-        if (myNewScored.length > prev) {
-          setNewResultsBanner(true)
-          if (typeof window !== 'undefined') localStorage.setItem(lsKey, String(myNewScored.length))
-        }
         setGwMatchRows((gwMatches ?? []) as unknown as MatchGWRow[])
         setHasTournamentPick(!!(tp && tp.length))
         setPrevRank((snapResult.data as { rank: number } | null)?.rank ?? null)
-
-        // Phase 3 — activity feed (non-critical, after main data)
-        if (league?.id) {
-          const { data: eventsData } = await supabase
-            .from('league_events')
-            .select('id, event_type, user_id, match_id, payload, created_at, profiles:profiles(username, avatar_url), matches:matches(home_team, away_team)')
-            .eq('league_id', league.id)
-            .order('created_at', { ascending: false })
-            .limit(20)
-          setEvents((eventsData ?? []) as unknown as ActivityEvent[])
-        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load dashboard')
         setLoading(false)
@@ -172,7 +130,6 @@ export default function DashboardPage() {
   const exactCount = useMemo(() => Object.values(preds).filter((p) => (p.pts_exact ?? 0) > 0).length, [preds])
   const rankMove = prevRank != null && myRank != null ? prevRank - myRank : null
 
-  // Notify on rank climb (toast only — no confetti)
   const celebratedRef = useRef(false)
   useEffect(() => {
     if (celebratedRef.current || loading) return
@@ -188,9 +145,12 @@ export default function DashboardPage() {
   const missingCount = upcoming.filter((m) => !preds[m.id]).length
   useAppBadge(missingCount)
   const hero = upcoming[0] ?? null
-  const next = upcoming.slice(1, 5)
+  const alsoToday = useMemo(() => {
+    if (!hero) return []
+    const heroDate = fmtDateOnlyKey(hero.match_date, timeZone)
+    return upcoming.slice(1).filter((m) => fmtDateOnlyKey(m.match_date, timeZone) === heroDate).slice(0, 4)
+  }, [hero, upcoming, timeZone])
 
-  // My scored matches (most recent first) → powers form, accuracy, recent feed
   const myScored = useMemo(() => matches
     .filter((m) => m.real_home_score !== null && (preds[m.id]?.points_awarded ?? null) !== null)
     .sort((a, b) => +new Date(b.match_date) - +new Date(a.match_date)), [matches, preds])
@@ -201,221 +161,408 @@ export default function DashboardPage() {
     for (const m of gwMatchRows) {
       if (!m.gw_number) continue
       const cur = gwMatchStatus.get(m.gw_number) ?? { total: 0, scored: 0 }
-      cur.total++
-      if (m.real_home_score !== null) cur.scored++
+      cur.total++; if (m.real_home_score !== null) cur.scored++
       gwMatchStatus.set(m.gw_number, cur)
     }
     const predsForCalc = scoredPreds.map((r) => ({
-      user_id: r.user_id,
-      points_awarded: weightedMatchPoints(r, weights),
-      pts_outcome: r.pts_outcome,
-      gw_number: r.matches?.gw_number ?? null,
+      user_id: r.user_id, points_awarded: weightedMatchPoints(r, weights),
+      pts_outcome: r.pts_outcome, gw_number: r.matches?.gw_number ?? null,
     }))
     return computePrizeSnapshot({ userId, allScoredPreds: predsForCalc, gwMatchStatus, overallRank: myRank })
   }, [userId, isMoney, scoredPreds, gwMatchRows, myRank, weights])
 
-  async function savePred(matchId: string, side: 'h' | 'a', val: number) {
-    if (!userId) return
-    const cur = preds[matchId] ?? { pred_home: 0, pred_away: 0, points_awarded: null }
-    const updated: MyPred = { ...cur, pred_home: side === 'h' ? val : cur.pred_home, pred_away: side === 'a' ? val : cur.pred_away }
-    setPreds((p) => ({ ...p, [matchId]: updated }))
-    await supabase.from('predictions').upsert(
-      {
-        user_id: userId, match_id: matchId,
-        pred_home: updated.pred_home, pred_away: updated.pred_away,
-        pred_first_goal_team: updated.pred_first_goal_team ?? null,
-        pred_first_scorer_id: updated.pred_first_scorer_id ?? null,
-      },
-      { onConflict: 'user_id,match_id' },
-    )
+  // Trajectory data (points per GW + rank per snapshot)
+  const scoredByGW = useMemo(() => {
+    const myPredRows = scoredPreds.filter((r) => r.user_id === userId)
+    const byGW: Record<number, number> = {}
+    for (const r of myPredRows) {
+      const gw = r.matches?.gw_number
+      if (gw) byGW[gw] = (byGW[gw] ?? 0) + weightedMatchPoints(r, weights)
+    }
+    return byGW
+  }, [scoredPreds, userId, weights])
+
+  const gwNumbers = Object.keys(scoredByGW).map(Number).sort((a, b) => a - b)
+  const gwSeries = gwNumbers.map((gw) => scoredByGW[gw])
+  const gwLabels = gwNumbers.map((gw) => `GW${gw}`)
+
+  // Current GW pts: pts from the most recent GW that has scored predictions
+  const currentGWPts = useMemo(() => {
+    if (gwNumbers.length === 0) return null
+    const lastGW = gwNumbers[gwNumbers.length - 1]
+    return scoredByGW[lastGW] ?? null
+  }, [gwNumbers, scoredByGW])
+
+  // Accuracy
+  const totalScored = myScored.length
+  const exactHits = myScored.filter((m) => (preds[m.id]?.pts_exact ?? 0) > 0).length
+  const outcomeHits = myScored.filter((m) => (preds[m.id]?.pts_outcome ?? 0) > 0).length
+  const missedHits = totalScored - outcomeHits
+
+  const accSegments = totalScored > 0 ? [
+    { value: exactHits, color: 'rgb(var(--blue))' },
+    { value: outcomeHits - exactHits, color: 'rgb(var(--primary))' },
+    { value: missedHits, color: 'rgb(var(--surface3))' },
+  ] : [{ value: 1, color: 'rgb(var(--surface3))' }]
+  const hitRate = totalScored > 0 ? Math.round((outcomeHits / totalScored) * 100) : 0
+
+  // Category accuracy bars
+  const cats = [
+    { label: 'Outcome', get: (p: MyPred) => (p.pts_outcome ?? 0) > 0 },
+    { label: 'Both teams score', get: (p: MyPred) => (p.pts_btts ?? 0) > 0 },
+    { label: 'Total goals', get: (p: MyPred) => (p.pts_total_goals ?? 0) > 0 },
+    { label: 'First goal', get: (p: MyPred) => (p.pts_first_team ?? 0) > 0 },
+    { label: 'Goal difference', get: (p: MyPred) => (p.pts_goal_diff ?? 0) > 0 },
+    { label: 'Exact score', get: (p: MyPred) => (p.pts_exact ?? 0) > 0 },
+  ]
+
+  function catColor(pct: number) {
+    return pct >= 60 ? 'rgb(var(--primary))' : pct >= 40 ? 'rgb(var(--blue))' : 'rgb(var(--coral))'
   }
 
   if (loading) {
     return (
       <div className="space-y-5">
-        <Skeleton className="h-9 w-48" />
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
-        <Skeleton className="h-40 rounded-xl" />
+        <Skeleton className="h-36 rounded-[20px]" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-[16px]" />)}</div>
+        <Skeleton className="h-52 rounded-[18px]" />
       </div>
     )
   }
 
   if (error) {
-    return (
-      <div className="space-y-5">
-        <div className="pb-4 border-b border-border">
-          <h1 className="text-2xl font-black tracking-tight">Dashboard</h1>
-        </div>
-        <EmptyState icon={<CalIcon size={22} />} title="Couldn't load dashboard" desc={error} />
-      </div>
-    )
+    return <EmptyState icon={<CalIcon size={22} />} title="Couldn't load dashboard" desc={error} />
   }
 
+  const profileName = lb.find((r) => r.id === userId)?.name ?? 'there'
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+
   return (
-    <div className="space-y-7">
-      <InstallBanner missingCount={missingCount} />
-
-      {newResultsBanner && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-primary/[0.08] border border-primary/25">
-          <div>
-            <p className="text-sm font-bold text-textp">New results in</p>
-            <p className="text-xs text-texts mt-0.5">Results have been posted — check your latest scores below.</p>
-          </div>
-          <button
-            onClick={() => setNewResultsBanner(false)}
-            className="shrink-0 text-texts hover:text-textp text-lg font-bold leading-none"
-            aria-label="Dismiss"
-          >
-            ✕
-          </button>
+    <div className="space-y-5">
+      {/* ── Banner ─────────────────────────────────────────────── */}
+      <div
+        className="relative rounded-[20px] overflow-hidden p-[26px] min-h-[148px] flex items-center justify-between gap-6"
+        style={{
+          background: 'linear-gradient(115deg, rgb(var(--heroFrom)), rgb(var(--heroTo)) 70%)',
+        }}
+      >
+        <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(circle at 84% 18%, rgba(255,255,255,0.16), transparent 42%)' }} />
+        <div className="absolute right-[-30px] bottom-[-50px] opacity-[0.12] text-white pointer-events-none">
+          <svg width="220" height="220" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6l-8-4Z" /></svg>
         </div>
-      )}
-
-      {banners.length > 0 && <BannerSlider banners={banners} />}
-
-      <div className="flex items-end justify-between flex-wrap gap-3 pb-4 border-b border-border">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-primary">World Cup 2026</span>
-            {leagueName && <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-textp">{leagueName}<LeagueBadge name={leagueLabel?.name} color={leagueLabel?.color} money={isMoney} /></span>}
-          </div>
-          <h1 className="text-2xl sm:text-[28px] font-black tracking-tight leading-none">Dashboard</h1>
-          <p className="text-texts font-medium mt-2 text-sm">
-            {myRank ? <>You&apos;re <span className="text-gold font-bold">{ordinal(myRank)}</span></> : 'Make your first picks'}
-            {missingCount > 0 && <> · <span className="text-error font-bold">{missingCount} predictions missing</span></>}
+        <div className="relative">
+          <div className="eyebrow" style={{ color: 'rgba(255,255,255,0.8)' }}>FIFA World Cup 2026 · Group Stage</div>
+          <h1 className="text-[27px] font-extrabold leading-[1.05] text-white mt-1.5 font-display">{greeting}, {profileName.split(' ')[0]}</h1>
+          <p className="text-[13px] font-medium mt-1.5" style={{ color: 'rgba(255,255,255,0.85)' }}>
+            {leagueName && <><span className="font-bold text-white">{leagueName}</span> · </>}
+            {missingCount > 0
+              ? <><span className="font-bold text-white">{missingCount} prediction{missingCount !== 1 ? 's' : ''}</span> still open</>
+              : 'All predictions submitted'}
           </p>
+          <div className="flex gap-2.5 mt-4">
+            <Link
+              href="/predictions"
+              className="h-10 px-[18px] rounded-[11px] bg-white text-[#0c5733] text-[13.5px] font-bold flex items-center gap-1.5 hover:opacity-90 transition-opacity"
+              style={{ boxShadow: '0 4px 14px -4px rgba(0,0,0,0.2)' }}
+            >
+              <BoltIcon size={14} />
+              Predict now
+            </Link>
+            {bracketEnabled && (
+              <Link
+                href="/bracket"
+                className="h-10 px-[18px] rounded-[11px] text-white text-[13.5px] font-semibold flex items-center border hover:bg-white/20 transition-colors"
+                style={{ background: 'rgba(255,255,255,0.16)', borderColor: 'rgba(255,255,255,0.25)' }}
+              >
+                View bracket
+              </Link>
+            )}
+          </div>
         </div>
-        <Link href="/predictions"><Button variant="primary" icon={<BoltIcon size={16} />}>Make predictions</Button></Link>
+        {myRank && (
+          <div className="relative flex gap-3 shrink-0">
+            <div className="text-center px-[18px] py-3.5 rounded-[14px]" style={{ background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.2)' }}>
+              <div className="text-[26px] font-extrabold text-white tabular-nums font-display leading-none">{ordinal(myRank)}</div>
+              <div className="eyebrow mt-0.5" style={{ color: 'rgba(255,255,255,0.75)' }}>Your rank</div>
+            </div>
+            {isMoney && (
+              <div className="text-center px-[18px] py-3.5 rounded-[14px]" style={{ background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.2)' }}>
+                <div className="text-[26px] font-extrabold text-white tabular-nums font-display leading-none">{prize ? formatPrize(prize.projectedTotal) : '—'}</div>
+                <div className="eyebrow mt-0.5" style={{ color: 'rgba(255,255,255,0.75)' }}>Net pool</div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
+      {/* ── Bracket reminder ─────────────────────────────────── */}
       {bracketEnabled && !hasTournamentPick && (
         <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-gold/[0.07] border border-gold/20">
           <div>
             <p className="text-sm font-bold text-textp">Play the bracket game</p>
             <p className="text-xs text-texts mt-0.5">Call the champion, finalists and more — just for fun, no effect on points.</p>
           </div>
-          <Link href="/bracket?tab=picks" className="shrink-0">
-            <Pill tone="gold">Pick now →</Pill>
-          </Link>
+          <Link href="/bracket?tab=picks" className="shrink-0"><Pill tone="gold">Pick now →</Pill></Link>
         </div>
       )}
 
-      {/* Hero — soonest match to predict */}
+      {/* ── Up next ──────────────────────────────────────────── */}
       {hero && (
-        <HeroMatch
-          m={hero}
-          pred={{ h: preds[hero.id]?.pred_home ?? null, a: preds[hero.id]?.pred_away ?? null }}
-          onChange={(side, v) => savePred(hero.id, side, v)}
-          onOpen={() => router.push(`/match/${hero.id}`)}
-        />
-      )}
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard
-          label="My Rank"
-          value={myRank ? <span className="inline-flex items-center gap-2">#<CountUp value={myRank} />{rankMove != null && rankMove !== 0 && <TrendArrow move={rankMove} />}</span> : '–'}
-          sub={`of ${lb.length || 1} players`}
-          accent="gold"
-        />
-        <StatCard label="Total Points" value={<CountUp value={myPts} />} accent="green" />
-        <StatCard label="Exact Scores" value={<CountUp value={exactCount} />} accent="blue" />
-        <StatCard label="Predictions" value={<CountUp value={Object.keys(preds).length} />} sub={`${missingCount} still to make`} />
-      </div>
-
-      {/* Prize card */}
-      {prize && (
-        <PrizeCard prize={prize} />
-      )}
-
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-4">
-          <SectionHeader
-            title="Next to predict"
-            sub="Lock in before kickoff — predictions close the moment the whistle blows."
-            action={<Link href="/predictions" className="text-sm font-bold text-primary hover:underline">All fixtures →</Link>}
-          />
-          {next.length === 0 ? (
-            !hero && <EmptyState icon={<CalIcon size={22} />} title="No upcoming matches" desc="Fixtures will appear here as kickoff approaches." />
-          ) : (
-            <div className="grid xl:grid-cols-2 gap-3">
-              {next.map((m) => (
-                <NextPredictCard
-                  key={m.id}
-                  m={toUIMatch(m, preds[m.id])}
-                  pred={{ h: preds[m.id]?.pred_home ?? null, a: preds[m.id]?.pred_away ?? null }}
-                  onChange={(side, v) => savePred(m.id, side, v)}
-                  onOpen={() => router.push(`/match/${m.id}`)}
-                />
-              ))}
+        <div>
+          <div className="flex items-center justify-between mb-3 mx-0.5">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2 h-2 rounded-full bg-coral" style={{ boxShadow: '0 0 0 4px rgba(var(--coral),0.18)' }} />
+              <span className="font-bold text-[16px] font-display">Up next — your pick is open</span>
             </div>
-          )}
-
-          {myScored.length > 0 && (
-            <RecentResults items={myScored.slice(0, 5).map((m) => ({ m, pred: preds[m.id] }))} weights={weights} onOpen={(id) => router.push(`/match/${id}`)} />
-          )}
-        </div>
-
-        <div className="space-y-6">
-          <Card className="overflow-hidden">
-            <div className="flex items-center justify-between px-4 h-12 border-b border-border">
-              <h3 className="font-extrabold text-textp text-[15px]">Leaderboard</h3>
-              <Link href="/leaderboard" className="text-xs font-bold text-primary hover:underline">Full table →</Link>
-            </div>
-            {lb.length === 0 ? (
-              <p className="text-sm text-texts text-center py-8">No scored predictions yet.</p>
-            ) : (
-              <div className="px-1 py-1"><LeaderboardTable players={lb.slice(0, 5)} dense showMove={false} showMeta={false} onRow={() => router.push('/leaderboard')} /></div>
-            )}
-          </Card>
-
-          {myScored.length > 0 && <FormAccuracy items={myScored.map((m) => preds[m.id])} weights={weights} />}
-
-          <Card className="overflow-hidden">
-            <div className="flex items-center justify-between px-4 h-12 border-b border-border">
-              <h3 className="font-extrabold text-textp text-[15px]">Scoring</h3>
-              <button onClick={() => setRulesOpen(true)} className="text-xs font-bold text-primary hover:underline">Full rules →</button>
-            </div>
-            <div className="divide-y divide-border/60">
-              {SCORING_RULES.filter((s) => (weights[s.key as keyof ScoringWeights] ?? s.pts) > 0).map((s) => (
-                <div key={s.key} className="flex items-center justify-between px-4 py-2.5">
-                  <span className="text-[13px] font-medium text-texts">{s.label}</span>
-                  <span className="text-sm font-extrabold tabular-nums text-primary">+{weights[s.key as keyof ScoringWeights] ?? s.pts}</span>
+            <Link href="/predictions" className="flex items-center gap-1 text-[12.5px] text-primary font-semibold">
+              All fixtures <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
+            </Link>
+          </div>
+          <div className={`grid gap-4 ${alsoToday.length > 0 ? 'grid-cols-1 lg:grid-cols-[1fr_300px]' : ''}`}>
+            {/* Hero card */}
+            <HeroMatchCard
+              m={hero}
+              hasPred={!!(preds[hero.id]?.pred_home != null && preds[hero.id]?.pred_away != null)}
+              onOpen={() => setModalMatchId(hero.id)}
+            />
+            {/* Also today list */}
+            {alsoToday.length > 0 && (
+              <div className="bg-card border border-border rounded-[18px] overflow-hidden">
+                <div className="px-4 py-3.5 border-b border-border">
+                  <span className="font-bold text-[14px] font-display">Also today</span>
                 </div>
+                <div>
+                  {alsoToday.map((m) => {
+                    const hTeam = getTeam(m.home_team), aTeam = getTeam(m.away_team)
+                    return (
+                      <button
+                        key={m.id}
+                        onClick={() => setModalMatchId(m.id)}
+                        className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-surface2/60 transition-colors"
+                        style={{ borderTop: '1px solid rgba(var(--border),0.55)' }}
+                      >
+                        <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <FlagChip code={m.home_team} w={22} h={15} r={3} />
+                            <span className="font-semibold text-[12.5px]">{hTeam.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <FlagChip code={m.away_team} w={22} h={15} r={3} />
+                            <span className="font-semibold text-[12.5px]">{aTeam.name}</span>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="tabular-nums text-[11.5px] font-bold text-texts">
+                            {fmtTime(m.match_date, timeZone)}
+                          </div>
+                          <div className="text-[10.5px] font-semibold mt-0.5" style={{ color: preds[m.id]?.pred_home != null ? 'rgb(var(--primary))' : 'rgb(var(--coral))' }}>
+                            {preds[m.id]?.pred_home != null ? '✓ Predicted' : 'Predict'}
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Stat row ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+        <AccentStatCard
+          label="My rank"
+          value={myRank ? ordinal(myRank) : '–'}
+          sub={`of ${lb.length || 1} players`}
+          accentColor="rgb(var(--gold))"
+          badge={rankMove != null && rankMove !== 0 ? (
+            <span className={`text-[13px] font-bold ${rankMove > 0 ? 'text-success' : 'text-error'}`}>
+              {rankMove > 0 ? '▲' : '▼'}{Math.abs(rankMove)}
+            </span>
+          ) : undefined}
+        />
+        <AccentStatCard
+          label="Total points"
+          value={<CountUp value={myPts} />}
+          sub={currentGWPts != null ? `pts this gameweek: +${currentGWPts}` : 'across all matches'}
+          accentColor="rgb(var(--primary))"
+        />
+        <AccentStatCard
+          label="Exact scores"
+          value={<CountUp value={exactCount} />}
+          sub={totalScored > 0 ? `${Math.round((exactCount / totalScored) * 100)}% of all picks` : 'no scored picks yet'}
+          accentColor="rgb(var(--blue))"
+        />
+        <AccentStatCard
+          label="Predictions"
+          value={<CountUp value={Object.keys(preds).length} />}
+          sub={missingCount > 0 ? `${missingCount} still to make` : 'all submitted'}
+          subColor={missingCount > 0 ? 'rgb(var(--coral))' : undefined}
+        />
+      </div>
+
+      {/* ── Analytics band ───────────────────────────────────── */}
+      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+        {/* Trajectory */}
+        <div className="bg-card border border-border rounded-[18px] px-[22px] py-[20px]">
+          <div className="flex items-start justify-between mb-1.5">
+            <div>
+              <h3 className="text-[16px] font-bold font-display">Season trajectory</h3>
+              <p className="text-[12px] text-texts mt-0.5">
+                {trajMode === 'points' ? `${myPts} pts total` : myRank ? `Currently ${ordinal(myRank)}` : 'No data yet'}
+              </p>
+            </div>
+            <div className="flex gap-0.5 bg-surface2 border border-border rounded-[10px] p-[3px]">
+              {(['points', 'rank'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setTrajMode(mode)}
+                  className="text-[11.5px] font-semibold px-3 py-1.5 rounded-[7px] transition-all capitalize"
+                  style={{
+                    background: trajMode === mode ? 'rgb(var(--card))' : 'transparent',
+                    color: trajMode === mode ? 'rgb(var(--textp))' : 'rgb(var(--texts))',
+                    boxShadow: trajMode === mode ? 'var(--card-shadow)' : undefined,
+                  }}
+                >
+                  {mode}
+                </button>
               ))}
             </div>
-          </Card>
+          </div>
+          <div className="flex items-baseline gap-2 mt-1.5 mb-4">
+            <span className="text-[34px] font-extrabold leading-none tabular-nums font-display">
+              {trajMode === 'points' ? myPts : myRank ? ordinal(myRank) : '–'}
+            </span>
+            {rankMove != null && rankMove !== 0 && (
+              <span className={`text-[13px] font-bold tabular-nums ${rankMove > 0 ? 'text-success' : 'text-error'}`}>
+                {rankMove > 0 ? `▲${rankMove}` : `▼${Math.abs(rankMove)}`}
+              </span>
+            )}
+          </div>
+          {gwSeries.length > 0 ? (
+            trajMode === 'points'
+              ? <BarChart series={gwSeries} labels={gwLabels} />
+              : <RankLine ranks={gwSeries.map((_, i) => i + 1)} total={lb.length || 7} labels={gwLabels} />
+          ) : (
+            <div className="h-28 flex items-center justify-center text-texts text-sm">No scored matches yet</div>
+          )}
+        </div>
+
+        {/* Accuracy donut */}
+        <div className="bg-card border border-border rounded-[18px] px-[22px] py-[20px] flex flex-col">
+          <h3 className="text-[16px] font-bold font-display mb-0.5">Accuracy</h3>
+          <p className="text-[12px] text-texts">{totalScored} predictions scored</p>
+          <div className="flex justify-center my-4">
+            <DonutChart
+              segments={accSegments}
+              total={totalScored || 1}
+              centerValue={totalScored > 0 ? `${hitRate}%` : '–'}
+              centerLabel="hit rate"
+              size={160}
+              thickness={17}
+            />
+          </div>
+          <div className="flex flex-col gap-2.5 mt-auto">
+            {[
+              { color: 'rgb(var(--blue))', label: 'Exact scorelines', count: exactHits },
+              { color: 'rgb(var(--primary))', label: 'Right outcome', count: outcomeHits - exactHits },
+              { color: 'rgb(var(--surface3))', label: 'Missed', count: missedHits, faint: true },
+            ].map((item) => (
+              <div key={item.label} className="flex items-center gap-2.5">
+                <span className="w-2 h-2 rounded-[3px] shrink-0" style={{ background: item.color }} />
+                <span className="flex-1 text-[12.5px] font-medium text-texts">{item.label}</span>
+                <span className={`text-[13px] font-bold tabular-nums ${item.faint ? 'text-faint' : ''}`}>{item.count}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      {events.length > 0 && (
-        <section className="space-y-2">
-          <SectionHeader title="Recent activity" sub="Latest scoring highlights in your league" />
-          <div className="space-y-1.5">
-            {events.slice(0, 8).map((ev) => {
-              const username = ev.profiles?.username ?? 'Someone'
-              const matchLabel = ev.matches ? `${ev.matches.home_team} vs ${ev.matches.away_team}` : 'a match'
-              let message = ''
-              if (ev.event_type === 'exact_score') {
-                message = `${username} nailed the exact score on ${matchLabel} (+${ev.payload?.pts ?? 0}pts)`
-              } else if (ev.event_type === 'match_scored') {
-                message = `${matchLabel} has been scored`
-              } else {
-                message = `${username} ${ev.event_type.replace(/_/g, ' ')}`
-              }
+      {/* ── Prize outlook ─────────────────────────────────────── */}
+      {isMoney && <PrizeSection prize={prize} isMoney={isMoney} />}
+
+      {/* ── Lower grid ───────────────────────────────────────── */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Mini leaderboard */}
+        <div className="bg-card border border-border rounded-[18px] overflow-hidden">
+          <div className="flex items-center justify-between px-4 h-12 border-b border-border">
+            <h3 className="font-bold text-[14.5px] font-display">Leaderboard</h3>
+            <Link href="/leaderboard" className="text-[11.5px] text-primary font-semibold">Full table →</Link>
+          </div>
+          {lb.length === 0 ? (
+            <p className="text-sm text-texts text-center py-8">No scored predictions yet.</p>
+          ) : (
+            <div className="p-[5px]">
+              {lb.slice(0, 5).map((row, i) => {
+                const isYou = row.id === userId
+                const posColor = i === 0 ? 'rgb(var(--gold))' : isYou ? 'rgb(var(--primary))' : 'rgb(var(--texts))'
+                return (
+                  <div key={row.id} className="flex items-center gap-[11px] px-[11px] py-[9px] rounded-[11px]" style={{ background: isYou ? 'rgba(var(--primary),0.10)' : 'transparent' }}>
+                    <span className="w-4 text-center text-[13px] font-bold tabular-nums" style={{ color: posColor }}>{i + 1}</span>
+                    <Avatar name={row.name} src={null} size={30} />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[13px] font-semibold flex items-center gap-1.5">
+                        {row.name}
+                        {isYou && <span className="text-[8.5px] font-bold text-primary bg-primary/15 px-1.5 py-0.5 rounded-full">YOU</span>}
+                      </span>
+                    </div>
+                    <span className="text-[13.5px] font-bold tabular-nums font-display" style={{ color: i === 0 ? 'rgb(var(--gold))' : 'rgb(var(--textp))' }}>{row.pts}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Accuracy by category */}
+        <div className="bg-card border border-border rounded-[18px] p-4">
+          <h3 className="font-bold text-[14.5px] font-display mb-3.5">Accuracy by category</h3>
+          <div className="flex flex-col gap-[11px]">
+            {cats.map((c) => {
+              const scored = myScored.map((m) => preds[m.id]).filter(Boolean) as MyPred[]
+              const hits = scored.filter((p) => c.get(p)).length
+              const pct = scored.length > 0 ? Math.round((hits / scored.length) * 100) : 0
+              const color = catColor(pct)
               return (
-                <div key={ev.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-surface border border-border/60">
-                  {ev.profiles && (
-                    <Avatar name={ev.profiles.username ?? '?'} src={ev.profiles.avatar_url} size={24} />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[12px] font-medium text-textp leading-snug">{message}</p>
-                    <p className="text-[10px] text-texts mt-0.5">{new Date(ev.created_at).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Singapore' })}</p>
+                <div key={c.label}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[12px] font-semibold">{c.label}</span>
+                    <span className="text-[11.5px] font-bold tabular-nums font-display" style={{ color }}>{pct}%</span>
+                  </div>
+                  <div className="h-[7px] rounded-full bg-surface2 overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: color }} />
                   </div>
                 </div>
               )
             })}
           </div>
-        </section>
+        </div>
+
+        {/* Scoring */}
+        <div className="bg-card border border-border rounded-[18px] overflow-hidden">
+          <div className="flex items-center justify-between px-4 h-12 border-b border-border">
+            <h3 className="font-bold text-[14.5px] font-display">Scoring</h3>
+            <button onClick={() => setRulesOpen(true)} className="text-[11.5px] text-primary font-semibold">Full rules →</button>
+          </div>
+          <div>
+            {SCORING_RULES.filter((s) => (weights[s.key as keyof ScoringWeights] ?? s.pts) > 0).map((s, i) => (
+              <div key={s.key} className="flex items-center justify-between px-4 py-[9.5px]" style={{ borderTop: i > 0 ? '1px solid rgba(var(--border),0.6)' : undefined }}>
+                <span className="text-[12.5px] text-texts font-medium">{s.label}</span>
+                <span className="text-[13px] font-bold text-primary tabular-nums">+{weights[s.key as keyof ScoringWeights] ?? s.pts}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Prediction Modal */}
+      {modalMatchId && (
+        <PredictionModal
+          matchId={modalMatchId}
+          onClose={() => setModalMatchId(null)}
+        />
       )}
 
       <RulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} weights={weights} showPrizePool={isMoney} />
@@ -423,14 +570,86 @@ export default function DashboardPage() {
   )
 }
 
-function PrizeCard({ prize }: { prize: ReturnType<typeof computePrizeSnapshot> }) {
+/* ─── AccentStatCard ─────────────────────────────────────────────── */
+function AccentStatCard({
+  label, value, sub, accentColor, badge, subColor,
+}: {
+  label: string; value: React.ReactNode; sub?: string; accentColor?: string
+  badge?: React.ReactNode; subColor?: string
+}) {
+  return (
+    <div className="bg-card border border-border rounded-[16px] shadow-card p-[16px] relative overflow-hidden pl-[18px]">
+      {accentColor && (
+        <>
+          <div className="absolute left-0 top-3.5 bottom-3.5 w-[3px] rounded-r-full" style={{ background: accentColor }} />
+          <div className="absolute -right-8 -top-10 w-28 h-28 rounded-full blur-2xl opacity-[0.07] pointer-events-none" style={{ background: accentColor }} />
+        </>
+      )}
+      <div className="eyebrow">{label}</div>
+      <div className="mt-2 flex items-baseline gap-[7px]">
+        <span
+          className="text-[28px] font-extrabold tabular-nums leading-none font-display"
+          style={{ color: accentColor ?? 'rgb(var(--textp))' }}
+        >
+          {value}
+        </span>
+        {badge}
+      </div>
+      {sub && <div className="mt-1 text-[11.5px] font-medium" style={{ color: subColor ?? 'rgb(var(--texts))' }}>{sub}</div>}
+    </div>
+  )
+}
+
+/* ─── HeroMatchCard ─────────────────────────────────────────────── */
+function HeroMatchCard({ m, hasPred, onOpen }: { m: DBMatch; hasPred: boolean; onOpen: () => void }) {
+  const home = getTeam(m.home_team), away = getTeam(m.away_team)
+  const knockout = isKnockout(m)
+  const stage = knockout ? (m.round_name ?? 'Knockout') : `Group ${m.group_name ?? ''}`.trim()
+  return (
+    <div className="bg-card border rounded-[18px] shadow-card p-[22px] relative overflow-hidden" style={{ borderColor: 'rgba(var(--primary),0.32)' }}>
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent pointer-events-none" />
+      <div className="relative">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2.5">
+            <span className="eyebrow text-blue bg-blue/12 px-2 py-1 rounded-[7px] tabular-nums">{stage}</span>
+            <span className="eyebrow">Today</span>
+          </div>
+          <span className="tabular-nums text-[12px] font-bold text-amber">
+            <Countdown kickoff={m.match_date} />
+          </span>
+        </div>
+
+        <div className="flex items-center justify-center gap-[22px]">
+          <div className="flex flex-col items-center gap-2.5 w-[104px]">
+            <FlagChip code={m.home_team} w={60} h={40} r={8} />
+            <span className="font-bold text-[15px] font-display text-center">{home.name}</span>
+          </div>
+          <div className="flex flex-col items-center gap-0 shrink-0">
+            <span className="font-bold text-[26px] text-faint font-display">vs</span>
+          </div>
+          <div className="flex flex-col items-center gap-2.5 w-[104px]">
+            <FlagChip code={m.away_team} w={60} h={40} r={8} />
+            <span className="font-bold text-[15px] font-display text-center">{away.name}</span>
+          </div>
+        </div>
+
+        <div className="flex justify-center mt-5">
+          <button
+            onClick={onOpen}
+            className="h-[42px] px-[22px] rounded-[11px] bg-primary text-[#042614] text-[13px] font-bold hover:opacity-90 active:scale-[0.98] transition-all"
+          >
+            {hasPred ? 'Edit prediction' : 'Submit prediction'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ─── PrizeSection ──────────────────────────────────────────────── */
+function PrizeSection({ prize }: { prize: ReturnType<typeof computePrizeSnapshot> | null; isMoney: boolean }) {
+  if (!prize) return null
   const { settledNet, completedGWs, liveGWNumber, liveGWRank, liveGWPrize, projectedOverallPrize, rangeMin, rangeMax, projectedTotal } = prize
-
-  const settledTone = prizeTone(settledNet)
-  const projectedTone = prizeTone(projectedTotal)
-
-  const rangeMinLabel = rangeMin > 0 ? `+$${rangeMin}` : rangeMin < 0 ? `-$${Math.abs(rangeMin)}` : '$0'
-  const rangeMaxLabel = rangeMax > 0 ? `+$${rangeMax}` : `$${rangeMax}`
 
   const totalPossible = GW_PRIZES[0] * 8 + OVERALL_PRIZES[0]
   const barMin = -(GW_PRIZES[GW_PRIZES.length - 1] * 8 + Math.abs(OVERALL_PRIZES[OVERALL_PRIZES.length - 1]))
@@ -440,331 +659,59 @@ function PrizeCard({ prize }: { prize: ReturnType<typeof computePrizeSnapshot> }
   const minPct = Math.max(0, Math.min(100, ((rangeMin - barMin) / barSpan) * 100))
   const maxPct = Math.max(0, Math.min(100, ((rangeMax - barMin) / barSpan) * 100))
 
+  const settledTone = prizeTone(settledNet)
+  const projectedTone = prizeTone(projectedTotal)
+
   return (
-    <Card className="p-5">
+    <div className="bg-card border border-border rounded-[18px] px-[22px] py-[20px]">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-extrabold text-textp text-[15px]">Prize outlook</h3>
+        <h3 className="font-bold text-[16px] font-display">Prize outlook</h3>
         {liveGWNumber && (
-          <span className="text-[11px] font-bold text-texts">{GW_NAMES[liveGWNumber] ?? `GW${liveGWNumber}`} live</span>
+          <span className="tabular-nums text-[11.5px] font-semibold text-amber bg-amber/12 px-2.5 py-1 rounded-full">
+            {GW_NAMES[liveGWNumber] ?? `GW${liveGWNumber}`} settling
+          </span>
         )}
       </div>
-
-      <div className="grid grid-cols-3 gap-3 mb-5">
-        <div className="text-center">
-          <p className={`text-xl font-extrabold tabular-nums ${settledTone === 'green' ? 'text-success' : settledTone === 'red' ? 'text-error' : 'text-textp'}`}>
-            {formatPrize(settledNet)}
-          </p>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-texts mt-0.5">Settled</p>
-          <p className="text-[10px] text-texts">{completedGWs.length} GW{completedGWs.length !== 1 ? 's' : ''} locked</p>
+      <div className="grid grid-cols-3 gap-3.5 mb-5">
+        <div className="bg-surface2 border border-border rounded-[13px] px-[15px] py-[13px]">
+          <div className={`text-[23px] font-extrabold tabular-nums font-display ${settledTone === 'green' ? 'text-success' : settledTone === 'red' ? 'text-error' : 'text-textp'}`}>{formatPrize(settledNet)}</div>
+          <div className="eyebrow mt-0.5">Settled</div>
+          <div className="text-[11px] text-texts mt-0.5">{completedGWs.length} GW{completedGWs.length !== 1 ? 's' : ''} locked</div>
         </div>
-
-        <div className="text-center">
-          <p className={`text-xl font-extrabold tabular-nums ${projectedTone === 'green' ? 'text-success' : projectedTone === 'red' ? 'text-error' : 'text-textp'}`}>
-            {formatPrize(projectedTotal)}
-          </p>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-texts mt-0.5">Projected</p>
-          {liveGWRank && (
-            <p className="text-[10px] text-texts">GW rank #{liveGWRank} · {formatPrize(liveGWPrize)}</p>
-          )}
+        <div className="bg-surface2 border border-border rounded-[13px] px-[15px] py-[13px]">
+          <div className={`text-[23px] font-extrabold tabular-nums font-display ${projectedTone === 'green' ? 'text-success' : projectedTone === 'red' ? 'text-error' : 'text-textp'}`}>{formatPrize(projectedTotal)}</div>
+          <div className="eyebrow mt-0.5">Projected</div>
+          {liveGWRank && <div className="text-[11px] text-texts mt-0.5">GW rank #{liveGWRank} · {formatPrize(liveGWPrize)}</div>}
         </div>
-
-        <div className="text-center">
-          <div className="flex items-center justify-center gap-0.5 flex-wrap">
-            <span className="text-base font-extrabold tabular-nums text-error">{rangeMinLabel}</span>
-            <span className="text-texts text-xs font-bold px-0.5">→</span>
-            <span className="text-base font-extrabold tabular-nums text-success">{rangeMaxLabel}</span>
+        <div className="bg-surface2 border border-border rounded-[13px] px-[15px] py-[13px]">
+          <div className="text-[23px] font-extrabold tabular-nums font-display">
+            <span className="text-error">{rangeMin > 0 ? `+$${rangeMin}` : rangeMin < 0 ? `-$${Math.abs(rangeMin)}` : '$0'}</span>
+            <span className="text-faint font-semibold text-[15px] mx-1">→</span>
+            <span className="text-success">{rangeMax > 0 ? `+$${rangeMax}` : `$${rangeMax}`}</span>
           </div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-texts mt-0.5">Range</p>
-          <p className="text-[10px] text-texts">worst → best</p>
+          <div className="eyebrow mt-0.5">Range</div>
+          <div className="text-[11px] text-texts mt-0.5">worst → best case</div>
         </div>
       </div>
-
-      {/* range bar */}
-      <div className="relative h-2.5 rounded-full bg-surface overflow-hidden">
+      <div className="relative h-3 rounded-full bg-surface2 overflow-visible">
         <div
-          className="absolute top-0 bottom-0 rounded-full bg-gradient-to-r from-error/40 to-success/40"
-          style={{ left: `${minPct}%`, right: `${100 - maxPct}%` }}
+          className="absolute top-0 bottom-0 rounded-full"
+          style={{ left: `${minPct}%`, right: `${100 - maxPct}%`, background: 'linear-gradient(90deg,rgba(var(--coral),0.55),rgba(var(--primary),0.55))' }}
         />
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-gold border-2 border-card shadow"
-          style={{ left: `calc(${projPct}% - 6px)` }}
+          className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-[3px] border-card shadow"
+          style={{ left: `calc(${projPct}% - 8px)`, background: 'rgb(var(--gold))' }}
         />
+        <div className="absolute top-1/2 left-1/2 w-px h-5 -translate-x-1/2 -translate-y-1/2 bg-border" />
       </div>
-      <div className="flex justify-between mt-1">
-        <span className="text-[9px] text-texts font-bold">{rangeMinLabel}</span>
-        <span className="text-[9px] text-texts font-bold">{rangeMaxLabel}</span>
+      <div className="flex justify-between mt-2.5 text-[10.5px] font-semibold text-faint">
+        <span>−${Math.abs(barMin)}</span><span>$0</span><span>+${barMax}</span>
       </div>
-
       {projectedOverallPrize !== 0 && (
         <p className="text-[11px] text-texts mt-2.5 text-center">
           Overall prize (current rank): <span className={`font-bold ${projectedOverallPrize > 0 ? 'text-success' : 'text-error'}`}>{formatPrize(projectedOverallPrize)}</span>
         </p>
       )}
-    </Card>
-  )
-}
-
-function ordinal(n: number) {
-  const s = ['th', 'st', 'nd', 'rd'], v = n % 100
-  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0])
-}
-
-function ptsColor(pts: number) {
-  return pts >= 8 ? 'rgb(var(--primary))' : pts > 0 ? 'rgb(var(--gold))' : 'rgb(var(--error))'
-}
-
-function TrendArrow({ move }: { move: number }) {
-  const up = move > 0
-  return <span className={`text-xs font-bold tabular-nums ${up ? 'text-success' : 'text-error'}`}>{up ? '▲' : '▼'}{Math.abs(move)}</span>
-}
-
-/* Hero — the single soonest match to predict */
-function HeroMatch({
-  m, pred, onChange, onOpen,
-}: { m: DBMatch; pred: { h: number | null; a: number | null }; onChange: (side: 'h' | 'a', v: number) => void; onOpen: () => void }) {
-  const home = getTeam(m.home_team), away = getTeam(m.away_team)
-  const missing = pred.h == null || pred.a == null
-  const knockout = isKnockout(m)
-  const stage = knockout ? (m.round_name ?? 'Knockout') : `Group ${m.group_name ?? ''}`.trim()
-  return (
-    <Card className="relative overflow-hidden p-5 sm:p-6">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.10] via-transparent to-gold/[0.06] pointer-events-none" />
-      <div className="relative">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2">
-            <Pill tone={knockout ? 'gold' : 'green'}>{stage}</Pill>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-texts">Next up</span>
-          </div>
-          {missing ? <Pill tone="red">● Missing</Pill> : <Pill tone="blue">✓ Submitted</Pill>}
-        </div>
-
-        <div className="flex items-center justify-between gap-3">
-          <button onClick={onOpen} className="flex flex-col items-center gap-2 flex-1 min-w-0 group">
-            <Flag code={m.home_team} size={40} />
-            <span className="font-bold text-textp text-sm truncate max-w-full group-hover:text-primary transition-colors">{home.name}</span>
-          </button>
-
-          <div className="flex flex-col items-center gap-2 shrink-0">
-            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-              <ScoreStepper value={pred.h} onChange={(v) => onChange('h', v)} />
-              <span className="text-texts font-bold">:</span>
-              <ScoreStepper value={pred.a} onChange={(v) => onChange('a', v)} />
-            </div>
-            <span className="text-[11px] flex items-center gap-1 font-semibold">
-              <span className="text-texts">Locks in</span> <Countdown kickoff={m.match_date} className="text-[11px]" />
-            </span>
-          </div>
-
-          <button onClick={onOpen} className="flex flex-col items-center gap-2 flex-1 min-w-0 group">
-            <Flag code={m.away_team} size={40} />
-            <span className="font-bold text-textp text-sm truncate max-w-full group-hover:text-primary transition-colors">{away.name}</span>
-          </button>
-        </div>
-
-        <div className="flex justify-center mt-5">
-          <Button variant="primary" size="sm" icon={<BoltIcon size={15} />} onClick={onOpen}>
-            {missing ? 'Predict this match' : 'Edit prediction'}
-          </Button>
-        </div>
-      </div>
-    </Card>
-  )
-}
-
-/* Recent results — how the user's latest scored picks landed */
-function RecentResults({ items, weights, onOpen }: { items: { m: DBMatch; pred?: MyPred }[]; weights: ScoringWeights; onOpen: (id: string) => void }) {
-  return (
-    <Card className="overflow-hidden">
-      <div className="flex items-center px-4 h-12 border-b border-border">
-        <h3 className="font-extrabold text-textp text-[15px]">Recent results</h3>
-      </div>
-      <div className="divide-y divide-border/60">
-        {items.map(({ m, pred }) => {
-          const home = getTeam(m.home_team), away = getTeam(m.away_team)
-          const pts = pred ? weightedMatchPoints(pred, weights) : 0
-          return (
-            <button key={m.id} onClick={() => onOpen(m.id)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface/60 transition-colors text-left">
-              <div className="flex-1 min-w-0 flex items-center gap-1.5 text-[13px] font-bold text-textp">
-                <Flag code={m.home_team} size={16} /><span className="tabular-nums">{m.real_home_score}</span>
-                <span className="text-texts">–</span>
-                <span className="tabular-nums">{m.real_away_score}</span><Flag code={m.away_team} size={16} />
-              </div>
-              {pred && (
-                <span className="text-[10px] text-texts font-semibold tabular-nums shrink-0">you {pred.pred_home}-{pred.pred_away}</span>
-              )}
-              <span className="text-sm font-extrabold tabular-nums shrink-0 w-9 text-right" style={{ color: ptsColor(pts) }}>+{pts}</span>
-            </button>
-          )
-        })}
-      </div>
-    </Card>
-  )
-}
-
-/* Form (last 5) + per-category accuracy */
-function FormAccuracy({ items, weights }: { items: (MyPred | undefined)[]; weights: ScoringWeights }) {
-  const scored = items.filter((p): p is MyPred => !!p)
-  const form = scored.slice(0, 5)
-  const total = scored.length
-  const cats: { label: string; get: (p: MyPred) => number }[] = [
-    { label: 'Outcome', get: (p) => p.pts_outcome ?? 0 },
-    { label: 'Exact', get: (p) => p.pts_exact ?? 0 },
-    { label: 'Goal diff', get: (p) => p.pts_goal_diff ?? 0 },
-    { label: 'Total goals', get: (p) => p.pts_total_goals ?? 0 },
-    { label: 'Both scored', get: (p) => p.pts_btts ?? 0 },
-  ]
-  return (
-    <Card className="overflow-hidden">
-      <div className="flex items-center justify-between px-4 h-12 border-b border-border">
-        <h3 className="font-extrabold text-textp text-[15px]">Form &amp; accuracy</h3>
-        <span className="text-[11px] font-bold text-texts">{total} scored</span>
-      </div>
-      <div className="p-4 space-y-4">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-texts mb-2">Last {form.length}</p>
-          <div className="flex items-center gap-1.5">
-            {form.map((p, i) => {
-              const pts = weightedMatchPoints(p, weights)
-              return (
-                <span key={i} title={`+${pts}`} className="w-6 h-6 grid place-items-center rounded-md text-[10px] font-extrabold tabular-nums text-white" style={{ background: ptsColor(pts) }}>{pts}</span>
-              )
-            })}
-          </div>
-        </div>
-        <div className="space-y-2">
-          {cats.map((c) => {
-            const hits = scored.filter((p) => c.get(p) > 0).length
-            const pct = total ? Math.round((hits / total) * 100) : 0
-            return (
-              <div key={c.label}>
-                <div className="flex items-center justify-between text-[12px] font-semibold mb-1">
-                  <span className="text-texts">{c.label}</span>
-                  <span className="text-textp tabular-nums">{pct}%</span>
-                </div>
-                <ProgressBar pct={pct} height={5} />
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    </Card>
-  )
-}
-
-/* Auto-advancing image banner carousel */
-function BannerSlider({ banners }: { banners: string[] }) {
-  const [idx, setIdx] = useState(0)
-  const len = banners.length
-  const next = useCallback(() => setIdx((i) => (i + 1) % len), [len])
-  const prev = useCallback(() => setIdx((i) => (i - 1 + len) % len), [len])
-
-  useEffect(() => {
-    if (len <= 1) return
-    const t = setInterval(next, 5000)
-    return () => clearInterval(t)
-  }, [len, next])
-
-  if (!len) return null
-
-  return (
-    <div className="relative rounded-xl overflow-hidden bg-surface select-none" style={{ aspectRatio: '16/7' }}>
-      {banners.map((url, i) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={url}
-          src={url}
-          alt=""
-          draggable={false}
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${i === idx ? 'opacity-100' : 'opacity-0'}`}
-        />
-      ))}
-
-      {len > 1 && (
-        <>
-          <button
-            onClick={prev}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/35 hover:bg-black/55 text-white text-lg font-bold grid place-items-center backdrop-blur-sm transition-colors"
-            aria-label="Previous banner"
-          >‹</button>
-          <button
-            onClick={next}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/35 hover:bg-black/55 text-white text-lg font-bold grid place-items-center backdrop-blur-sm transition-colors"
-            aria-label="Next banner"
-          >›</button>
-          <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
-            {banners.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setIdx(i)}
-                aria-label={`Banner ${i + 1}`}
-                className={`rounded-full transition-all duration-300 ${i === idx ? 'w-5 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/50 hover:bg-white/80'}`}
-              />
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-/* ── InstallBanner ─────────────────────────────────────────────── */
-function InstallBanner({ missingCount }: { missingCount: number }) {
-  const { canInstall, isInstalled, triggerInstall } = useInstallPrompt()
-  const [show, setShow] = useState(false)
-  const [installing, setInstalling] = useState(false)
-
-  useEffect(() => {
-    if (isInstalled) { setShow(false); return }
-    const dismissed = sessionStorage.getItem('md_install_banner_dismissed')
-    if (!dismissed) setShow(true)
-  }, [isInstalled])
-
-  if (!show) return null
-
-  async function handleInstall() {
-    setInstalling(true)
-    const outcome = await triggerInstall()
-    setInstalling(false)
-    if (outcome === 'accepted') {
-      setShow(false)
-    }
-  }
-
-  function dismiss() {
-    sessionStorage.setItem('md_install_banner_dismissed', '1')
-    setShow(false)
-  }
-
-  return (
-    <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-surface border border-border">
-      <div className="flex items-center gap-3 min-w-0">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icon-192.png" alt="MatchDay" className="w-9 h-9 rounded-xl shrink-0" />
-        <div className="min-w-0">
-          <p className="text-[13px] font-bold text-textp">Add MatchDay to your home screen</p>
-          <p className="text-[11px] text-texts mt-0.5">
-            {missingCount > 0
-              ? `${missingCount} prediction${missingCount !== 1 ? 's' : ''} still open — launch instantly anytime.`
-              : 'Launch instantly, full-screen, no browser bar.'}
-          </p>
-        </div>
-      </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {canInstall ? (
-          <button
-            onClick={handleInstall}
-            disabled={installing}
-            className="text-[12px] font-extrabold text-primary whitespace-nowrap px-2.5 py-1 rounded-lg border border-primary/30 hover:bg-primary/10 transition-colors disabled:opacity-50"
-          >
-            {installing ? 'Installing…' : 'Install'}
-          </button>
-        ) : (
-          <Link href="/install" className="text-[12px] font-extrabold text-primary whitespace-nowrap hover:underline">
-            How →
-          </Link>
-        )}
-        <button onClick={dismiss} className="text-texts hover:text-textp text-lg font-bold leading-none w-7 h-7 grid place-items-center" aria-label="Dismiss">×</button>
-      </div>
     </div>
   )
 }

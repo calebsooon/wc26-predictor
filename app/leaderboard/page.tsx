@@ -2,13 +2,15 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { PageHeader, Tabs, Card, Skeleton, EmptyState, TrophyIcon, Avatar, LeagueBadge, Pill, ChipRow, Flag, BoltIcon } from '@/components/ui'
-import { LeaderboardTable, type LBRow } from '@/components/football'
+import { PageHeader, Card, Skeleton, EmptyState, TrophyIcon, Avatar, LeagueBadge, Pill, ChipRow, BoltIcon } from '@/components/ui'
+import FlagChip from '@/components/FlagChip'
+import { type LBRow } from '@/components/football'
 import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
 import { getActiveLeague, getMyLeagues, setActiveLeague, isMoneyLeague, type League, type LeagueLabel } from '@/lib/league'
 import { DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { GW_NAMES, GW_SHORT, GW_PRIZES, OVERALL_PRIZES, formatPrize, prizeTone } from '@/lib/prizes'
 import { getTeam } from '@/lib/teams'
+import { fmtDateTime } from '@/lib/date-format'
 
 const PRED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, matches(gw_number, match_date)'
 
@@ -47,15 +49,15 @@ interface PickPred {
   points_awarded: number | null
 }
 
-function downloadCSV(rows: LBRow[], gwLabel: string) {
-  const headers = ['Rank', 'Player', 'Points', 'Exact Scores', 'Accuracy %', 'Prize']
+function downloadCSV(rows: LBRow[], gwLabel: string, includePrize: boolean) {
+  const headers = ['Rank', 'Player', 'Points', 'Exact Scores', 'Accuracy %', ...(includePrize ? ['Prize'] : [])]
   const data = rows.map((r, i) => [
     String(i + 1),
     r.name,
     String(r.pts),
     String(r.exact ?? 0),
     String(r.acc ?? 0),
-    r.prize != null ? String(r.prize) : '',
+    ...(includePrize ? [r.prize != null ? String(r.prize) : ''] : []),
   ])
   const csv = [headers, ...data].map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n')
   const blob = new Blob([csv], { type: 'text/csv' })
@@ -169,6 +171,7 @@ export default function LeaderboardPage() {
       )
       .subscribe()
     return () => { supabase.removeChannel(channel) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLeagueId, fetchRows])
 
   // Load picks data when picks tab is activated
@@ -258,6 +261,7 @@ export default function LeaderboardPage() {
 
       <p className="sr-only" role="status" aria-live="polite">{srStatus}</p>
 
+      {/* League switcher */}
       {myLeagues.length > 1 && (
         <div className="flex gap-2 overflow-x-auto -mx-4 px-4 no-scrollbar pb-0.5">
           {myLeagues.map((l) => {
@@ -301,12 +305,42 @@ export default function LeaderboardPage() {
         />
       ) : (
         <>
+          {/* GW pill tabs + CSV export */}
           <div className="flex items-center gap-3">
-            <div className="flex-1 overflow-x-auto -mx-4 px-4">
-              <Tabs tabs={GW_TABS} value={tab} onChange={setTab} />
+            <div
+              className="flex-1 overflow-x-auto no-scrollbar -mx-4 px-4"
+              style={{ display: 'flex', alignItems: 'center' }}
+            >
+              <div style={{ display: 'flex', gap: 8, paddingBottom: 4, flexShrink: 0 }}>
+                {GW_TABS.map((t) => {
+                  const active = t.key === tab
+                  return (
+                    <button
+                      key={t.key}
+                      onClick={() => setTab(t.key)}
+                      style={{
+                        height: 36,
+                        padding: '0 14px',
+                        borderRadius: 999,
+                        fontSize: '12.5px',
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                        border: '1px solid',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                        background: active ? 'rgb(var(--textp))' : 'rgb(var(--card))',
+                        color: active ? 'rgb(var(--bg))' : 'rgb(var(--texts))',
+                        borderColor: active ? 'rgb(var(--textp))' : 'rgb(var(--border))',
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
             <button
-              onClick={() => downloadCSV(board, gwLabel)}
+              onClick={() => downloadCSV(board, gwLabel, isMoney)}
               className="shrink-0 flex items-center gap-1.5 text-[12px] font-bold text-texts hover:text-textp px-3 py-1.5 rounded-lg border border-border hover:border-texts/40 transition-colors"
             >
               ↓ CSV
@@ -317,38 +351,217 @@ export default function LeaderboardPage() {
             <EmptyState icon={<TrophyIcon size={22} />} title="No players yet" desc="Players will appear here once they sign up." />
           ) : (
             <>
-              <InsightStrip board={board} hasSnapshots={hasSnapshots} />
+              {/* Podium */}
               {podium.length >= 3 && (
-                <div className="grid grid-cols-3 gap-3">
-                  {[podium[1], podium[0], podium[2]].map((p, idx) => {
-                    const place = idx === 1 ? 1 : idx === 0 ? 2 : 3
-                    const color = place === 1 ? 'rgb(var(--gold))' : place === 2 ? '#94A3B8' : '#D9A066'
-                    const prizeAmt = (tab === 'all' ? OVERALL_PRIZES : GW_PRIZES)[Math.min(place - 1, 6)]
-                    const prizeLabel = formatPrize(prizeAmt)
-                    const tone = prizeTone(prizeAmt)
-                    const prizeColor = tone === 'green' ? 'rgb(var(--success))' : tone === 'red' ? 'rgb(var(--error))' : 'rgb(var(--texts))'
-                    return (
-                      <Card key={p.id} className={`p-4 text-center ${place === 1 ? 'sm:-mt-3' : ''} ${p.you ? 'border-blue/40' : ''}`}>
-                        <div className="text-[11px] font-black mb-2 tabular-nums" style={{ color }}>{place === 1 ? '1st' : place === 2 ? '2nd' : '3rd'}</div>
-                        <div className="flex justify-center mb-2"><Avatar name={p.name} src={p.avatar} size={44} ring={place === 1} you={p.you} /></div>
-                        <div className="font-bold text-sm truncate" style={place === 1 ? { color } : undefined}>{p.name}</div>
-                        <div className="text-2xl font-extrabold tabular-nums mt-1" style={{ color }}>{p.pts}</div>
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-texts mb-1">points</div>
-                        {isMoney && <>
-                          <div className="text-sm font-extrabold tabular-nums" style={{ color: prizeColor }}>{prizeLabel}</div>
-                          <div className="text-[9px] font-bold uppercase tracking-wider text-texts">prize</div>
-                        </>}
-                      </Card>
-                    )
-                  })}
+                <div
+                  style={{
+                    background: 'rgb(var(--card))',
+                    border: '1px solid rgb(var(--border))',
+                    borderRadius: 20,
+                    padding: '52px 24px 0',
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Gold glow */}
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'radial-gradient(circle at 50% -10%, rgba(var(--gold),0.10), transparent 45%)',
+                    pointerEvents: 'none',
+                  }} />
+
+                  <div style={{
+                    maxWidth: 620,
+                    margin: '0 auto',
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr 1fr',
+                    alignItems: 'end',
+                    gap: 0,
+                  }}>
+                    {/* 2nd place */}
+                    <PodiumSlot
+                      player={podium[1]}
+                      place={2}
+                      isMoney={isMoney}
+                      tab={tab}
+                    />
+                    {/* 1st place */}
+                    <PodiumSlot
+                      player={podium[0]}
+                      place={1}
+                      isMoney={isMoney}
+                      tab={tab}
+                    />
+                    {/* 3rd place */}
+                    <PodiumSlot
+                      player={podium[2]}
+                      place={3}
+                      isMoney={isMoney}
+                      tab={tab}
+                    />
+                  </div>
                 </div>
               )}
 
-              <Card className="overflow-hidden">
-                <div className="px-1 py-1">
-                  <LeaderboardTable players={board} metricLabel="PTS" showMove={hasSnapshots} showPrize={isMoney} />
+              {/* Stat highlights */}
+              <StatHighlights board={board} rows={rows} />
+
+              {/* Full table */}
+              <div style={{
+                background: 'rgb(var(--card))',
+                border: '1px solid rgb(var(--border))',
+                borderRadius: 18,
+                overflow: 'hidden',
+              }}>
+                {/* Table header */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '10px 16px',
+                  borderBottom: '1px solid rgb(var(--border))',
+                  gap: 14,
+                }}>
+                  <span style={{ width: 22, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'center', flexShrink: 0 }}>#</span>
+                  {hasSnapshots && <span style={{ width: 10, flexShrink: 0 }} />}
+                  <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))' }}>Player</span>
+                  <span style={{ width: 90, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'center', flexShrink: 0 }}>Exact</span>
+                  <span style={{ width: 80, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'right', flexShrink: 0 }}>{tab === 'all' ? 'Points' : 'GW Pts'}</span>
+                  {isMoney && <span style={{ width: 60, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'right', flexShrink: 0 }}>Prize</span>}
                 </div>
-              </Card>
+
+                <div style={{ padding: '4px' }}>
+                  {board.map((p, idx) => {
+                    const place = idx + 1
+                    const posColor =
+                      place === 1 ? 'rgb(var(--gold))' :
+                      place === 2 ? 'rgb(var(--texts))' :
+                      place === 3 ? 'rgb(var(--bronze))' :
+                      'rgb(var(--texts))'
+                    const prizeAmt = p.prize
+                    const prizeLabel = prizeAmt != null ? formatPrize(prizeAmt) : null
+                    const tone = prizeAmt != null ? prizeTone(prizeAmt) : 'default'
+                    const prizeColor =
+                      tone === 'green' ? 'rgb(var(--success))' :
+                      tone === 'red' ? 'rgb(var(--error))' :
+                      'rgb(var(--texts))'
+
+                    return (
+                      <div
+                        key={p.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 14,
+                          padding: '12px 16px',
+                          borderRadius: 13,
+                          margin: '2px 0',
+                          background: p.you ? 'rgba(var(--primary),0.10)' : undefined,
+                        }}
+                      >
+                        {/* Position */}
+                        <span style={{
+                          width: 22,
+                          fontSize: 15,
+                          fontWeight: 800,
+                          textAlign: 'center',
+                          color: posColor,
+                          flexShrink: 0,
+                        }}>
+                          {place}
+                        </span>
+
+                        {/* Delta */}
+                        {hasSnapshots && (
+                          <span style={{
+                            width: 10,
+                            fontSize: 13,
+                            fontWeight: 700,
+                            flexShrink: 0,
+                            color:
+                              (p.move ?? 0) > 0 ? 'rgb(var(--success))' :
+                              (p.move ?? 0) < 0 ? 'rgb(var(--error))' :
+                              'rgb(var(--faint))',
+                            animation: p.move ? 'lb-pop 0.45s' : undefined,
+                          }}>
+                            {p.move == null || p.move === 0 ? '–' : p.move > 0 ? `▲` : `▼`}
+                          </span>
+                        )}
+
+                        {/* Avatar */}
+                        <Avatar name={p.name} src={p.avatar} size={34} you={p.you} />
+
+                        {/* Name + accuracy block */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: 'rgb(var(--textp))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {p.name}
+                            </span>
+                            {p.you && (
+                              <span style={{
+                                fontSize: 9,
+                                fontWeight: 700,
+                                padding: '1px 5px',
+                                borderRadius: 999,
+                                background: 'rgba(var(--primary),0.12)',
+                                color: 'rgb(var(--primary))',
+                                border: '1px solid rgba(var(--primary),0.2)',
+                                letterSpacing: '0.04em',
+                                textTransform: 'uppercase',
+                                flexShrink: 0,
+                              }}>
+                                YOU
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'rgb(var(--texts))', marginTop: 1 }}>
+                            {p.acc ?? 0}% acc · {p.exact ?? 0} exact
+                          </div>
+                        </div>
+
+                        {/* Exact count */}
+                        <span style={{
+                          width: 90,
+                          textAlign: 'center',
+                          fontSize: 14,
+                          fontWeight: 700,
+                          color: 'rgb(var(--blue))',
+                          flexShrink: 0,
+                        }}>
+                          {p.exact ?? 0}
+                        </span>
+
+                        {/* Points */}
+                        <span style={{
+                          width: 80,
+                          fontSize: 16,
+                          fontWeight: 800,
+                          textAlign: 'right',
+                          fontFamily: 'Schibsted Grotesk, sans-serif',
+                          color: 'rgb(var(--textp))',
+                          flexShrink: 0,
+                        }}>
+                          {p.pts}
+                        </span>
+
+                        {/* Prize */}
+                        {isMoney && (
+                          <span style={{
+                            width: 60,
+                            textAlign: 'right',
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: prizeColor,
+                            flexShrink: 0,
+                          }}>
+                            {prizeLabel}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
 
               <div className="px-1">
                 <p className="text-[11px] text-texts font-medium">
@@ -363,42 +576,264 @@ export default function LeaderboardPage() {
   )
 }
 
-/* ── Insight strip ─────────────────────────────── */
-function InsightStrip({ board, hasSnapshots }: { board: LBRow[]; hasSnapshots: boolean }) {
-  const leader = board[0]
-  const bigMover = hasSnapshots
-    ? [...board].filter((r) => r.move != null && r.move !== 0).sort((a, b) => Math.abs(b.move!) - Math.abs(a.move!))[0]
-    : null
-  const topExact = [...board].sort((a, b) => (b.exact ?? 0) - (a.exact ?? 0))[0]
+/* ── Podium slot ─────────────────────────────── */
+function PodiumSlot({ player, place, isMoney, tab }: { player: LBRow; place: 1 | 2 | 3; isMoney: boolean; tab: string }) {
+  const prizes = tab === 'all' ? OVERALL_PRIZES : GW_PRIZES
+  const prizeAmt = prizes[Math.min(place - 1, 6)]
+  const prizeLabel = formatPrize(prizeAmt)
+  const tone = prizeTone(prizeAmt)
+  const prizeColor = tone === 'green' ? 'rgb(var(--success))' : tone === 'red' ? 'rgb(var(--error))' : 'rgb(var(--texts))'
 
-  if (!leader) return null
+  const avatarSize = place === 1 ? 70 : place === 2 ? 58 : 54
+  const podiumH = place === 1 ? 132 : place === 2 ? 96 : 72
+  const numSize = place === 1 ? 38 : place === 2 ? 30 : 26
+  const ptsSize = place === 1 ? 26 : place === 2 ? 22 : 18
 
-  const items = [
-    leader && {
-      icon: <TrophyIcon size={13} className="text-gold shrink-0" />,
-      label: 'Leading',
-      value: `${leader.name} · ${leader.pts}pts`,
-    },
-    bigMover && {
-      icon: <span className={`text-[11px] font-bold shrink-0 tabular-nums ${(bigMover.move ?? 0) > 0 ? 'text-success' : 'text-error'}`}>{(bigMover.move ?? 0) > 0 ? '▲' : '▼'}{Math.abs(bigMover.move ?? 0)}</span>,
-      label: 'Biggest move',
-      value: bigMover.name,
-    },
-    topExact && (topExact.exact ?? 0) > 0 && {
-      icon: <BoltIcon size={13} className="text-amber shrink-0" />,
-      label: 'Most exact',
-      value: `${topExact.name} · ${topExact.exact}`,
-    },
-  ].filter(Boolean) as { icon: React.ReactNode; label: string; value: string }[]
+  const borderColor =
+    place === 1 ? 'rgb(var(--gold))' :
+    place === 2 ? 'rgb(var(--texts))' :
+    'rgb(var(--bronze))'
+
+  const podiumBg =
+    place === 1
+      ? 'linear-gradient(180deg, rgb(var(--gold) / 0.32), rgb(var(--gold) / 0.10))'
+      : place === 2
+      ? 'linear-gradient(180deg, rgb(var(--surface3)), rgb(var(--surface2)))'
+      : 'linear-gradient(180deg, rgb(var(--bronze) / 0.30), rgb(var(--bronze) / 0.10))'
+
+  const podiumBorder =
+    place === 1 ? '1px solid rgb(var(--gold) / 0.4)' :
+    place === 2 ? '1px solid rgb(var(--border))' :
+    '1px solid rgb(var(--bronze) / 0.4)'
+
+  const numColor =
+    place === 1 ? 'rgb(var(--gold))' :
+    place === 2 ? 'rgb(var(--texts))' :
+    'rgb(var(--bronze))'
+
+  const avatarBorder =
+    place === 1 ? `3px solid rgb(var(--gold))` :
+    place === 2 ? `2.5px solid rgb(var(--texts))` :
+    `2.5px solid rgb(var(--bronze))`
+
+  const avatarShadow =
+    place === 1 ? '0 0 0 4px rgb(var(--gold) / 0.16)' : undefined
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-      {items.map((item) => (
-        <div key={item.label} className="flex items-center gap-2.5 p-2.5 rounded-xl bg-surface border border-border">
-          {item.icon}
-          <div className="min-w-0">
-            <p className="text-[9px] font-bold uppercase tracking-wider text-texts leading-none mb-0.5">{item.label}</p>
-            <p className="text-[12px] font-extrabold text-textp truncate">{item.value}</p>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 8px' }}>
+      {/* Crown for 1st */}
+      {place === 1 && (
+        <svg viewBox="0 0 24 24" fill="currentColor" style={{ color: 'rgb(var(--gold))', width: 24, height: 24, marginBottom: 4 }}>
+          <path d="M2 20h20l-3-9-4.5 4.5L12 8l-2.5 7.5L5 11Z" />
+        </svg>
+      )}
+
+      {/* Avatar */}
+      <div style={{
+        borderRadius: '50%',
+        border: avatarBorder,
+        boxShadow: avatarShadow,
+        display: 'inline-flex',
+        overflow: 'hidden',
+        flexShrink: 0,
+        lineHeight: 0,
+      }}>
+        <Avatar name={player.name} src={player.avatar} size={avatarSize} />
+      </div>
+
+      {/* Name */}
+      <div style={{ fontSize: 14, fontWeight: 700, marginTop: 8, textAlign: 'center', color: 'rgb(var(--textp))', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {player.name}
+      </div>
+
+      {/* Points */}
+      <div style={{
+        fontSize: ptsSize,
+        fontWeight: 800,
+        color: borderColor,
+        fontFamily: 'Schibsted Grotesk, sans-serif',
+        marginTop: 2,
+      }}>
+        {player.pts}
+      </div>
+
+      {/* YOU pill */}
+      {player.you && (
+        <span style={{
+          fontSize: 9,
+          fontWeight: 700,
+          padding: '1px 5px',
+          borderRadius: 999,
+          background: 'rgba(var(--primary),0.12)',
+          color: 'rgb(var(--primary))',
+          border: '1px solid rgba(var(--primary),0.2)',
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          marginTop: 3,
+        }}>
+          YOU
+        </span>
+      )}
+
+      {/* Podium block */}
+      <div style={{
+        width: '100%',
+        height: podiumH,
+        marginTop: 10,
+        borderRadius: '13px 13px 0 0',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: podiumBorder,
+        borderBottom: 'none',
+        background: podiumBg,
+        gap: 4,
+      }}>
+        <span style={{ fontSize: numSize, fontWeight: 800, color: numColor, fontFamily: 'Schibsted Grotesk, sans-serif' }}>
+          {place}
+        </span>
+        {isMoney && (
+          <>
+            <span style={{ fontSize: 13, fontWeight: 700, color: prizeColor }}>{prizeLabel}</span>
+            <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'rgb(var(--texts))' }}>prize</span>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ── Stat highlights (4 cards) ─────────────────── */
+function StatHighlights({ board, rows }: { board: LBRow[]; rows: PredRow[] }) {
+  // 1. Most exact scores
+  const topExact = [...board].sort((a, b) => (b.exact ?? 0) - (a.exact ?? 0))[0]
+
+  // 2. Top scorer picks — most pts_first_scorer > 0 among all preds
+  const scorerHits = new Map<string, number>()
+  for (const r of rows) {
+    if ((r.pts_first_scorer ?? 0) > 0) {
+      scorerHits.set(r.user_id, (scorerHits.get(r.user_id) ?? 0) + 1)
+    }
+  }
+  let topScorerPicks: LBRow | null = null
+  let topScorerCount = 0
+  for (const p of board) {
+    const count = scorerHits.get(p.id) ?? 0
+    if (count > topScorerCount) { topScorerCount = count; topScorerPicks = p }
+  }
+
+  // 3. Biggest climber
+  const climbers = board.filter((r) => r.move != null && r.move > 0)
+  const topClimber = climbers.length > 0 ? climbers.sort((a, b) => (b.move ?? 0) - (a.move ?? 0))[0] : null
+
+  // 4. Best gameweek — highest single-GW points for any user
+  const gwTotals = new Map<string, number>()
+  for (const r of rows) {
+    const gw = r.matches?.gw_number
+    if (gw == null) continue
+    const key = `${r.user_id}|${gw}`
+    gwTotals.set(key, (gwTotals.get(key) ?? 0) + r.points_awarded)
+  }
+  let bestGwUser: LBRow | null = null
+  let bestGwPts = 0
+  gwTotals.forEach((pts, key) => {
+    if (pts > bestGwPts) {
+      bestGwPts = pts
+      const uid = key.split('|')[0]
+      bestGwUser = board.find((p) => p.id === uid) ?? null
+    }
+  })
+
+  const cards = [
+    topExact && (topExact.exact ?? 0) > 0 ? {
+      icon: <BoltIcon size={16} />,
+      iconBg: 'rgba(var(--blue),0.12)',
+      iconColor: 'rgb(var(--blue))',
+      label: 'Most exact',
+      player: topExact,
+      value: String(topExact.exact ?? 0),
+    } : null,
+    topScorerPicks && topScorerCount > 0 ? {
+      icon: <TrophyIcon size={16} />,
+      iconBg: 'rgba(var(--primary),0.12)',
+      iconColor: 'rgb(var(--primary))',
+      label: 'Scorer picks',
+      player: topScorerPicks,
+      value: String(topScorerCount),
+    } : null,
+    topClimber ? {
+      icon: <span style={{ fontSize: 14, fontWeight: 800 }}>▲</span>,
+      iconBg: 'rgba(var(--success),0.12)',
+      iconColor: 'rgb(var(--success))',
+      label: 'Biggest climber',
+      player: topClimber,
+      value: `+${topClimber.move}`,
+    } : null,
+    bestGwUser && bestGwPts > 0 ? {
+      icon: <BoltIcon size={16} />,
+      iconBg: 'rgba(var(--gold),0.14)',
+      iconColor: 'rgb(var(--gold))',
+      label: 'Best gameweek',
+      player: bestGwUser,
+      value: String(bestGwPts),
+    } : null,
+  ].filter(Boolean) as {
+    icon: React.ReactNode
+    iconBg: string
+    iconColor: string
+    label: string
+    player: LBRow
+    value: string
+  }[]
+
+  if (cards.length === 0) return null
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: `repeat(${Math.min(cards.length, 4)}, 1fr)`,
+      gap: 14,
+    }}>
+      {cards.map((card) => (
+        <div
+          key={card.label}
+          style={{
+            background: 'rgb(var(--card))',
+            border: '1px solid rgb(var(--border))',
+            borderRadius: 16,
+            padding: '14px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <div style={{
+            width: 34,
+            height: 34,
+            borderRadius: 10,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            background: card.iconBg,
+            color: card.iconColor,
+          }}>
+            {card.icon}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'rgb(var(--faint))', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {card.label}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+              <Avatar name={card.player.name} src={card.player.avatar} size={30} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'rgb(var(--textp))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                {card.player.name}
+              </span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: 'rgb(var(--textp))', flexShrink: 0 }}>
+                {card.value}
+              </span>
+            </div>
           </div>
         </div>
       ))}
@@ -450,7 +885,6 @@ function PicksView({
       {displayed.map((m) => {
         const home = getTeam(m.home_team)
         const away = getTeam(m.away_team)
-        const kickoff = new Date(m.match_date)
         const isScored = m.real_home_score !== null && m.real_away_score !== null
         const stageLabel = m.group_name ? `Group ${m.group_name}` : 'Knockout'
 
@@ -460,9 +894,7 @@ function PicksView({
             <div className="flex items-center gap-3 mb-3">
               <Pill tone={m.group_name ? 'default' : 'gold'}>{stageLabel}</Pill>
               <span className="text-[11px] text-texts font-medium">
-                {kickoff.toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Singapore' })}
-                {' · '}
-                {kickoff.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore', hour12: false })}
+                {fmtDateTime(m.match_date)}
               </span>
               {isScored ? (
                 <Pill tone="green" className="ml-auto">{m.real_home_score}–{m.real_away_score} FT</Pill>
@@ -474,12 +906,12 @@ function PicksView({
             {/* Teams */}
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <Flag code={home.code} size={20} />
+                <FlagChip code={home.code} w={24} h={16} r={3} />
                 <span className="font-bold text-textp">{home.name}</span>
               </div>
               <span className="text-texts font-bold text-sm px-2">vs</span>
               <div className="flex items-center gap-2 flex-row-reverse">
-                <Flag code={away.code} size={20} />
+                <FlagChip code={away.code} w={24} h={16} r={3} />
                 <span className="font-bold text-textp text-right">{away.name}</span>
               </div>
             </div>

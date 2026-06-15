@@ -26,7 +26,6 @@ interface Profile {
   username: string
   avatar_url: string | null
   is_admin: boolean
-  active_league_id: string | null
 }
 
 type NavItem = { href: string; label: string; icon: (p: { size?: number; className?: string }) => JSX.Element; admin?: boolean }
@@ -34,15 +33,15 @@ type NavItem = { href: string; label: string; icon: (p: { size?: number; classNa
 const SIDEBAR: NavItem[] = [
   { href: '/dashboard',   label: 'Home',        icon: HomeIcon },
   { href: '/predictions', label: 'Fixtures',    icon: CalIcon },
-  { href: '/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
   { href: '/groups',      label: 'Groups',      icon: GridIcon },
   { href: '/bracket',     label: 'Bracket',     icon: TreeIcon },
-  { href: '/squads',      label: 'Squads',      icon: UsersIcon },
+  { href: '/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
   { href: '/h2h',         label: 'Compare',     icon: ChartIcon },
-  { href: '/rules',       label: 'Rules',       icon: HelpIcon },
-  { href: '/install',     label: 'Get the app', icon: InstallIcon },
+  { href: '/squads',      label: 'Squads',      icon: UsersIcon },
   { href: '/profile',     label: 'Profile',     icon: UserIcon },
   { href: '/admin',       label: 'Admin',       icon: ShieldIcon, admin: true },
+  { href: '/rules',       label: 'Rules',       icon: HelpIcon },
+  { href: '/install',     label: 'Get the app', icon: InstallIcon },
 ]
 
 const BOTTOM: NavItem[] = [
@@ -62,6 +61,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [myLeagues, setMyLeagues] = useState<League[]>([])
   const [leaguesReady, setLeaguesReady] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
+  const [activeLeagueId, setActiveLeagueId] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -69,11 +69,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) { setProfile(null); setLeaguesReady(false); return }
         const [{ data }, leagues] = await Promise.all([
-          supabase.from('profiles').select('username, avatar_url, is_admin, active_league_id').eq('id', user.id).single(),
+          supabase.from('profiles').select('username, avatar_url, is_admin').eq('id', user.id).single(),
           getMyLeagues(supabase, user.id),
         ])
         if (data) setProfile(data as Profile)
         setMyLeagues(leagues)
+        try {
+          const stored = window.localStorage.getItem(`matchday:active-league:${user.id}`)
+          const resolved = leagues.find((l) => l.id === stored)?.id ?? leagues[0]?.id ?? null
+          setActiveLeagueId(resolved)
+        } catch {
+          setActiveLeagueId(leagues[0]?.id ?? null)
+        }
         setLeaguesReady(true)
       } catch {
         // Shell failure is non-fatal — nav still renders, pages handle their own auth
@@ -82,10 +89,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
     load()
     const { data: listener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') { setProfile(null); setMyLeagues([]); setLeaguesReady(false) }
+      if (event === 'SIGNED_OUT') { setProfile(null); setMyLeagues([]); setActiveLeagueId(null); setLeaguesReady(false) }
       if (event === 'SIGNED_IN') load()
     })
-    return () => listener.subscription.unsubscribe()
+    function handleProfileUpdated(event: Event) {
+      const detail = (event as CustomEvent<{ username?: string; avatar_url?: string | null }>).detail
+      setProfile((prev) => (prev ? { ...prev, ...detail } : prev))
+    }
+    function handleActiveLeagueChanged(event: Event) {
+      const detail = (event as CustomEvent<{ leagueId?: string }>).detail
+      if (detail?.leagueId) setActiveLeagueId(detail.leagueId)
+    }
+    window.addEventListener('matchday:profile-updated', handleProfileUpdated as EventListener)
+    window.addEventListener('matchday:active-league-changed', handleActiveLeagueChanged as EventListener)
+    return () => {
+      listener.subscription.unsubscribe()
+      window.removeEventListener('matchday:profile-updated', handleProfileUpdated as EventListener)
+      window.removeEventListener('matchday:active-league-changed', handleActiveLeagueChanged as EventListener)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -97,15 +118,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     if (myLeagues.length === 0 && pathname !== '/join') router.replace('/join')
   }, [isBare, leaguesReady, myLeagues.length, pathname, router])
 
-  const activeLeague = myLeagues.find((l) => l.id === profile?.active_league_id) ?? myLeagues[0] ?? null
+  const activeLeague = myLeagues.find((l) => l.id === activeLeagueId) ?? myLeagues[0] ?? null
   const accentChannels = hexToRgbChannels(activeLeague?.league_labels?.color)
   const accentStyle = accentChannels ? ({ ['--accent' as string]: accentChannels } as React.CSSProperties) : undefined
 
   const switchLeague = useCallback(async (id: string) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+    setActiveLeagueId(id)
     await setActiveLeague(supabase, user.id, id)
-    setProfile((p) => (p ? { ...p, active_league_id: id } : p))
     router.refresh()
   }, [router, supabase])
 

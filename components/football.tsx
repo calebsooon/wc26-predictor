@@ -7,9 +7,10 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { getTeam } from '@/lib/teams'
 import {
-  Card, Pill, StatusBadge, Avatar, Countdown, LockIcon, ScoreStepper, Flag, BoltIcon,
+  Card, Pill, StatusBadge, Avatar, Countdown, LockIcon, ScoreStepper, BoltIcon,
   type PredStatus,
 } from '@/components/ui'
+import FlagChip from '@/components/FlagChip'
 import { fmtTime } from '@/lib/date-format'
 
 export interface UIMatch {
@@ -63,7 +64,7 @@ export function MatchCard({ m, onClick, compact = false }: { m: UIMatch; onClick
 
       <div className="flex items-center">
         <div className="flex-1 flex items-center gap-2.5 min-w-0">
-          <Flag code={m.home} size={22} />
+          <FlagChip code={m.home} w={28} h={18} r={4} />
           <span className="font-bold text-textp truncate">{home.name}</span>
         </div>
 
@@ -94,7 +95,7 @@ export function MatchCard({ m, onClick, compact = false }: { m: UIMatch; onClick
 
         <div className="flex-1 flex items-center gap-2.5 justify-end min-w-0">
           <span className="font-bold text-textp truncate text-right">{away.name}</span>
-          <Flag code={m.away} size={22} />
+          <FlagChip code={m.away} w={28} h={18} r={4} />
         </div>
       </div>
 
@@ -138,7 +139,7 @@ export function NextPredictCard({
 
       <div className="flex items-center gap-2">
         <div className="flex flex-col items-center gap-1.5 w-10 shrink-0">
-          <Flag code={m.home} size={20} />
+          <FlagChip code={m.home} w={24} h={16} r={3} />
           <span className="text-[11px] font-bold text-textp group-hover/card:text-primary transition-colors">{home.code}</span>
         </div>
         {/* Steppers must not trigger card navigation */}
@@ -148,7 +149,7 @@ export function NextPredictCard({
           <ScoreStepper value={pred.a} onChange={(v) => onChange('a', v)} compact />
         </div>
         <div className="flex flex-col items-center gap-1.5 w-10 shrink-0">
-          <Flag code={m.away} size={20} />
+          <FlagChip code={m.away} w={24} h={16} r={3} />
           <span className="text-[11px] font-bold text-textp group-hover/card:text-primary transition-colors">{away.code}</span>
         </div>
       </div>

@@ -49,7 +49,6 @@ export function Avatar({
         className="object-cover shrink-0"
         style={{ borderRadius: radius, border: ring ? `2px solid ${color}` : undefined }}
         onError={() => setImgError(true)}
-        unoptimized
       />
     )
   }
@@ -464,8 +463,13 @@ export function Countdown({ kickoff, className = '' }: { kickoff: string; classN
 export function Skeleton({ className = '' }: { className?: string }) {
   return (
     <div
-      className={`rounded-[12px] animate-shimmer ${className}`}
-      style={{ background: 'linear-gradient(90deg, rgb(var(--surface2)), rgb(var(--surface3)), rgb(var(--surface2)))', backgroundSize: '200% 100%' }}
+      aria-hidden="true"
+      className={`rounded-[12px] animate-shimmer border border-border/50 ${className}`}
+      style={{
+        backgroundColor: 'rgb(var(--surface2))',
+        backgroundImage: 'linear-gradient(90deg, rgb(var(--surface2)), rgb(var(--surface3)), rgb(var(--surface2)))',
+        backgroundSize: '200% 100%',
+      }}
     />
   )
 }

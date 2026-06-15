@@ -7,7 +7,6 @@ export interface ActiveLeagueProfile {
   username: string
   avatar_url: string | null
   is_admin: boolean
-  active_league_id: string | null
 }
 
 export interface ActiveLeagueContextValue {
