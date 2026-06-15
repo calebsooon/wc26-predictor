@@ -99,8 +99,9 @@ export function PlayerCardPicker({
   const [search, setSearch] = useState('')
 
   const noScorer = value === 'none'
-  const selected = typeof value === 'number' ? (players.find((p) => p.id === value) ?? null) : null
-  const hasChoice = noScorer || !!selected
+  const ownGoal = value === -1
+  const selected = typeof value === 'number' && value !== -1 ? (players.find((p) => p.id === value) ?? null) : null
+  const hasChoice = noScorer || ownGoal || !!selected
 
   const grouped = useMemo(() => {
     const q = search.toLowerCase()
@@ -145,6 +146,8 @@ export function PlayerCardPicker({
       >
         {noScorer ? (
           <span className="flex-1 text-left text-textp">🚫 No scorer</span>
+        ) : ownGoal ? (
+          <span className="flex-1 text-left text-textp">⚽ Own goal</span>
         ) : selected ? (
           <>
             <span className="text-lg leading-none">{getTeam(selected.team_code).flag}</span>
@@ -182,13 +185,22 @@ export function PlayerCardPicker({
           </div>
 
           {!search && (
-            <button
-              onClick={() => { onChange('none'); setOpen(false) }}
-              className={`flex items-center gap-2 px-3 h-11 border-b border-border text-left text-sm font-bold transition-colors ${noScorer ? 'bg-gold/10 text-gold' : 'text-textp hover:bg-surface'}`}
-            >
-              🚫 No scorer <span className="text-[11px] font-medium text-texts">(predict nobody scores first)</span>
-              {noScorer && <span className="ml-auto text-gold">✓</span>}
-            </button>
+            <>
+              <button
+                onClick={() => { onChange('none'); setOpen(false) }}
+                className={`flex items-center gap-2 px-3 h-11 border-b border-border text-left text-sm font-bold transition-colors ${noScorer ? 'bg-gold/10 text-gold' : 'text-textp hover:bg-surface'}`}
+              >
+                🚫 No scorer <span className="text-[11px] font-medium text-texts">(predict nobody scores first)</span>
+                {noScorer && <span className="ml-auto text-gold">✓</span>}
+              </button>
+              <button
+                onClick={() => { onChange(-1); setOpen(false) }}
+                className={`flex items-center gap-2 px-3 h-11 border-b border-border text-left text-sm font-bold transition-colors ${ownGoal ? 'bg-gold/10 text-gold' : 'text-textp hover:bg-surface'}`}
+              >
+                ⚽ Own goal <span className="text-[11px] font-medium text-texts">(first goal is an own goal)</span>
+                {ownGoal && <span className="ml-auto text-gold">✓</span>}
+              </button>
+            </>
           )}
 
           <div className="overflow-y-auto p-3 space-y-4">

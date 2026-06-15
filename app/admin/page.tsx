@@ -94,7 +94,7 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
     toast.success(`${home.name} ${h}–${a} ${away.name} saved & scored`)
   }
 
-  const scorerName = players.find((p) => p.id === scorerId)?.name ?? ''
+  const scorerName = scorerId === -1 ? 'Own goal' : (players.find((p) => p.id === scorerId)?.name ?? '')
   const scorerOptions = players.filter((p) => !search || p.name.toLowerCase().includes(search.toLowerCase()))
 
   return (
@@ -143,6 +143,10 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
                 </div>
                 <div className="max-h-48 overflow-y-auto">
                   <button onClick={() => { setScorerId(null); setScorerOpen(false) }} className="w-full px-3 h-10 text-left text-sm text-texts hover:bg-surface">— Clear —</button>
+                  <button onClick={() => { setScorerId(-1); setScorerOpen(false); setSearch('') }} className={`w-full px-3 h-10 flex items-center gap-2 text-left text-sm font-bold hover:bg-surface ${scorerId === -1 ? 'text-primary' : 'text-textp'}`}>
+                    <span>⚽</span><span className="flex-1">Own goal</span>
+                    {scorerId === -1 && <span className="text-primary">✓</span>}
+                  </button>
                   {scorerOptions.map((o) => (
                     <button key={o.id} onClick={() => { setScorerId(o.id); setScorerOpen(false); setSearch('') }} className="w-full px-3 h-10 flex items-center gap-2 hover:bg-surface text-left">
                       <Flag code={o.team_code} size={16} /><span className="text-sm text-textp flex-1">{o.name}</span>
@@ -420,6 +424,18 @@ function LeagueManage({
           <Button size="sm" variant={league.banners_enabled ? 'primary' : 'surface'} onClick={() => patch({ banners_enabled: !league.banners_enabled }, league.banners_enabled ? 'Banners hidden.' : 'Banner slider enabled.')}>
             {league.banners_enabled ? 'On' : 'Off'}
           </Button>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-texts">Manual GD edit</span>
+          {(() => {
+            const scoring = (typeof league.scoring === 'object' && league.scoring !== null) ? league.scoring as Record<string, unknown> : {}
+            const disabled = !!scoring.disable_gd
+            return (
+              <Button size="sm" variant={disabled ? 'surface' : 'primary'} onClick={() => patch({ scoring: { ...scoring, disable_gd: !disabled } }, disabled ? 'Manual GD override enabled.' : 'Manual GD override disabled.')}>
+                {disabled ? 'Off' : 'On'}
+              </Button>
+            )
+          })()}
         </div>
       </div>
 
