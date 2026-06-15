@@ -112,12 +112,13 @@ export const WEIGHT_FIELDS: { key: keyof ScoringWeights; label: string; group: '
 /** Merge a league's stored (possibly null/partial) weights over the defaults. */
 export function resolveWeights(raw: unknown): ScoringWeights {
   if (!raw || typeof raw !== 'object') return { ...DEFAULT_WEIGHTS }
-  const r = raw as Partial<Record<keyof ScoringWeights, unknown>>
+  const r = raw as Partial<Record<keyof ScoringWeights, unknown>> & { disable_gd?: unknown }
   const out = { ...DEFAULT_WEIGHTS }
   for (const k of Object.keys(DEFAULT_WEIGHTS) as (keyof ScoringWeights)[]) {
     const v = r[k]
     if (typeof v === 'number' && Number.isFinite(v)) out[k] = v
   }
+  if (r.disable_gd) out.goalDiff = 0
   return out
 }
 
