@@ -110,6 +110,7 @@ export default function ProfilePage() {
   const [netPool, setNetPool] = useState<number | null>(null)
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [uploading, setUploading] = useState(false)
+  const [uploadPct, setUploadPct] = useState(0)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -276,10 +277,16 @@ export default function ProfilePage() {
       return
     }
     setUploading(true)
+    setUploadPct(0)
+    const pctTicker = setInterval(() => {
+      setUploadPct((prev) => Math.min(prev + Math.random() * 14, 85))
+    }, 180)
     const ext = file.name.split('.').pop()
     const path = `${profile.id}/avatar.${ext}`
     const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type })
-    if (upErr) { toast.error(`Upload failed: ${upErr.message}`); setUploading(false); return }
+    clearInterval(pctTicker)
+    if (upErr) { setUploadPct(0); toast.error(`Upload failed: ${upErr.message}`); setUploading(false); return }
+    setUploadPct(100)
     const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
     const busted = `${publicUrl}?t=${Date.now()}`
     const { error: dbErr } = await supabase.from('profiles').update({ avatar_url: busted }).eq('id', profile.id)
@@ -288,6 +295,7 @@ export default function ProfilePage() {
     setProfile((prev) => (prev ? { ...prev, avatar_url: busted } : prev))
     window.dispatchEvent(new CustomEvent('matchday:profile-updated', { detail: { avatar_url: busted } }))
     toast.success('Avatar updated!')
+    setTimeout(() => setUploadPct(0), 500)
     setUploading(false)
   }
 
@@ -817,9 +825,16 @@ export default function ProfilePage() {
           {/* Avatar */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <Avatar name={profile.username} src={avatarUrl} size={56} />
-            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
-              {uploading ? 'Uploading…' : 'Change photo'}
-            </Button>
+            <div>
+              <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
+                {uploading ? `Uploading ${Math.round(uploadPct)}%` : 'Change photo'}
+              </Button>
+              {uploading && (
+                <div style={{ width: '100%', height: 3, borderRadius: 2, background: 'rgb(var(--surface2))', marginTop: 6, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 2, background: 'rgb(var(--primary))', width: `${uploadPct}%`, transition: 'width 0.18s ease' }} />
+                </div>
+              )}
+            </div>
             <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarChange} />
           </div>
 

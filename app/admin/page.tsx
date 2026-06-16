@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
@@ -29,7 +29,10 @@ interface Match {
 
 interface Player { id: number; name: string; team_code: string }
 
-function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
+interface AdminRowHandle { save: () => Promise<void> }
+
+const AdminRow = forwardRef<AdminRowHandle, { m: Match; onSaved: (m: Match) => void }>(
+function AdminRow({ m, onSaved }, ref) {
   const supabase = createClient()
   const home = getTeam(m.home_team), away = getTeam(m.away_team)
   const [open, setOpen] = useState(false)
@@ -60,7 +63,7 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
     }
   }
 
-  async function scoreOnly() {
+  const scoreOnly = useCallback(async () => {
     setSaving(true)
     setScoringFailed(false)
     const res = await fetch('/api/score-match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ match_id: m.id }) })
@@ -72,9 +75,10 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
     }
     onSaved({ ...m, real_home_score: h, real_away_score: a, is_locked: true, first_goal_team: fgt, first_goal_player_id: scorerId, match_winner: matchWinner })
     toast.success(`${home.name} ${h}–${a} ${away.name} re-scored`)
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [h, a, fgt, scorerId, m.id, home.name, away.name])
 
-  async function save() {
+  const save = useCallback(async () => {
     if (h == null || a == null) { toast.error('Both scores required'); return }
     setSaving(true)
     setScoringFailed(false)
@@ -93,7 +97,10 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
     }
     onSaved({ ...m, real_home_score: h, real_away_score: a, is_locked: true, first_goal_team: fgt, first_goal_player_id: scorerId, match_winner: matchWinner })
     toast.success(`${home.name} ${h}–${a} ${away.name} saved & scored`)
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [h, a, fgt, scorerId, matchWinner, m.id, m.group_name, home.name, away.name])
+
+  useImperativeHandle(ref, () => ({ save }), [save])
 
   const scorerName = scorerId === -1 ? 'Own goal' : (players.find((p) => p.id === scorerId)?.name ?? '')
   const scorerOptions = players.filter((p) => !search || p.name.toLowerCase().includes(search.toLowerCase()))
@@ -192,7 +199,7 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
       </div>
     </Card>
   )
-}
+})
 
 function AdminActions() {
   const [busy, setBusy] = useState<string | null>(null)
@@ -873,6 +880,8 @@ export default function AdminPage() {
   const [matches, setMatches] = useState<Match[]>([])
   const [filter, setFilter] = useState('pending')
   const [loading, setLoading] = useState(true)
+  const [batchSaving, setBatchSaving] = useState(false)
+  const rowHandles = useRef(new Map<string, AdminRowHandle>())
 
   useEffect(() => {
     async function load() {
@@ -902,7 +911,20 @@ export default function AdminPage() {
     return filter === 'all' ? true : filter === 'done' ? done : !done
   }), [matches, filter])
 
+  async function saveAll() {
+    const pending = filtered.filter((m) => m.real_home_score === null)
+    if (pending.length === 0) { toast.info('No pending matches to batch-save'); return }
+    setBatchSaving(true)
+    for (const m of pending) {
+      const handle = rowHandles.current.get(m.id)
+      if (handle) await handle.save()
+    }
+    setBatchSaving(false)
+  }
+
   if (loading) return <div className="space-y-3"><Skeleton className="h-9 w-40" />{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+
+  const pendingCount = filtered.filter((m) => m.real_home_score === null).length
 
   return (
     <div className="space-y-5">
@@ -910,11 +932,23 @@ export default function AdminPage() {
       <LeagueAdmin />
       <AdminActions />
       <BracketResultsEditor />
-      <SectionHeader title="Results entry" sub="Saving a result locks the match and recalculates points." />
+      <div className="flex items-center justify-between gap-3">
+        <SectionHeader title="Results entry" sub="Saving a result locks the match and recalculates points." />
+        {filter !== 'done' && pendingCount > 0 && (
+          <Button size="sm" variant="outline" onClick={saveAll} disabled={batchSaving} className="shrink-0">
+            {batchSaving ? 'Saving…' : `Save all ${pendingCount}`}
+          </Button>
+        )}
+      </div>
       <ChipRow chips={[{ key: 'pending', label: 'Pending' }, { key: 'done', label: 'Scored' }, { key: 'all', label: 'All' }]} value={filter} onChange={setFilter} />
       <div className="space-y-2.5">
         {filtered.map((m) => (
-          <AdminRow key={m.id} m={m} onSaved={(nm) => setMatches((prev) => prev.map((x) => x.id === nm.id ? nm : x))} />
+          <AdminRow
+            key={m.id}
+            ref={(handle) => { if (handle) rowHandles.current.set(m.id, handle); else rowHandles.current.delete(m.id) }}
+            m={m}
+            onSaved={(nm) => setMatches((prev) => prev.map((x) => x.id === nm.id ? nm : x))}
+          />
         ))}
       </div>
     </div>

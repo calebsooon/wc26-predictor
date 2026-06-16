@@ -34,14 +34,17 @@ interface ScoredPredRow {
   matches: { gw_number: number | null } | null
 }
 interface MatchGWRow { gw_number: number | null; real_home_score: number | null }
+interface BannerItem { id: string; image_url: string; display_order: number }
 
 function ordinal(n: number) {
   const s = ['th', 'st', 'nd', 'rd'], v = n % 100
   return n + (s[(v - 20) % 10] ?? s[v] ?? s[0])
 }
 
+interface RankSnapshot { rank: number; snapshot_at: string; gw_number: number | null }
+
 export default function DashboardPage() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
   const [matches, setMatches] = useState<DBMatch[]>([])
   const [preds, setPreds] = useState<Record<string, MyPred>>({})
@@ -51,10 +54,13 @@ export default function DashboardPage() {
   const [scoredPreds, setScoredPreds] = useState<ScoredPredRow[]>([])
   const [gwMatchRows, setGwMatchRows] = useState<MatchGWRow[]>([])
   const [prevRank, setPrevRank] = useState<number | null>(null)
+  const [rankSnapshots, setRankSnapshots] = useState<RankSnapshot[]>([])
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [isMoney, setIsMoney] = useState(false)
   const [leagueName, setLeagueName] = useState('')
   const [bracketEnabled, setBracketEnabled] = useState(true)
+  const [bannersEnabled, setBannersEnabled] = useState(false)
+  const [banners, setBanners] = useState<BannerItem[]>([])
   const [rulesOpen, setRulesOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -98,13 +104,15 @@ export default function DashboardPage() {
         setIsMoney(isMoneyLeague(league))
         setLeagueName(league?.name ?? '')
         setBracketEnabled(league?.bracket_enabled !== false)
+        setBannersEnabled(league?.banners_enabled === true)
 
         const ids = memberIds.length ? memberIds : [user.id]
-        const [{ data: scored }, { data: gwMatches }, { data: tp }, snapResult] = await Promise.all([
+        const [{ data: scored }, { data: gwMatches }, { data: tp }, snapResult, bannerResult] = await Promise.all([
           supabase.from('predictions').select(SCORED_COLS).not('points_awarded', 'is', null).in('user_id', ids),
           supabase.from('matches').select('gw_number, real_home_score').not('gw_number', 'is', null),
           supabase.from('tournament_predictions').select('user_id').eq('user_id', user.id).limit(1),
-          league ? supabase.from('rank_snapshots').select('rank, snapshot_at').eq('user_id', user.id).eq('league_id', league.id).order('snapshot_at', { ascending: false }).limit(1).maybeSingle() : Promise.resolve({ data: null }),
+          league ? supabase.from('rank_snapshots').select('rank, snapshot_at, gw_number').eq('user_id', user.id).eq('league_id', league.id).order('snapshot_at', { ascending: true }) : Promise.resolve({ data: [] }),
+          league?.banners_enabled ? supabase.from('league_banners').select('id, image_url, display_order').eq('league_id', league.id).order('display_order') : Promise.resolve({ data: [] }),
         ])
 
         const allScored = (scored ?? []) as unknown as ScoredPredRow[]
@@ -112,7 +120,10 @@ export default function DashboardPage() {
         setLb(aggregateLeaderboard({ scoredPreds: allScored, profiles: memberProfiles as ProfileLite[], userId: user.id, weights: w }))
         setGwMatchRows((gwMatches ?? []) as unknown as MatchGWRow[])
         setHasTournamentPick(!!(tp && tp.length))
-        setPrevRank((snapResult.data as { rank: number } | null)?.rank ?? null)
+        const snaps = (snapResult.data ?? []) as RankSnapshot[]
+        setRankSnapshots(snaps)
+        setPrevRank(snaps.length >= 2 ? snaps[snaps.length - 2].rank : null)
+        setBanners((bannerResult.data ?? []) as BannerItem[])
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load dashboard')
         setLoading(false)
@@ -185,6 +196,10 @@ export default function DashboardPage() {
   const gwNumbers = Object.keys(scoredByGW).map(Number).sort((a, b) => a - b)
   const gwSeries = gwNumbers.map((gw) => scoredByGW[gw])
   const gwLabels = gwNumbers.map((gw) => `GW${gw}`)
+
+  // Rank trajectory from real snapshots
+  const rankSeries = rankSnapshots.map((s) => s.rank)
+  const rankLabels = rankSnapshots.map((s, i) => s.gw_number != null ? `GW${s.gw_number}` : `S${i + 1}`)
 
   // Current GW pts: pts from the most recent GW that has scored predictions
   const currentGWPts = useMemo(() => {
@@ -263,7 +278,7 @@ export default function DashboardPage() {
           <div className="flex gap-2.5 mt-4">
             <Link
               href="/predictions"
-              className="h-10 px-[18px] rounded-[11px] bg-white text-[#0c5733] text-[13.5px] font-bold flex items-center gap-1.5 hover:opacity-90 transition-opacity"
+              className="h-10 px-[18px] rounded-[11px] bg-white text-[rgb(4,38,20)] text-[13.5px] font-bold flex items-center gap-1.5 hover:opacity-90 transition-opacity"
               style={{ boxShadow: '0 4px 14px -4px rgba(0,0,0,0.2)' }}
             >
               <BoltIcon size={14} />
@@ -441,12 +456,14 @@ export default function DashboardPage() {
               </span>
             )}
           </div>
-          {gwSeries.length > 0 ? (
-            trajMode === 'points'
+          {trajMode === 'points' ? (
+            gwSeries.length > 0
               ? <BarChart series={gwSeries} labels={gwLabels} />
-              : <RankLine ranks={gwSeries.map((_, i) => i + 1)} total={lb.length || 7} labels={gwLabels} />
+              : <div className="h-28 flex items-center justify-center text-texts text-sm">No scored matches yet</div>
           ) : (
-            <div className="h-28 flex items-center justify-center text-texts text-sm">No scored matches yet</div>
+            rankSeries.length > 1
+              ? <RankLine ranks={rankSeries} total={lb.length || 7} labels={rankLabels} />
+              : <div className="h-28 flex items-center justify-center text-texts text-sm">{rankSeries.length === 1 ? 'Need more snapshots for rank trend' : 'No rank history yet'}</div>
           )}
         </div>
 
@@ -557,6 +574,10 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {bannersEnabled && banners.length > 0 && (
+        <BannerPreview banners={banners} leagueName={leagueName} />
+      )}
+
       {/* Prediction Modal */}
       {modalMatchId && (
         <PredictionModal
@@ -636,7 +657,7 @@ function HeroMatchCard({ m, hasPred, onOpen }: { m: DBMatch; hasPred: boolean; o
         <div className="flex justify-center mt-5">
           <button
             onClick={onOpen}
-            className="h-[42px] px-[22px] rounded-[11px] bg-primary text-[#042614] text-[13px] font-bold hover:opacity-90 active:scale-[0.98] transition-all"
+            className="h-[42px] px-[22px] rounded-[11px] bg-primary text-[rgb(4,38,20)] text-[13px] font-bold hover:opacity-90 active:scale-[0.98] transition-all"
           >
             {hasPred ? 'Edit prediction' : 'Submit prediction'}
           </button>
@@ -712,6 +733,52 @@ function PrizeSection({ prize }: { prize: ReturnType<typeof computePrizeSnapshot
           Overall prize (current rank): <span className={`font-bold ${projectedOverallPrize > 0 ? 'text-success' : 'text-error'}`}>{formatPrize(projectedOverallPrize)}</span>
         </p>
       )}
+    </div>
+  )
+}
+
+function BannerPreview({ banners, leagueName }: { banners: BannerItem[]; leagueName: string }) {
+  const [index, setIndex] = useState(0)
+
+  useEffect(() => {
+    if (banners.length <= 1) return
+    const id = window.setInterval(() => {
+      setIndex((prev) => (prev + 1) % banners.length)
+    }, 4500)
+    return () => window.clearInterval(id)
+  }, [banners.length])
+
+  const active = banners[index] ?? banners[0]
+  if (!active) return null
+
+  return (
+    <div className="bg-card border border-border rounded-[18px] px-[22px] py-[20px]">
+      <div className="flex items-end justify-between gap-3 mb-4">
+        <div>
+          <div className="text-[16px] font-bold font-display text-textp">Latest from {leagueName || 'your league'}</div>
+        </div>
+        {banners.length > 1 && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            {banners.map((banner, i) => (
+              <button
+                key={banner.id}
+                onClick={() => setIndex(i)}
+                aria-label={`Show banner ${i + 1}`}
+                className={`h-2 rounded-full transition-all ${i === index ? 'w-6 bg-primary' : 'w-2 bg-border hover:bg-texts/40'}`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="relative overflow-hidden rounded-[16px] border border-border bg-surface2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={active.image_url}
+          alt={`${leagueName || 'League'} banner ${index + 1}`}
+          className="block w-full h-auto object-cover"
+          style={{ aspectRatio: '16 / 7' }}
+        />
+      </div>
     </div>
   )
 }

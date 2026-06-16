@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/s
 import { requireAdmin } from '@/lib/require-admin'
 import { scorePrediction, type PredictionInput } from '@/lib/scoring'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { snapshotLeagueRanks } from '@/lib/snapshot'
 
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient()
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
 
   const { data: match, error: matchErr } = await supabase
     .from('matches')
-    .select('id, home_team, away_team, real_home_score, real_away_score, first_goal_team, first_goal_player_id')
+    .select('id, home_team, away_team, real_home_score, real_away_score, first_goal_team, first_goal_player_id, gw_number')
     .eq('id', match_id)
     .single()
   if (matchErr || !match) return NextResponse.json({ error: 'Match not found' }, { status: 404 })
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
     home_team: string; away_team: string
     real_home_score: number | null; real_away_score: number | null
     first_goal_team: string | null; first_goal_player_id: number | null
+    gw_number: number | null
   }
   if (m.real_home_score === null || m.real_away_score === null) {
     return NextResponse.json({ error: 'Match has no real scores yet' }, { status: 422 })
@@ -74,6 +76,18 @@ export async function POST(request: Request) {
     pts_distributed: updates.reduce((s, u) => s + (u.points_awarded ?? 0), 0),
     scored_count: updates.length,
   }).then(() => {})
+
+  // Auto-snapshot when all matches in this GW are now scored
+  if (m.gw_number != null) {
+    const { count } = await serviceSupabase
+      .from('matches')
+      .select('*', { count: 'exact', head: true })
+      .eq('gw_number', m.gw_number)
+      .is('real_home_score', null)
+    if (count === 0) {
+      try { await snapshotLeagueRanks(serviceSupabase, m.gw_number) } catch {}
+    }
+  }
 
   return NextResponse.json({ match_id, scored: updates.length })
 }

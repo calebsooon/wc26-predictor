@@ -100,8 +100,10 @@ export async function POST(req: Request) {
     scored_count: predictionsUpdated,
   }).then(() => {})
 
-  // Auto-snapshot ranks at group-stage boundary
-  try { await snapshotLeagueRanks(serviceSupabase) } catch {}
+  // Auto-snapshot ranks after scoring all groups (end of group stage = GW3)
+  if (!group_name) {
+    try { await snapshotLeagueRanks(serviceSupabase, 3) } catch {}
+  }
 
   return NextResponse.json({ groups: results, predictions_updated: predictionsUpdated })
 }
