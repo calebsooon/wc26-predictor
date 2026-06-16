@@ -2,7 +2,7 @@
 
 export default function OfflinePage() {
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center gap-6 bg-[#0B0C14] px-6 text-center">
+    <div className="fixed inset-0 flex flex-col items-center justify-center gap-6 bg-bg px-6 text-center">
       {/* Ball mark */}
       <svg
         width="72"

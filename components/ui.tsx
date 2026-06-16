@@ -101,10 +101,11 @@ export function Modal({
       onClick={(e) => { if (e.target === overlayRef.current) onClose() }}
       role="dialog"
       aria-modal="true"
+      aria-labelledby="modal-title"
     >
       <div ref={panelRef} className={`w-full ${maxWidth} bg-card border border-border rounded-t-[24px] sm:rounded-[20px] shadow-card overflow-hidden flex flex-col max-h-[90vh]`}>
         <div className="flex items-center justify-between gap-3 px-5 h-14 shrink-0 border-b border-border bg-surface">
-          <h2 className="font-bold font-display text-textp text-[15px] truncate">{title}</h2>
+          <h2 id="modal-title" className="font-bold font-display text-textp text-[15px] truncate">{title}</h2>
           <button onClick={onClose} aria-label="Close" className="w-8 h-8 grid place-items-center rounded-lg bg-surface2 text-texts hover:text-textp shrink-0 text-sm">✕</button>
         </div>
         <div className="flex-1 overflow-y-auto">{children}</div>

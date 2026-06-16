@@ -43,6 +43,11 @@
   /* Semantic */
   --error:     221  75  75;  /* #dd4b4b */
   --success:    14 158  85;  /* #0e9e55 */
+  --bronze:    176 110  70;  /* #b06e46 */
+
+  /* Hero gradient */
+  --heroFrom:   22 163  93;
+  --heroTo:     12 122  68;
 
   /* Card elevation */
   --card-shadow: 0 1px 2px rgba(16,22,40,0.05), 0 10px 26px -14px rgba(16,22,40,0.14);
@@ -72,6 +77,11 @@
   /* Semantic */
   --error:     255 107 107;  /* #ff6b6b */
   --success:    31 193 107;  /* #1fc16b */
+  --bronze:    205 127  80;  /* #cd7f50 */
+
+  /* Hero gradient */
+  --heroFrom:   26 168  94;
+  --heroTo:     15 122  72;
 
   /* Card elevation */
   --card-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 26px -12px rgba(0,0,0,0.6);
@@ -133,6 +143,23 @@ h1, h2, h3, .font-display {
     letter-spacing: 0.13em;
     color: rgb(var(--faint));
   }
+}
+
+/* Modal enter animation */
+@keyframes mcIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes mcFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Leaderboard rank-change pop */
+@keyframes lbPop {
+  0%   { opacity: 0; transform: translateY(4px) scale(0.8); }
+  60%  { transform: translateY(0) scale(1.12); }
+  100% { opacity: 1; transform: none; }
 }
 
 /* Custom scrollbar (token-aware) */

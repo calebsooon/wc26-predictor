@@ -54,7 +54,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        <link rel="manifest" href="/manifest.json" />
+        {/* manifest is declared via metadata.manifest above — no duplicate link tag needed */}
         <link rel="apple-touch-icon" href="/icon-192.png" />
         <link rel="icon" type="image/svg+xml" href="/icon.svg" />
         <meta name="mobile-web-app-capable" content="yes" />

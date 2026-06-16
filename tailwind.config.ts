@@ -37,6 +37,7 @@ const config: Config = {
         faint:    token("--faint"),
         error:    token("--error"),
         success:  token("--success"),
+        bronze:   token("--bronze"),
         // legacy aliases
         background: token("--bg"),
         foreground: token("--textp"),
@@ -54,9 +55,20 @@ const config: Config = {
           "0%":   { backgroundPosition: "200% 0" },
           "100%": { backgroundPosition: "-200% 0" },
         },
+        mcIn: {
+          "from": { opacity: "0", transform: "translateY(10px) scale(0.985)" },
+          "to":   { opacity: "1", transform: "none" },
+        },
+        lbPop: {
+          "0%":   { opacity: "0", transform: "translateY(4px) scale(0.8)" },
+          "60%":  { transform: "translateY(0) scale(1.12)" },
+          "100%": { opacity: "1", transform: "none" },
+        },
       },
       animation: {
         shimmer: "shimmer 1.4s infinite",
+        "mc-in": "mcIn 0.22s cubic-bezier(.16,1,.3,1) forwards",
+        "lb-pop": "lbPop 0.45s cubic-bezier(.16,1,.3,1) forwards",
       },
     },
   },

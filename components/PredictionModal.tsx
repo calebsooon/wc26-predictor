@@ -48,7 +48,7 @@ function Av({ name, src, you, size = 32 }: { name: string; src?: string | null; 
   const [err, setErr] = useState(false)
   const color = you ? 'rgb(var(--primary))' : 'rgb(var(--textp))'
   const bg = you ? 'rgb(var(--primary))' : 'rgb(var(--surface3))'
-  const textColor = you ? '#042614' : 'rgb(var(--textp))'
+  const textColor = you ? 'rgb(4,38,20)' : 'rgb(var(--textp))'
   const r = Math.round(size * 0.28)
   if (src && !err) {
     return (
@@ -968,7 +968,7 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
                               alignItems: 'center',
                               justifyContent: 'center',
                               background: selected ? 'rgb(var(--primary))' : 'rgb(var(--surface3))',
-                              color: selected ? '#042614' : 'rgb(var(--texts))',
+                              color: selected ? 'rgb(4,38,20)' : 'rgb(var(--texts))',
                             }}>
                               {isOg ? (
                                 <span style={{ fontSize: 20 }}>⚽</span>
@@ -1021,7 +1021,7 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
                     height: 48,
                     borderRadius: 13,
                     background: 'rgb(var(--primary))',
-                    color: '#042614',
+                    color: 'rgb(4,38,20)',
                     fontSize: 14,
                     fontWeight: 700,
                     marginTop: 4,
