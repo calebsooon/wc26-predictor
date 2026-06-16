@@ -7,6 +7,21 @@ import { EmptyState, Skeleton, CalIcon } from '@/components/ui'
 import { toUIMatch, matchStatus, type DBMatch, type MyPred } from '@/lib/match-ui'
 import { getActiveLeague } from '@/lib/league'
 import { DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
+
+const MATCH_WEIGHT_KEYS: (keyof ScoringWeights)[] = [
+  'outcome', 'exact', 'goalDiff', 'totalGoals', 'teamGoals', 'btts', 'firstTeam', 'firstScorer',
+]
+function maxMatchPts(w: ScoringWeights) {
+  return MATCH_WEIGHT_KEYS.reduce((s, k) => s + (w[k] ?? 0), 0)
+}
+function ptColor(pts: number, w: ScoringWeights): string {
+  const max = maxMatchPts(w)
+  if (max <= 0) return 'rgb(var(--primary))'
+  const pct = pts / max
+  if (pct >= 0.6) return 'rgb(var(--success))'
+  if (pct >= 0.3) return 'rgb(var(--amber))'
+  return 'rgb(var(--coral))'
+}
 import { fmtDateKey, fmtDateOnlyKey, fmtTime, getUserTimeZone } from '@/lib/date-format'
 import FlagChip from '@/components/FlagChip'
 import PredictionModal from '@/components/PredictionModal'
@@ -14,7 +29,7 @@ import { getTeam } from '@/lib/teams'
 
 interface RoundRow { id: string; name: string; order: number; matches: DBMatch[] }
 
-type MainFilter = 'open' | 'today' | 'missing' | 'full'
+type MainFilter = 'open' | 'today' | 'missing' | 'closed' | 'full'
 type StageFilter = 'all' | 'group' | 'knockout'
 
 export default function FixturesPage() {
@@ -82,8 +97,9 @@ export default function FixturesPage() {
     const missing = matches.filter((m) => matchStatus(m, preds[m.id]) === 'missing').length
     const today = matches.filter((m) => fmtDateOnlyKey(m.match_date, timeZone) === todayLocal).length
     const open = matches.filter((m) => m.real_home_score === null || m.real_away_score === null).length
+    const closed = matches.filter((m) => m.real_home_score !== null && m.real_away_score !== null).length
     const full = matches.length
-    return { open, missing, today, full }
+    return { open, missing, today, closed, full }
   }, [matches, preds, timeZone, todayLocal])
 
   const groupNames = useMemo(() => {
@@ -102,6 +118,8 @@ export default function FixturesPage() {
         ? true
         : mainFilter === 'open'
         ? (m.real_home_score === null || m.real_away_score === null)
+        : mainFilter === 'closed'
+        ? (m.real_home_score !== null && m.real_away_score !== null)
         : mainFilter === 'today'
         ? fmtDateOnlyKey(m.match_date, timeZone) === todayLocal
         : matchStatus(m, preds[m.id]) === 'missing'
@@ -183,94 +201,93 @@ export default function FixturesPage() {
 
       {/* Filter Bar */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
-          {/* Left: main filter chips */}
-          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2, flex: 1 }} className="no-scrollbar">
-            {(
-              [
-                { key: 'open' as MainFilter, label: 'Open', count: counts.open },
-                { key: 'today' as MainFilter, label: 'Today', count: counts.today },
-                { key: 'missing' as MainFilter, label: 'Missing', count: counts.missing },
-                { key: 'full' as MainFilter, label: 'Full schedule', count: counts.full },
-              ] as { key: MainFilter; label: string; count: number }[]
-            ).map(({ key, label, count }) => {
-              const active = mainFilter === key
-              return (
-                <button
-                  key={key}
-                  onClick={() => setMainFilter(key)}
-                  style={{
-                    height: 36,
-                    padding: '0 15px',
-                    borderRadius: 999,
-                    fontSize: 12.5,
-                    fontWeight: 600,
-                    whiteSpace: 'nowrap',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    cursor: 'pointer',
-                    background: active ? 'rgb(var(--textp))' : 'rgb(var(--card))',
-                    color: active ? 'rgb(var(--bg))' : 'rgb(var(--texts))',
-                    border: active ? '1px solid rgb(var(--textp))' : '1px solid rgb(var(--border))',
-                    flexShrink: 0,
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  {label}
-                  <span style={{
-                    background: active ? 'rgba(0,0,0,0.20)' : 'rgb(var(--surface3))',
-                    color: active ? '#fff' : 'rgb(var(--textp))',
-                    borderRadius: 999,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    padding: '2px 6px',
-                  }}>
-                    {count}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+        {/* Row 1: main filter chips */}
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }} className="no-scrollbar">
+          {(
+            [
+              { key: 'open' as MainFilter, label: 'Open', count: counts.open },
+              { key: 'closed' as MainFilter, label: 'Closed', count: counts.closed },
+              { key: 'today' as MainFilter, label: 'Today', count: counts.today },
+              { key: 'missing' as MainFilter, label: 'Missing', count: counts.missing },
+              { key: 'full' as MainFilter, label: 'All', count: counts.full },
+            ] as { key: MainFilter; label: string; count: number }[]
+          ).map(({ key, label, count }) => {
+            const active = mainFilter === key
+            return (
+              <button
+                key={key}
+                onClick={() => setMainFilter(key)}
+                style={{
+                  height: 36,
+                  padding: '0 14px',
+                  borderRadius: 999,
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  cursor: 'pointer',
+                  background: active ? 'rgb(var(--textp))' : 'rgb(var(--card))',
+                  color: active ? 'rgb(var(--bg))' : 'rgb(var(--texts))',
+                  border: active ? '1px solid rgb(var(--textp))' : '1px solid rgb(var(--border))',
+                  flexShrink: 0,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {label}
+                <span style={{
+                  background: active ? 'rgba(0,0,0,0.20)' : 'rgb(var(--surface3))',
+                  color: active ? '#fff' : 'rgb(var(--textp))',
+                  borderRadius: 999,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  padding: '2px 6px',
+                }}>
+                  {count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
 
-          {/* Right: stage filter chips */}
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            {(
-              [
-                { key: 'all' as StageFilter, label: 'All' },
-                { key: 'group' as StageFilter, label: 'Group' },
-                { key: 'knockout' as StageFilter, label: 'Knockout' },
-              ] as { key: StageFilter; label: string }[]
-            ).map(({ key, label }) => {
-              const active = stageFilter === key
-              return (
-                <button
-                  key={key}
-                  onClick={() => {
-                    setStageFilter(key)
-                    if (key !== 'group') setSelectedGroup(null)
-                  }}
-                  style={{
-                    height: 36,
-                    padding: '0 15px',
-                    borderRadius: 999,
-                    fontSize: 12.5,
-                    fontWeight: 600,
-                    whiteSpace: 'nowrap',
-                    display: 'flex',
-                    alignItems: 'center',
-                    cursor: 'pointer',
-                    background: active ? 'rgb(var(--textp))' : 'rgb(var(--card))',
-                    color: active ? 'rgb(var(--bg))' : 'rgb(var(--texts))',
-                    border: active ? '1px solid rgb(var(--textp))' : '1px solid rgb(var(--border))',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  {label}
-                </button>
-              )
-            })}
-          </div>
+        {/* Row 2: stage filter chips */}
+        <div style={{ display: 'flex', gap: 6 }}>
+          {(
+            [
+              { key: 'all' as StageFilter, label: 'All stages' },
+              { key: 'group' as StageFilter, label: 'Group' },
+              { key: 'knockout' as StageFilter, label: 'Knockout' },
+            ] as { key: StageFilter; label: string }[]
+          ).map(({ key, label }) => {
+            const active = stageFilter === key
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  setStageFilter(key)
+                  if (key !== 'group') setSelectedGroup(null)
+                }}
+                style={{
+                  height: 30,
+                  padding: '0 12px',
+                  borderRadius: 999,
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  background: active ? 'rgb(var(--primary))' : 'rgb(var(--surface2))',
+                  color: active ? 'rgb(var(--bg))' : 'rgb(var(--texts))',
+                  border: active ? '1px solid transparent' : '1px solid rgb(var(--border))',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {label}
+              </button>
+            )
+          })}
         </div>
 
         {/* Group letter sub-chips */}
@@ -428,7 +445,7 @@ function MatchRow({
     if (ui.pts != null) {
       pill = {
         label: `+${ui.pts} pts`,
-        color: 'rgb(var(--primary))',
+        color: ptColor(ui.pts, weights),
         bg: 'rgba(var(--primary),0.12)',
         border: 'rgba(var(--primary),0.25)',
       }
@@ -580,7 +597,7 @@ function MatchRow({
       </div>
 
       {/* Status pill / countdown */}
-      <div style={{ width: 140, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+      <div style={{ minWidth: 0, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', maxWidth: 120 }}>
         {!hasScore && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
             <MiniCountdown kickoff={m.match_date} />

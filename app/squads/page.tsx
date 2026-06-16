@@ -82,9 +82,45 @@ export default function SquadsPage() {
 
   const playersByCode = useMemo(() => {
     const map: Record<string, Player[]> = {}
+    const allTeams = Object.values(TEAMS)
+
+    // Pre-build a lookup: normalised string → team code
+    // Each team contributes: playerKey, name, fullName, code (all lowercased + stripped)
+    function norm(s: string) { return s.toLowerCase().replace(/[^a-z0-9]/g, '') }
+    const lookup = new Map<string, string>()
+    for (const t of allTeams) {
+      for (const alias of [t.playerKey, t.name, t.fullName, t.code]) {
+        const key = norm(alias)
+        if (key && !lookup.has(key)) lookup.set(key, t.code)
+      }
+    }
+    // Extra hand-written aliases for known football-data.org variations
+    const EXTRA: Record<string, string> = {
+      'drcon':        'COD', // "Congo DR" / "DR Congo"
+      'congodemo':    'COD',
+      'congodemocrep':'COD',
+      'republicofcongo':'COD',
+      'englishfa':    'ENG',
+      'cotedivoire':  'CIV',
+      'ivorycoast':   'CIV',
+      'republicofkorea':'KOR',
+      'korea':        'KOR',
+      'unitedstates': 'USA',
+      'unitedstatesofamerica':'USA',
+      'bosniaandherzegovina':'BIH',
+      'bosniaherzegovina':'BIH',
+      'czechrepublic':'CZE',
+      'turkiye':      'TUR',
+      'capeverdeislands':'CPV',
+      'capeverde':    'CPV',
+    }
+    for (const [k, code] of Object.entries(EXTRA)) {
+      if (!lookup.has(k)) lookup.set(k, code)
+    }
+
     for (const p of allPlayers) {
-      const team = Object.values(TEAMS).find((t) => t.playerKey === p.team_name)
-      if (team) (map[team.code] ||= []).push(p)
+      const code = lookup.get(norm(p.team_name))
+      if (code) (map[code] ||= []).push(p)
     }
     return map
   }, [allPlayers])

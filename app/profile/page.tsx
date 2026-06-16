@@ -89,6 +89,64 @@ const CATEGORIES = [
   { key: 'pts_exact' as const, label: 'Exact score' },
 ]
 
+/* ─── CropModal ─────────────────────────────────────────────────────────────── */
+const CROP_SIZE = 280
+
+function CropModal({ src, onConfirm, onClose }: { src: string; onConfirm: (blob: Blob) => void; onClose: () => void }) {
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const [scale, setScale] = useState(1)
+  const [dragging, setDragging] = useState(false)
+  const dragStart = useRef<{ mx: number; my: number; ox: number; oy: number } | null>(null)
+  const imgRef = useRef<HTMLImageElement | null>(null)
+
+  function onMouseDown(e: React.MouseEvent) {
+    setDragging(true)
+    dragStart.current = { mx: e.clientX, my: e.clientY, ox: offset.x, oy: offset.y }
+  }
+  function onMouseMove(e: React.MouseEvent) {
+    if (!dragging || !dragStart.current) return
+    setOffset({ x: dragStart.current.ox + e.clientX - dragStart.current.mx, y: dragStart.current.oy + e.clientY - dragStart.current.my })
+  }
+  function onMouseUp() { setDragging(false) }
+  function onWheel(e: React.WheelEvent) { e.preventDefault(); setScale((s) => Math.max(0.5, Math.min(4, s - e.deltaY * 0.002))) }
+
+  function confirm() {
+    const img = imgRef.current; if (!img) return
+    const OUT = 400
+    const canvas = document.createElement('canvas')
+    canvas.width = OUT; canvas.height = OUT
+    const ctx = canvas.getContext('2d')!
+    ctx.beginPath(); ctx.arc(OUT / 2, OUT / 2, OUT / 2, 0, Math.PI * 2); ctx.clip()
+    const ratio = OUT / CROP_SIZE
+    const base = Math.max(CROP_SIZE / img.naturalWidth, CROP_SIZE / img.naturalHeight)
+    const dw = img.naturalWidth * base * scale, dh = img.naturalHeight * base * scale
+    ctx.drawImage(img, (OUT - dw) / 2 + offset.x * ratio, (OUT - dh) / 2 + offset.y * ratio, dw, dh)
+    canvas.toBlob((b) => { if (b) onConfirm(b) }, 'image/jpeg', 0.92)
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Crop photo" maxWidth="max-w-sm">
+      <div className="flex flex-col items-center gap-4">
+        <p className="text-sm text-texts">Drag to reposition · scroll or slider to zoom</p>
+        <div
+          style={{ width: CROP_SIZE, height: CROP_SIZE, borderRadius: '50%', overflow: 'hidden', border: '3px solid rgb(var(--primary))', cursor: dragging ? 'grabbing' : 'grab', position: 'relative', userSelect: 'none', flexShrink: 0 }}
+          onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onWheel={onWheel}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img ref={(el) => { imgRef.current = el }} src={src} alt="" draggable={false}
+            style={{ position: 'absolute', top: '50%', left: '50%', maxWidth: 'none', transform: `translate(-50%,-50%) translate(${offset.x}px,${offset.y}px) scale(${scale})`, transformOrigin: 'center center', width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+          />
+        </div>
+        <input type="range" min={0.5} max={3} step={0.01} value={scale} onChange={(e) => setScale(Number(e.target.value))} style={{ width: CROP_SIZE }} />
+        <div className="flex gap-3 w-full justify-end">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={confirm}>Save photo</Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 /* ─── Page ──────────────────────────────────────────────────────────────────── */
 export default function ProfilePage() {
   const supabase = createClient()
@@ -107,9 +165,13 @@ export default function ProfilePage() {
   const [tournamentPred, setTournamentPred] = useState<TournamentPred | null>(null)
   const [groupPreds, setGroupPreds] = useState<GroupPred[]>([])
   const [rankSeries, setRankSeries] = useState<number[]>([])
+  const [snapshotLabels, setSnapshotLabels] = useState<string[]>([])
+  const [rankChartMode, setRankChartMode] = useState<'season' | 'byGW' | 'specificGW'>('season')
+  const [selectedRankGw, setSelectedRankGw] = useState<number>(1)
   const [netPool, setNetPool] = useState<number | null>(null)
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [uploading, setUploading] = useState(false)
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
   const [uploadPct, setUploadPct] = useState(0)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -183,7 +245,9 @@ export default function ProfilePage() {
             .order('snapshot_at', { ascending: true })
             .limit(20)
           if (!snapsErr && snaps && snaps.length > 0) {
-            setRankSeries((snaps as { rank: number; snapshot_at: string }[]).map((s) => s.rank))
+            const typed = snaps as { rank: number; snapshot_at: string }[]
+            setRankSeries(typed.map((s) => s.rank))
+            setSnapshotLabels(typed.map((s) => new Date(s.snapshot_at).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })))
           } else if (myRank) {
             setRankSeries([myRank])
           }
@@ -260,6 +324,26 @@ export default function ProfilePage() {
   const rankLast = rankSeries[rankSeries.length - 1] ?? rank ?? 1
   const rankDelta = rankFirst - rankLast // positive = climbed
 
+  /* ─── Per-GW points for chart tabs ──────────────────────────────────────── */
+  const gwPointsMap = useMemo(() => {
+    const m = new Map<number, number>()
+    for (const p of preds) {
+      const gw = p.matches?.gw_number; if (!gw) continue
+      m.set(gw, (m.get(gw) ?? 0) + weightedMatchPoints(p, weights))
+    }
+    return m
+  }, [preds, weights])
+
+  const allGws = useMemo(() => Array.from(gwPointsMap.keys()).sort((a, b) => a - b), [gwPointsMap])
+
+  const gwPointsSeries = useMemo(() => allGws.map((gw) => gwPointsMap.get(gw) ?? 0), [allGws, gwPointsMap])
+
+  const specificGwMatches = useMemo(() => {
+    return preds
+      .filter((p) => p.matches?.gw_number === selectedRankGw)
+      .sort((a, b) => (a.matches?.match_date ?? '').localeCompare(b.matches?.match_date ?? ''))
+  }, [preds, selectedRankGw])
+
   /* ─── Donut chart segments ───────────────────────────────────────────────── */
   const missed = Math.max(0, stats.scored - stats.correctOutcome - stats.exact)
   const donutSegments = stats.scored > 0 ? [
@@ -269,21 +353,28 @@ export default function ProfilePage() {
   ] : [{ value: 1, color: 'rgb(var(--surface3))' }]
 
   /* ─── Handlers ───────────────────────────────────────────────────────────── */
-  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; if (!file || !profile) return
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error(`Image must be under 5 MB (yours is ${(file.size / 1024 / 1024).toFixed(1)} MB)`)
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error(`Image must be under 20 MB`)
       e.target.value = ''
       return
     }
+    const url = URL.createObjectURL(file)
+    setCropSrc(url)
+  }
+
+  async function handleCropConfirm(blob: Blob) {
+    if (!profile) return
+    setCropSrc(null)
+    if (fileRef.current) fileRef.current.value = ''
     setUploading(true)
     setUploadPct(0)
     const pctTicker = setInterval(() => {
       setUploadPct((prev) => Math.min(prev + Math.random() * 14, 85))
     }, 180)
-    const ext = file.name.split('.').pop()
-    const path = `${profile.id}/avatar.${ext}`
-    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type })
+    const path = `${profile.id}/avatar.jpg`
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, blob, { upsert: true, contentType: 'image/jpeg' })
     clearInterval(pctTicker)
     if (upErr) { setUploadPct(0); toast.error(`Upload failed: ${upErr.message}`); setUploading(false); return }
     setUploadPct(100)
@@ -297,6 +388,12 @@ export default function ProfilePage() {
     toast.success('Avatar updated!')
     setTimeout(() => setUploadPct(0), 500)
     setUploading(false)
+  }
+
+  function handleCropClose() {
+    if (cropSrc) URL.revokeObjectURL(cropSrc)
+    setCropSrc(null)
+    if (fileRef.current) fileRef.current.value = ''
   }
 
   async function saveUsername() {
@@ -408,8 +505,8 @@ export default function ProfilePage() {
           </p>
         </div>
 
-        {/* Right stats */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 0, position: 'relative', flexShrink: 0 }}>
+        {/* Right stats — hidden on mobile, shown on sm+ */}
+        <div className="hidden sm:flex" style={{ alignItems: 'center', gap: 0, position: 'relative', flexShrink: 0 }}>
           {/* Rank */}
           <div style={{ padding: '0 18px', textAlign: 'center' }}>
             <p style={eyebrow}>Rank</p>
@@ -438,7 +535,7 @@ export default function ProfilePage() {
       </div>
 
       {/* ── 4 stat cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-[14px]">
         {/* Total points */}
         <div style={{
           background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))',
@@ -494,7 +591,7 @@ export default function ProfilePage() {
       </div>
 
       {/* ── Points by gameweek + Accuracy donut ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 18 }}>
+      <div className="grid grid-cols-1 md:grid-cols-[1.55fr_1fr] gap-[18px]">
         {/* Left: bar chart */}
         <div style={{
           background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))',
@@ -552,37 +649,79 @@ export default function ProfilePage() {
       </div>
 
       {/* ── Rank movement + Category accuracy ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-[18px]">
         {/* Left: rank movement */}
         <div style={{
           background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))',
           borderRadius: 18, boxShadow: 'var(--card-shadow)', padding: '20px 22px',
           position: 'relative',
         }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div>
-              <p style={{ fontSize: 14, fontWeight: 700, margin: 0, color: 'rgb(var(--textp))' }}>Rank movement</p>
-              <p style={{ fontSize: 12, color: 'rgb(var(--texts))', margin: 0, marginTop: 2 }}>
-                {rankSeries.length > 1
-                  ? `Climbed from ${ordinal(rankFirst)} to ${ordinal(rankLast)}`
-                  : rank ? `Currently ${ordinal(rank)}` : 'No rank data yet'}
-              </p>
-            </div>
-            {rankDelta > 0 && (
-              <div style={{
-                padding: '4px 10px', borderRadius: 8,
-                background: 'rgba(var(--primary),0.13)',
-                color: 'rgb(var(--primary))',
-                fontSize: 12, fontWeight: 700,
-              }}>
-                ▲ {rankDelta} since GW1
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 700, margin: 0, color: 'rgb(var(--textp))' }}>
+                  {rankChartMode === 'season' ? 'Rank movement' : rankChartMode === 'byGW' ? 'Points by gameweek' : `GW${selectedRankGw} breakdown`}
+                </p>
+                <p style={{ fontSize: 12, color: 'rgb(var(--texts))', margin: 0, marginTop: 2 }}>
+                  {rankChartMode === 'season'
+                    ? (rankSeries.length > 1 ? `${ordinal(rankFirst)} → ${ordinal(rankLast)}` : rank ? `Currently ${ordinal(rank)}` : 'No rank data yet')
+                    : rankChartMode === 'byGW'
+                    ? 'Points earned each gameweek'
+                    : 'Match-by-match points'}
+                </p>
               </div>
-            )}
+              {rankChartMode === 'season' && rankDelta > 0 && (
+                <div style={{ padding: '4px 10px', borderRadius: 8, background: 'rgba(var(--primary),0.13)', color: 'rgb(var(--primary))', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                  ▲ {rankDelta}
+                </div>
+              )}
+            </div>
+            {/* Tabs */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: 4, borderRadius: 999, background: 'rgb(var(--surface2))', border: '1px solid rgb(var(--border))' }}>
+                {(['season', 'byGW', 'specificGW'] as const).map((mode) => {
+                  const active = rankChartMode === mode
+                  const label = mode === 'season' ? 'Season' : mode === 'byGW' ? 'By GW' : 'Specific GW'
+                  return (
+                    <button key={mode} onClick={() => setRankChartMode(mode)} style={{
+                      height: 28, padding: '0 11px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                      background: active ? 'rgb(var(--textp))' : 'transparent',
+                      color: active ? 'rgb(var(--bg))' : 'rgb(var(--texts))',
+                      fontSize: 11.5, fontWeight: 700, transition: 'all 0.15s',
+                    }}>{label}</button>
+                  )
+                })}
+              </div>
+              {rankChartMode === 'specificGW' && allGws.length > 0 && (
+                <select
+                  value={selectedRankGw}
+                  onChange={(e) => setSelectedRankGw(Number(e.target.value))}
+                  style={{ height: 30, borderRadius: 8, border: '1px solid rgb(var(--border))', background: 'rgb(var(--surface))', color: 'rgb(var(--textp))', fontSize: 12, padding: '0 8px', cursor: 'pointer' }}
+                >
+                  {allGws.map((gw) => <option key={gw} value={gw}>{`GW${gw}`}</option>)}
+                </select>
+              )}
+            </div>
           </div>
-          <RankLine
-            ranks={rankSeries.length >= 2 ? rankSeries : (rank ? [rank, rank] : [1, 1])}
-            total={totalPlayers || undefined}
-          />
+          {rankChartMode === 'season' ? (
+            <RankLine
+              ranks={rankSeries.length >= 2 ? rankSeries : (rank ? [rank, rank] : [1, 1])}
+              total={totalPlayers || undefined}
+              labels={snapshotLabels.length >= 2 ? snapshotLabels : undefined}
+            />
+          ) : rankChartMode === 'byGW' ? (
+            allGws.length > 0
+              ? <BarChart series={gwPointsSeries} labels={allGws.map((g) => `GW${g}`)} showVals />
+              : <p style={{ fontSize: 13, color: 'rgb(var(--texts))', textAlign: 'center', paddingTop: 40 }}>No scored gameweeks yet</p>
+          ) : (
+            specificGwMatches.length > 0
+              ? <BarChart
+                  series={specificGwMatches.map((p) => weightedMatchPoints(p, weights))}
+                  labels={specificGwMatches.map((p) => `${p.matches?.home_team ?? '?'} v ${p.matches?.away_team ?? '?'}`)}
+                  showVals
+                />
+              : <p style={{ fontSize: 13, color: 'rgb(var(--texts))', textAlign: 'center', paddingTop: 40 }}>No predictions for GW{selectedRankGw}</p>
+          )}
         </div>
 
         {/* Right: category accuracy */}
@@ -628,7 +767,7 @@ export default function ProfilePage() {
           <p style={{ fontSize: 14, fontWeight: 700, margin: 0, color: 'rgb(var(--textp))' }}>Badges</p>
           <p style={{ fontSize: 12, color: 'rgb(var(--texts))', margin: 0 }}>{unlockedCount} of 6 unlocked</p>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-[10px]">
           {badges.map((b) => (
             <div
               key={b.id}
@@ -670,7 +809,7 @@ export default function ProfilePage() {
         {!tournamentPred || (!tournamentPred.champion && !tournamentPred.runner_up && !tournamentPred.semi?.length && !tournamentPred.quarter?.length) ? (
           <EmptyState icon={<TrophyIcon size={20} />} title="No bracket picks yet" desc="Open Bracket to set your champion and knockout picks." />
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-[14px]">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[
                 { label: 'Champion', value: tournamentPred.champion },
@@ -721,7 +860,7 @@ export default function ProfilePage() {
         {groupPreds.length === 0 ? (
           <EmptyState icon={<LockIcon size={18} />} title="No group predictions yet" desc="Open Groups to rank each group from 1st to 4th." />
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-[12px]">
             {groupPreds.map((gp) => (
               <div key={gp.group_name} style={{ borderRadius: 14, background: 'rgb(var(--surface2))', border: '1px solid rgb(var(--border))', padding: '12px 13px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
@@ -836,6 +975,7 @@ export default function ProfilePage() {
               )}
             </div>
             <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarChange} />
+            {cropSrc && <CropModal src={cropSrc} onConfirm={handleCropConfirm} onClose={handleCropClose} />}
           </div>
 
           {/* Username */}

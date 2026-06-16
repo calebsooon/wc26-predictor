@@ -424,9 +424,9 @@ export default function LeaderboardPage() {
                   <span style={{ width: 22, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'center', flexShrink: 0 }}>#</span>
                   {hasSnapshots && <span style={{ width: 10, flexShrink: 0 }} />}
                   <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))' }}>Player</span>
-                  <span style={{ width: 90, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'center', flexShrink: 0 }}>Exact</span>
-                  <span style={{ width: 80, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'right', flexShrink: 0 }}>{tab === 'all' ? 'Points' : 'GW Pts'}</span>
-                  {isMoney && <span style={{ width: 60, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'right', flexShrink: 0 }}>Prize</span>}
+                  <span className="hidden sm:block" style={{ width: 90, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'center', flexShrink: 0 }}>Exact</span>
+                  <span style={{ width: 60, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'right', flexShrink: 0 }}>{tab === 'all' ? 'Points' : 'GW Pts'}</span>
+                  {isMoney && <span className="hidden sm:block" style={{ width: 60, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'right', flexShrink: 0 }}>Prize</span>}
                 </div>
 
                 <div style={{ padding: '4px' }}>
@@ -518,8 +518,8 @@ export default function LeaderboardPage() {
                           </div>
                         </div>
 
-                        {/* Exact count */}
-                        <span style={{
+                        {/* Exact count — hidden on mobile */}
+                        <span className="hidden sm:block" style={{
                           width: 90,
                           textAlign: 'center',
                           fontSize: 14,
@@ -532,7 +532,7 @@ export default function LeaderboardPage() {
 
                         {/* Points */}
                         <span style={{
-                          width: 80,
+                          width: 60,
                           fontSize: 16,
                           fontWeight: 800,
                           textAlign: 'right',
@@ -543,9 +543,9 @@ export default function LeaderboardPage() {
                           {p.pts}
                         </span>
 
-                        {/* Prize */}
+                        {/* Prize — hidden on mobile */}
                         {isMoney && (
-                          <span style={{
+                          <span className="hidden sm:block" style={{
                             width: 60,
                             textAlign: 'right',
                             fontSize: 13,
@@ -789,11 +789,7 @@ function StatHighlights({ board, rows }: { board: LBRow[]; rows: PredRow[] }) {
   if (cards.length === 0) return null
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: `repeat(${Math.min(cards.length, 4)}, 1fr)`,
-      gap: 14,
-    }}>
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-[14px]">
       {cards.map((card) => (
         <div
           key={card.label}

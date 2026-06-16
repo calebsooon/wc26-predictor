@@ -478,20 +478,22 @@ export default function H2HPage() {
               {/* Season points race chart */}
               {(gwSeriesA.length > 0 || gwSeriesB.length > 0) && (
                 <div style={{ background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))', borderRadius: 18, boxShadow: 'var(--card-shadow)', padding: '20px 22px' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
-                    <div>
-                      <p style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Schibsted Grotesk, sans-serif', color: 'rgb(var(--textp))' }}>
-                        Season points race
-                      </p>
-                      <p style={{ fontSize: 11, color: 'rgb(var(--texts))', marginTop: 2 }}>
-                        {raceView === 'season'
-                          ? 'Cumulative points, gameweek by gameweek'
-                          : raceView === 'gameweek'
-                          ? 'Each player’s points haul in every gameweek'
-                          : `Inside GW${selectedGw}, match by match`}
-                      </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                      <div>
+                        <p style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Schibsted Grotesk, sans-serif', color: 'rgb(var(--textp))' }}>
+                          Season points race
+                        </p>
+                        <p style={{ fontSize: 11, color: 'rgb(var(--texts))', marginTop: 2 }}>
+                          {raceView === 'season'
+                            ? 'Cumulative points, gameweek by gameweek'
+                            : raceView === 'gameweek'
+                            ? "Each player's points haul in every gameweek"
+                            : `Inside GW${selectedGw}, match by match`}
+                        </p>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 4, borderRadius: 999, background: 'rgb(var(--surface2))', border: '1px solid rgb(var(--border))' }}>
                         {(['season', 'gameweek', 'specific'] as const).map((mode) => {
                           const active = raceView === mode
@@ -583,7 +585,7 @@ export default function H2HPage() {
 
               {/* 2-col lower grid */}
               {stats.common > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-[18px]">
                   {/* Left: Category accuracy */}
                   {catStats.some((c) => c.totalA > 0 || c.totalB > 0) && (
                     <div style={{ background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))', borderRadius: 18, boxShadow: 'var(--card-shadow)', padding: 20 }}>

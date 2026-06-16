@@ -296,7 +296,7 @@ export default function DashboardPage() {
           </div>
         </div>
         {myRank && (
-          <div className="relative flex gap-3 shrink-0">
+          <div className="relative hidden sm:flex gap-3 shrink-0">
             <div className="text-center px-[18px] py-3.5 rounded-[14px]" style={{ background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.2)' }}>
               <div className="text-[26px] font-extrabold text-white tabular-nums font-display leading-none">{ordinal(myRank)}</div>
               <div className="eyebrow mt-0.5" style={{ color: 'rgba(255,255,255,0.75)' }}>Your rank</div>
@@ -693,7 +693,7 @@ function PrizeSection({ prize }: { prize: ReturnType<typeof computePrizeSnapshot
           </span>
         )}
       </div>
-      <div className="grid grid-cols-3 gap-3.5 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3.5 mb-5">
         <div className="bg-surface2 border border-border rounded-[13px] px-[15px] py-[13px]">
           <div className={`text-[23px] font-extrabold tabular-nums font-display ${settledTone === 'green' ? 'text-success' : settledTone === 'red' ? 'text-error' : 'text-textp'}`}>{formatPrize(settledNet)}</div>
           <div className="eyebrow mt-0.5">Settled</div>

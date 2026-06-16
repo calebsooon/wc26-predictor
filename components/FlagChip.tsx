@@ -14,6 +14,7 @@ const MAP: Record<string, string> = {
   AUT: 'at', POL: 'pl', DEN: 'dk', DNK: 'dk', SCO: 'gb-sct', WAL: 'gb-wls', NIR: 'gb-nir',
   SRB: 'rs', UKR: 'ua', TUR: 'tr', SWE: 'se', NOR: 'no', CZE: 'cz', HUN: 'hu',
   GRE: 'gr', ROU: 'ro', SVK: 'sk', SVN: 'si', ALB: 'al', RUS: 'ru', IRL: 'ie',
+  BIH: 'ba',
   // CONMEBOL
   ARG: 'ar', BRA: 'br', URU: 'uy', COL: 'co', ECU: 'ec', PAR: 'py', PER: 'pe',
   CHI: 'cl', BOL: 'bo', VEN: 've',
