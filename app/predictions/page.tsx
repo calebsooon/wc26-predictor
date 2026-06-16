@@ -433,7 +433,6 @@ function MatchRow({
   const away = getTeam(m.away_team)
   const timeStr = fmtTime(m.match_date, timeZone)
   const hasScore = m.real_home_score !== null && m.real_away_score !== null
-  const canOpen = true
   const isKO = ui.knockout
 
   // Determine status pill props
