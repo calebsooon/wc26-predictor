@@ -8,8 +8,10 @@ import { resolveWeights, weightedMatchPoints, type MatchBreakdown } from '@/lib/
 
 const PRED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer'
 
-/** Snapshot every league's current ranking (league-weighted). Returns rows written. */
-export async function snapshotLeagueRanks(supabase: SupabaseClient, gwNumber?: number): Promise<number> {
+interface SnapshotResult { written: number; overtakes: { userId: string; newRank: number; leagueId: string }[] }
+
+/** Snapshot every league's current ranking (league-weighted). */
+export async function snapshotLeagueRanks(supabase: SupabaseClient, gwNumber?: number): Promise<SnapshotResult> {
   const [{ data: preds }, { data: leagues }, { data: members }] = await Promise.all([
     supabase.from('predictions').select(PRED_COLS).not('points_awarded', 'is', null),
     supabase.from('leagues').select('id, scoring'),
@@ -47,8 +49,35 @@ export async function snapshotLeagueRanks(supabase: SupabaseClient, gwNumber?: n
       })
   }
 
-  if (snapshots.length === 0) return 0
+  if (snapshots.length === 0) return { written: 0, overtakes: [] }
+
+  // Capture previous ranks before writing new snapshots (for overtake detection)
+  const prevRanks = new Map<string, number>() // key = `${leagueId}:${userId}`
+  for (const league of (leagues ?? []) as { id: string }[]) {
+    const { data: prev } = await supabase
+      .from('rank_snapshots')
+      .select('user_id, rank')
+      .eq('league_id', league.id)
+      .order('snapshot_at', { ascending: false })
+      .limit((leagueMembers.get(league.id) ?? []).length || 1)
+    for (const p of (prev ?? []) as { user_id: string; rank: number }[]) {
+      const key = `${league.id}:${p.user_id}`
+      if (!prevRanks.has(key)) prevRanks.set(key, p.rank)
+    }
+  }
+
   const { error } = await supabase.from('rank_snapshots').insert(snapshots)
   if (error) throw new Error(`rank_snapshots insert failed: ${error.message}`)
-  return snapshots.length
+
+  // Build overtake notifications: anyone whose rank got worse
+  const overtakes: { userId: string; newRank: number; leagueId: string }[] = []
+  for (const snap of snapshots) {
+    const key = `${snap.league_id}:${snap.user_id}`
+    const prev = prevRanks.get(key)
+    if (prev != null && snap.rank > prev) {
+      overtakes.push({ userId: snap.user_id, newRank: snap.rank, leagueId: snap.league_id })
+    }
+  }
+
+  return { written: snapshots.length, overtakes }
 }

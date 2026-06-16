@@ -208,6 +208,26 @@ export default function DashboardPage() {
     return scoredByGW[lastGW] ?? null
   }, [gwNumbers, scoredByGW])
 
+  // Tournament progress
+  const totalMatches = 104
+  const playedMatches = useMemo(() => gwMatchRows.filter((m) => m.real_home_score !== null).length, [gwMatchRows])
+  const currentGW = useMemo(() => {
+    const gwsWithScored = gwMatchRows.filter((m) => m.real_home_score !== null && m.gw_number != null).map((m) => m.gw_number!)
+    return gwsWithScored.length > 0 ? Math.max(...gwsWithScored) : null
+  }, [gwMatchRows])
+  const progressPct = Math.round((playedMatches / totalMatches) * 100)
+
+  // Best / worst GW
+  const { bestGW, worstGW } = useMemo(() => {
+    if (gwNumbers.length === 0) return { bestGW: null, worstGW: null }
+    let best = gwNumbers[0], worst = gwNumbers[0]
+    for (const gw of gwNumbers) {
+      if (scoredByGW[gw] > scoredByGW[best]) best = gw
+      if (scoredByGW[gw] < scoredByGW[worst]) worst = gw
+    }
+    return { bestGW: { gw: best, pts: scoredByGW[best] }, worstGW: { gw: worst, pts: scoredByGW[worst] } }
+  }, [gwNumbers, scoredByGW])
+
   // Accuracy
   const totalScored = myScored.length
   const exactHits = myScored.filter((m) => (preds[m.id]?.pts_exact ?? 0) > 0).length
@@ -416,6 +436,46 @@ export default function DashboardPage() {
           sub={missingCount > 0 ? `${missingCount} still to make` : 'all submitted'}
           subColor={missingCount > 0 ? 'rgb(var(--coral))' : undefined}
         />
+      </div>
+
+      {/* ── Tournament progress + Best/Worst GW ─────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3.5">
+        {/* Progress bar */}
+        <div className="bg-card border border-border rounded-[18px] px-[22px] py-[16px]">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <p className="text-[13px] font-bold text-textp">
+                {playedMatches === 0 ? 'Tournament not started' : playedMatches === totalMatches ? 'Tournament complete' : currentGW ? `GW${currentGW} underway` : 'Group stage'}
+              </p>
+              <p className="text-[11.5px] text-texts mt-0.5">{playedMatches} of {totalMatches} matches played</p>
+            </div>
+            <span className="text-[22px] font-extrabold tabular-nums font-display text-primary">{progressPct}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-surface2 overflow-hidden">
+            <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${progressPct}%` }} />
+          </div>
+          <div className="flex justify-between mt-1.5">
+            {[1,2,3,4,5,6,7,8].map((gw) => (
+              <span key={gw} className={`text-[10px] font-semibold ${(currentGW ?? 0) >= gw ? 'text-primary' : 'text-texts/40'}`}>GW{gw}</span>
+            ))}
+          </div>
+        </div>
+        {/* Best / Worst GW */}
+        {bestGW && worstGW && gwNumbers.length >= 2 && (
+          <div className="bg-card border border-border rounded-[18px] px-[22px] py-[16px] flex gap-6 items-center">
+            <div className="text-center">
+              <p className="text-[10.5px] font-semibold uppercase tracking-wider text-texts mb-0.5">Best GW</p>
+              <p className="text-[24px] font-extrabold font-display text-success leading-none">{bestGW.pts}</p>
+              <p className="text-[11px] text-texts mt-0.5">GW{bestGW.gw}</p>
+            </div>
+            <div className="w-px h-10 bg-border" />
+            <div className="text-center">
+              <p className="text-[10.5px] font-semibold uppercase tracking-wider text-texts mb-0.5">Worst GW</p>
+              <p className="text-[24px] font-extrabold font-display text-coral leading-none">{worstGW.pts}</p>
+              <p className="text-[11px] text-texts mt-0.5">GW{worstGW.gw}</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Analytics band ───────────────────────────────────── */}

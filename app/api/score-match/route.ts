@@ -5,6 +5,11 @@ import { scorePrediction, type PredictionInput } from '@/lib/scoring'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { snapshotLeagueRanks } from '@/lib/snapshot'
 
+function ordinal(n: number) {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100
+  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0])
+}
+
 export async function POST(request: Request) {
   const supabase = createServerSupabaseClient()
   const denied = await requireAdmin(supabase)
@@ -77,6 +82,17 @@ export async function POST(request: Request) {
     scored_count: updates.length,
   }).then(() => {})
 
+  // Push notification — fire and forget
+  if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    const home = m.home_team, away = m.away_team
+    const score = `${m.real_home_score}–${m.real_away_score}`
+    fetch(`${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/api/push/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-service-key': process.env.SUPABASE_SERVICE_ROLE_KEY! },
+      body: JSON.stringify({ title: `${home} ${score} ${away}`, body: 'Result in — your points have been updated.', url: '/predictions' }),
+    }).catch(() => {})
+  }
+
   // Auto-snapshot when all matches in this GW are now scored
   if (m.gw_number != null) {
     const { count } = await serviceSupabase
@@ -85,7 +101,24 @@ export async function POST(request: Request) {
       .eq('gw_number', m.gw_number)
       .is('real_home_score', null)
     if (count === 0) {
-      try { await snapshotLeagueRanks(serviceSupabase, m.gw_number) } catch {}
+      try {
+        const snap = await snapshotLeagueRanks(serviceSupabase, m.gw_number)
+        if (snap.overtakes.length > 0 && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
+          const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? ''
+          for (const o of snap.overtakes) {
+            fetch(`${siteUrl}/api/push/send`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-service-key': process.env.SUPABASE_SERVICE_ROLE_KEY! },
+              body: JSON.stringify({
+                title: "You've been overtaken",
+                body: `You're now ${ordinal(o.newRank)} on the leaderboard — time to close the gap.`,
+                url: '/leaderboard',
+                userIds: [o.userId],
+              }),
+            }).catch(() => {})
+          }
+        }
+      } catch {}
     }
   }
 

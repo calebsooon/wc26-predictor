@@ -433,7 +433,7 @@ function MatchRow({
   const away = getTeam(m.away_team)
   const timeStr = fmtTime(m.match_date, timeZone)
   const hasScore = m.real_home_score !== null && m.real_away_score !== null
-  const canOpen = !hasScore
+  const canOpen = true
   const isKO = ui.knockout
 
   // Determine status pill props
@@ -499,15 +499,14 @@ function MatchRow({
 
   return (
     <button
-      onClick={canOpen ? onOpen : undefined}
-      disabled={!canOpen}
-      className={canOpen ? 'hover:bg-textp/[0.035]' : ''}
+      onClick={onOpen}
+      className="hover:bg-textp/[0.035]"
       style={{
         display: 'flex',
         alignItems: 'center',
         gap: 14,
         padding: '14px 18px',
-        cursor: canOpen ? 'pointer' : 'default',
+        cursor: 'pointer',
         transition: 'background 0.15s',
         borderTop: divider ? '1px solid rgba(var(--border),0.55)' : undefined,
         width: '100%',

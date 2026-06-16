@@ -11,6 +11,158 @@ import {
 import FlagChip from '@/components/FlagChip'
 import { WEIGHT_FIELDS, resolveWeights, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { fmtDateTime } from '@/lib/date-format'
+import { normalisePosition, POSITION_ABBR } from '@/lib/teams'
+
+/* ── EditConfirmButton ───────────────────────────────────────────────────── */
+function EditConfirmButton({ saving, onConfirm, label }: { saving: boolean; onConfirm: () => void; label: string }) {
+  const [confirming, setConfirming] = useState(false)
+  if (confirming) {
+    return (
+      <div className="flex items-center gap-2 bg-amber/10 border border-amber/30 rounded-lg px-3 py-1.5">
+        <span className="text-[11.5px] text-amber font-semibold max-w-[220px] leading-snug">{label}</span>
+        <Button size="sm" variant="outline" onClick={() => setConfirming(false)}>Cancel</Button>
+        <Button size="sm" onClick={() => { setConfirming(false); onConfirm() }} disabled={saving}>
+          {saving ? 'Saving…' : 'Confirm'}
+        </Button>
+      </div>
+    )
+  }
+  return (
+    <Button size="sm" variant="outline" onClick={() => setConfirming(true)} disabled={saving}>
+      {saving ? 'Saving…' : 'Edit result'}
+    </Button>
+  )
+}
+
+/* ── LineupEditor ────────────────────────────────────────────────────────── */
+const POS_OPTIONS = ['GK', 'RB', 'CB', 'LB', 'RM', 'CM', 'LM', 'CAM', 'RW', 'LW', 'ST', 'CF']
+
+interface LineupEntry { playerId: number; name: string; jersey: number | null; status: 'out' | 'starter' | 'sub'; posLabel: string }
+
+function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamCode: string; playerKey: string }) {
+  const supabase = createClient()
+  const [entries, setEntries] = useState<LineupEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [tab, setTab] = useState<'starter' | 'sub' | 'out'>('starter')
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const [{ data: players }, { data: lineup }] = await Promise.all([
+        supabase.from('players').select('id, name, jersey_number, position').eq('team_name', playerKey).order('jersey_number', { nullsFirst: false }),
+        supabase.from('lineups').select('player_id, is_starting, position_label, shirt_number').eq('match_id', matchId).eq('team_code', teamCode),
+      ])
+      const lineupMap = new Map((lineup ?? []).map((l: { player_id: number; is_starting: boolean; position_label: string | null; shirt_number: number | null }) =>
+        [l.player_id, { is_starting: l.is_starting, posLabel: l.position_label ?? '', jersey: l.shirt_number }]
+      ))
+      setEntries((players ?? []).filter((p: { id: number; name: string; jersey_number: number | null; position: string | null }) =>
+        normalisePosition(p.position) !== 'Coach'
+      ).map((p: { id: number; name: string; jersey_number: number | null; position: string | null }) => {
+        const l = lineupMap.get(p.id)
+        return {
+          playerId: p.id, name: p.name, jersey: p.jersey_number,
+          status: l ? (l.is_starting ? 'starter' : 'sub') : 'out',
+          posLabel: l?.posLabel ?? POSITION_ABBR[normalisePosition(p.position ?? '')] ?? '',
+        }
+      }))
+      setLoading(false)
+    }
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId, teamCode, playerKey])
+
+  function update(playerId: number, patch: Partial<LineupEntry>) {
+    setEntries((prev) => prev.map((e) => e.playerId === playerId ? { ...e, ...patch } : e))
+  }
+
+  async function save() {
+    setSaving(true)
+    const selected = entries.filter((e) => e.status !== 'out')
+    await supabase.from('lineups').delete().eq('match_id', matchId).eq('team_code', teamCode)
+    if (selected.length > 0) {
+      const rows = selected.map((e, i) => ({
+        match_id: matchId, team_code: teamCode, player_id: e.playerId,
+        is_starting: e.status === 'starter', shirt_number: e.jersey,
+        position_label: e.posLabel || null, sort_order: i,
+      }))
+      const { error } = await supabase.from('lineups').insert(rows)
+      if (error) { toast.error(error.message); setSaving(false); return }
+    }
+    toast.success(`Lineup saved — ${selected.filter((e) => e.status === 'starter').length} starters, ${selected.filter((e) => e.status === 'sub').length} subs`)
+    setSaving(false)
+  }
+
+  async function clearLineup() {
+    await supabase.from('lineups').delete().eq('match_id', matchId).eq('team_code', teamCode)
+    setEntries((prev) => prev.map((e) => ({ ...e, status: 'out' })))
+    toast.success('Lineup cleared')
+  }
+
+  const filtered = entries.filter((e) => tab === 'out' ? e.status === 'out' : e.status === tab)
+  const starterCount = entries.filter((e) => e.status === 'starter').length
+  const subCount = entries.filter((e) => e.status === 'sub').length
+
+  if (loading) return <div className="py-4 flex justify-center"><div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" /></div>
+
+  return (
+    <div className="space-y-2">
+      {/* Filter tabs */}
+      <div className="flex gap-1 bg-surface2 border border-border rounded-lg p-1 w-fit">
+        {(['starter', 'sub', 'out'] as const).map((t) => {
+          const label = t === 'starter' ? `Starters (${starterCount})` : t === 'sub' ? `Subs (${subCount})` : 'Not selected'
+          return (
+            <button key={t} onClick={() => setTab(t)}
+              className={`px-3 py-1.5 rounded-md text-[11.5px] font-bold transition-all ${tab === t ? 'bg-card text-textp shadow-sm' : 'text-texts'}`}>
+              {label}
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+        {filtered.length === 0 && <p className="text-sm text-texts py-3 text-center">None</p>}
+        {filtered.map((e) => (
+          <div key={e.playerId} className="flex items-center gap-2 py-1.5 border-b border-border/40 last:border-0">
+            <span className="w-6 text-center text-[11px] font-mono text-texts shrink-0">{e.jersey ?? '–'}</span>
+            <span className="text-sm text-textp flex-1 truncate">{e.name}</span>
+            {e.status !== 'out' && (
+              <select
+                value={e.posLabel}
+                onChange={(ev) => update(e.playerId, { posLabel: ev.target.value })}
+                className="text-[11px] h-7 rounded-md border border-border bg-surface text-textp px-1"
+              >
+                <option value="">Pos</option>
+                {POS_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            )}
+            <div className="flex gap-1 shrink-0">
+              <button onClick={() => update(e.playerId, { status: 'starter' })}
+                className={`px-2 py-1 rounded text-[10.5px] font-bold border transition-all ${e.status === 'starter' ? 'bg-primary/15 border-primary/40 text-primary' : 'border-border text-texts hover:text-textp'}`}>
+                XI
+              </button>
+              <button onClick={() => update(e.playerId, { status: 'sub' })}
+                className={`px-2 py-1 rounded text-[10.5px] font-bold border transition-all ${e.status === 'sub' ? 'bg-blue/15 border-blue/40 text-blue' : 'border-border text-texts hover:text-textp'}`}>
+                Sub
+              </button>
+              {e.status !== 'out' && (
+                <button onClick={() => update(e.playerId, { status: 'out' })}
+                  className="px-2 py-1 rounded text-[10.5px] font-bold border border-border text-texts hover:text-coral">
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between pt-1">
+        <button onClick={clearLineup} className="text-[11px] text-texts hover:text-coral underline">Clear lineup</button>
+        <Button size="sm" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save lineup'}</Button>
+      </div>
+    </div>
+  )
+}
 
 interface Match {
   id: string
@@ -128,6 +280,22 @@ function AdminRow({ m, onSaved }, ref) {
 
       {open && (
         <div className="mt-3 pt-3 border-t border-border/60 space-y-3">
+          {/* Lineup entry */}
+          {['home', 'away'].map((side) => {
+            const team = side === 'home' ? home : away
+            const code = side === 'home' ? m.home_team : m.away_team
+            return (
+              <div key={side}>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-texts flex items-center gap-2">
+                  <FlagChip code={code} w={16} h={11} r={2} /> {team.name} lineup
+                </label>
+                <div className="mt-1.5 bg-surface border border-border rounded-lg p-3">
+                  <LineupEditor matchId={m.id} teamCode={code} playerKey={team.playerKey} />
+                </div>
+              </div>
+            )
+          })}
+
           <div>
             <label className="text-[11px] font-bold uppercase tracking-wider text-texts">First-goal team</label>
             <div className="grid grid-cols-3 gap-2 mt-1.5">
@@ -188,14 +356,20 @@ function AdminRow({ m, onSaved }, ref) {
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-2 mt-3">
-        {hasScore && <Pill tone="green">{m.real_home_score}–{m.real_away_score}</Pill>}
+      <div className="flex items-center justify-end gap-2 mt-3 flex-wrap">
+        {hasScore && <Pill tone="green">{m.real_home_score}–{m.real_away_score} (scored)</Pill>}
         {scoringFailed && (
           <Button size="sm" variant="outline" onClick={scoreOnly} disabled={saving}>
             {saving ? '…' : 'Retry scoring'}
           </Button>
         )}
-        <Button size="sm" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save & score'}</Button>
+        {hasScore ? (
+          <EditConfirmButton saving={saving} onConfirm={save}
+            label={`Update ${home.name} vs ${away.name} — this will re-score all predictions for this match.`}
+          />
+        ) : (
+          <Button size="sm" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save & score'}</Button>
+        )}
       </div>
     </Card>
   )

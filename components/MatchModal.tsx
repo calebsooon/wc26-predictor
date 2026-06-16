@@ -28,7 +28,7 @@ function sortPlayers(players: Player[]) {
 }
 
 
-function SquadPanel({ code, matchId }: { code: string; matchId: string }) {
+export function SquadPanel({ code, matchId }: { code: string; matchId: string }) {
   const supabase = createClient()
   const team = getTeam(code)
   const [squad, setSquad] = useState<Player[] | null>(null)

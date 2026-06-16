@@ -16,6 +16,7 @@ import { POINTS, weightedMatchPoints, DEFAULT_WEIGHTS, type MatchBreakdown, type
 import { getActiveLeague } from '@/lib/league'
 import { PlayerCardPicker, type PlayerForPicker } from '@/components/PlayerCardPicker'
 import { fmtDateTime } from '@/lib/date-format'
+import { SquadPanel } from '@/components/MatchModal'
 
 interface OtherPred extends MatchBreakdown {
   user_id: string
@@ -56,6 +57,7 @@ export default function MatchDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
+  const [lineupTab, setLineupTab] = useState<'home' | 'away'>('home')
   // Reactive lock: recalculate every second so form locks at kickoff even if page stays open
   const [secsLeft, setSecsLeft] = useState<number | null>(null)
   const matchDate = match?.match_date ?? null
@@ -237,6 +239,29 @@ export default function MatchDetailPage() {
           others={others}
         />
       )}
+
+      {/* lineups */}
+      <Card className="overflow-hidden">
+        <div className="flex border-b border-border">
+          {(['home', 'away'] as const).map((side) => {
+            const t = side === 'home' ? home : away
+            const active = lineupTab === side
+            return (
+              <button key={side} onClick={() => setLineupTab(side)}
+                className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${active ? 'border-b-2 border-primary text-textp bg-card' : 'text-texts hover:text-textp bg-surface'}`}>
+                <FlagChip code={side === 'home' ? match.home_team : match.away_team} w={20} h={14} r={3} />
+                {t.name}
+              </button>
+            )
+          })}
+        </div>
+        <div className="p-5">
+          <SquadPanel
+            code={lineupTab === 'home' ? match.home_team : match.away_team}
+            matchId={match.id}
+          />
+        </div>
+      </Card>
 
       {/* prediction entry */}
       {!locked && (

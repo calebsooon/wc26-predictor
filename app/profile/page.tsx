@@ -11,6 +11,7 @@ import FlagChip from '@/components/FlagChip'
 import { BarChart, DonutChart, RankLine } from '@/components/charts'
 import { getTeam } from '@/lib/teams'
 import { weightedMatchPoints, weightedGroupPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
+import { subscribeToPush, unsubscribeFromPush, getPushState } from '@/lib/push'
 import { getActiveLeague, isMoneyLeague } from '@/lib/league'
 
 /* ─── Types ────────────────────────────────────────────────────────────────── */
@@ -88,6 +89,49 @@ const CATEGORIES = [
   { key: 'pts_goal_diff' as const, label: 'Goal diff' },
   { key: 'pts_exact' as const, label: 'Exact score' },
 ]
+
+/* ─── PushToggle ─────────────────────────────────────────────────────────────── */
+function PushToggle({ userId }: { userId: string }) {
+  const [state, setState] = useState<'unsupported' | 'denied' | 'granted' | 'default' | 'loading'>('loading')
+
+  useEffect(() => {
+    getPushState().then(setState)
+  }, [])
+
+  async function enable() {
+    setState('loading')
+    const ok = await subscribeToPush(userId)
+    setState(ok ? 'granted' : await getPushState())
+  }
+
+  async function disable() {
+    setState('loading')
+    await unsubscribeFromPush(userId)
+    setState('default')
+  }
+
+  if (state === 'loading') return null
+  if (state === 'unsupported') return null
+
+  return (
+    <div style={{ borderTop: '1px solid rgb(var(--border))', paddingTop: 16 }}>
+      <p style={{ ...eyebrow, marginBottom: 6 }}>Push notifications</p>
+      {state === 'denied' ? (
+        <p style={{ fontSize: 12, color: 'rgb(var(--texts))' }}>Blocked in browser settings — enable in site permissions to receive match alerts.</p>
+      ) : state === 'granted' ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <p style={{ fontSize: 12, color: 'rgb(var(--texts))' }}>Match results will be sent to this device.</p>
+          <Button size="sm" variant="outline" onClick={disable}>Turn off</Button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <p style={{ fontSize: 12, color: 'rgb(var(--texts))' }}>Get notified when results are scored.</p>
+          <Button size="sm" onClick={enable}>Enable</Button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 /* ─── CropModal ─────────────────────────────────────────────────────────────── */
 const CROP_SIZE = 280
@@ -343,6 +387,33 @@ export default function ProfilePage() {
       .filter((p) => p.matches?.gw_number === selectedRankGw)
       .sort((a, b) => (a.matches?.match_date ?? '').localeCompare(b.matches?.match_date ?? ''))
   }, [preds, selectedRankGw])
+
+  /* ─── Lucky vs skilled split ────────────────────────────────────────────── */
+  const { skillPts, luckPts } = useMemo(() => {
+    let skill = 0, luck = 0
+    for (const p of preds) {
+      skill += (p.pts_outcome ?? 0) + (p.pts_exact ?? 0) + (p.pts_goal_diff ?? 0) + (p.pts_total_goals ?? 0) + (p.pts_btts ?? 0)
+      luck += (p.pts_first_team ?? 0) + (p.pts_first_scorer ?? 0)
+    }
+    return { skillPts: skill, luckPts: luck }
+  }, [preds])
+
+  /* ─── Accuracy improvement per GW ───────────────────────────────────────── */
+  const gwAccuracy = useMemo(() => {
+    const byGW = new Map<number, { correct: number; scored: number }>()
+    for (const p of preds) {
+      const gw = p.matches?.gw_number; if (!gw) continue
+      const cur = byGW.get(gw) ?? { correct: 0, scored: 0 }
+      cur.scored++
+      if ((p.pts_outcome ?? 0) > 0) cur.correct++
+      byGW.set(gw, cur)
+    }
+    const gws = Array.from(byGW.keys()).sort((a, b) => a - b)
+    return {
+      labels: gws.map((g) => `GW${g}`),
+      series: gws.map((g) => { const d = byGW.get(g)!; return d.scored > 0 ? Math.round((d.correct / d.scored) * 100) : 0 }),
+    }
+  }, [preds])
 
   /* ─── Donut chart segments ───────────────────────────────────────────────── */
   const missed = Math.max(0, stats.scored - stats.correctOutcome - stats.exact)
@@ -758,6 +829,52 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      {/* ── Lucky vs Skilled + Improvement trend ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-[18px]">
+        {/* Lucky vs Skilled */}
+        <div style={{ background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))', borderRadius: 18, boxShadow: 'var(--card-shadow)', padding: '20px 22px' }}>
+          <p style={{ fontSize: 14, fontWeight: 700, margin: 0, color: 'rgb(var(--textp))', marginBottom: 4 }}>Skill vs luck breakdown</p>
+          <p style={{ fontSize: 12, color: 'rgb(var(--texts))', margin: 0, marginBottom: 16 }}>Outcome/score/diff/goals = skill · First goal/scorer = luck</p>
+          {stats.totalPts > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {[
+                { label: 'Skill', pts: skillPts, color: 'rgb(var(--primary))' },
+                { label: 'Luck', pts: luckPts, color: 'rgb(var(--amber))' },
+              ].map(({ label, pts, color }) => {
+                const pct = stats.totalPts > 0 ? Math.round((pts / stats.totalPts) * 100) : 0
+                return (
+                  <div key={label}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'rgb(var(--textp))' }}>{label}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color }}>{pts} pts <span style={{ color: 'rgb(var(--texts))', fontWeight: 500 }}>({pct}%)</span></span>
+                    </div>
+                    <div style={{ height: 8, borderRadius: 4, background: 'rgb(var(--surface2))', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', borderRadius: 4, width: `${pct}%`, background: color, transition: 'width 0.5s ease' }} />
+                    </div>
+                  </div>
+                )
+              })}
+              <p style={{ fontSize: 11, color: 'rgb(var(--texts))', margin: 0 }}>
+                {luckPts > skillPts ? 'Riding your luck — first scorer picks are carrying you.' : skillPts > luckPts * 2 ? 'Fundamentally solid — your score/outcome reads are the backbone.' : 'Balanced mix of reading games and backing the right scorers.'}
+              </p>
+            </div>
+          ) : (
+            <p style={{ fontSize: 13, color: 'rgb(var(--texts))', textAlign: 'center', paddingTop: 32 }}>No scored predictions yet</p>
+          )}
+        </div>
+
+        {/* Accuracy trend per GW */}
+        <div style={{ background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))', borderRadius: 18, boxShadow: 'var(--card-shadow)', padding: '20px 22px' }}>
+          <p style={{ fontSize: 14, fontWeight: 700, margin: 0, color: 'rgb(var(--textp))', marginBottom: 4 }}>Accuracy trend</p>
+          <p style={{ fontSize: 12, color: 'rgb(var(--texts))', margin: 0, marginBottom: 16 }}>Outcome hit rate per gameweek — are you improving?</p>
+          {gwAccuracy.series.length >= 2 ? (
+            <BarChart series={gwAccuracy.series} labels={gwAccuracy.labels} accent="rgb(var(--blue))" showVals />
+          ) : (
+            <p style={{ fontSize: 13, color: 'rgb(var(--texts))', textAlign: 'center', paddingTop: 32 }}>Need at least 2 gameweeks of data</p>
+          )}
+        </div>
+      </div>
+
       {/* ── Badges ── */}
       <div style={{
         background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))',
@@ -996,6 +1113,9 @@ export default function ProfilePage() {
               }}
             />
           </div>
+
+          {/* Push notifications */}
+          <PushToggle userId={profile.id} />
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <Button variant="outline" size="sm" onClick={() => setEditOpen(false)}>Cancel</Button>
