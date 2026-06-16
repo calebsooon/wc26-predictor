@@ -3,10 +3,5 @@
   "buildCommand": "npm run build",
   "installCommand": "npm install",
   "outputDirectory": ".next",
-  "crons": [
-    {
-      "path": "/api/cron/kickoff-reminders",
-      "schedule": "0 * * * *"
-    }
-  ]
+  "crons": []
 }
