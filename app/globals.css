@@ -15,35 +15,76 @@
 :root { --accent: var(--primary); }
 
 /*
- * MatchDay tokens as space-separated RGB channels.
- * :root = light mode · .dark = dark mode ("Dark Stadium Analytics").
+ * MatchDay — "Refined" design tokens.
+ * Space-separated RGB channels so Tailwind opacity modifiers work (`bg-primary/12`).
+ * :root = light · .dark = dark (near-black with true emerald accent).
  */
 :root {
-  --bg:       248 250 252;  /* #F8FAFC */
-  --surface:  255 255 255;  /* #FFFFFF */
-  --card:     255 255 255;  /* #FFFFFF */
-  --border:   226 232 240;  /* #E2E8F0 */
-  --primary:    5 150 105;  /* #059669 — deeper green for contrast on light */
-  --gold:     180 121  31;  /* #B4791F */
-  --blue:       2 132 199;  /* #0284C7 */
-  --textp:     15  23  42;  /* #0F172A */
-  --texts:    100 116 139;  /* #64748B */
-  --error:    220  38  38;  /* #DC2626 */
-  --success:   22 163  74;  /* #16A34A */
+  /* Surfaces */
+  --bg:        238 241 246;  /* #eef1f6 — page */
+  --surface:   248 250 253;  /* off-white — sidebar / nav */
+  --card:      255 255 255;  /* #ffffff — cards */
+  --surface2:  244 246 250;  /* #f4f6fa — inset controls, steppers */
+  --surface3:  233 237 243;  /* #e9edf3 — avatar bg, track fills */
+  --border:    222 226 232;  /* ≈rgba(16,22,40,0.07) on bg */
+
+  /* Brand */
+  --primary:    14 158  85;  /* #0e9e55 — deeper emerald for light */
+  --gold:      192 138  26;  /* #c08a1a */
+  --blue:       47 111 224;  /* #2f6fe0 — sky */
+  --amber:     201 131  24;  /* #c98318 */
+  --coral:     221  75  75;  /* #dd4b4b */
+
+  /* Text */
+  --textp:      16  21  33;  /* #101521 — primary */
+  --texts:      92 100 115;  /* #5c6473 — muted/secondary */
+  --faint:     138 146 159;  /* #8a929f — tertiary / eyebrows */
+
+  /* Semantic */
+  --error:     221  75  75;  /* #dd4b4b */
+  --success:    14 158  85;  /* #0e9e55 */
+  --bronze:    176 110  70;  /* #b06e46 */
+
+  /* Hero gradient */
+  --heroFrom:   22 163  93;
+  --heroTo:     12 122  68;
+
+  /* Card elevation */
+  --card-shadow: 0 1px 2px rgba(16,22,40,0.05), 0 10px 26px -14px rgba(16,22,40,0.14);
 }
 
 .dark {
-  --bg:         7  17  31;  /* #07111F */
-  --surface:   16  27  45;  /* #101B2D */
-  --card:      21  34  56;  /* #152238 */
-  --border:    38  53  79;  /* #26354F */
-  --primary:    0 230 118;  /* #00E676 */
-  --gold:     245 197  66;  /* #F5C542 */
-  --blue:      56 189 248;  /* #38BDF8 */
-  --textp:    248 250 252;  /* #F8FAFC */
-  --texts:    148 163 184;  /* #94A3B8 */
-  --error:    239  68  68;  /* #EF4444 */
-  --success:   34 197  94;  /* #22C55E */
+  /* Surfaces */
+  --bg:         10  11  16;  /* #0a0b10 — page */
+  --surface:    12  14  19;  /* #0c0e13 — sidebar / nav */
+  --card:       21  24  31;  /* #15181f — cards */
+  --surface2:   29  33  42;  /* #1d212a — inset controls, steppers */
+  --surface3:   38  43  53;  /* #262b35 — avatar bg, track fills */
+  --border:     37  40  47;  /* ≈rgba(255,255,255,0.07) on card */
+
+  /* Brand */
+  --primary:    31 193 107;  /* #1fc16b — true emerald (not neon) */
+  --gold:      255 206  90;  /* #ffce5a */
+  --blue:       91 157 255;  /* #5b9dff — sky */
+  --amber:     255 178  77;  /* #ffb24d */
+  --coral:     255 107 107;  /* #ff6b6b */
+
+  /* Text */
+  --textp:     243 245 249;  /* #f3f5f9 */
+  --texts:     154 163 178;  /* #9aa3b2 — muted/secondary */
+  --faint:     105 112 126;  /* #69707e — tertiary / eyebrows */
+
+  /* Semantic */
+  --error:     255 107 107;  /* #ff6b6b */
+  --success:    31 193 107;  /* #1fc16b */
+  --bronze:    205 127  80;  /* #cd7f50 */
+
+  /* Hero gradient */
+  --heroFrom:   26 168  94;
+  --heroTo:     15 122  72;
+
+  /* Card elevation */
+  --card-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 26px -12px rgba(0,0,0,0.6);
 }
 
 html {
@@ -53,7 +94,7 @@ html {
 body {
   background: rgb(var(--bg));
   color: rgb(var(--textp));
-  font-family: var(--font-archivo), system-ui, sans-serif;
+  font-family: var(--font-body), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -62,7 +103,15 @@ body {
 }
 
 h1, h2, h3, .font-display {
-  font-family: var(--font-space-grotesk), var(--font-archivo), sans-serif;
+  font-family: var(--font-display), var(--font-body), sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Numerals: tabular + lining figures with tight tracking */
+.num, .tabular-nums {
+  font-family: var(--font-display), var(--font-body), sans-serif;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  letter-spacing: -0.015em;
 }
 
 @layer utilities {
@@ -82,6 +131,35 @@ h1, h2, h3, .font-display {
   .h-18 {
     height: 4.5rem;
   }
+  /* Card elevation shadow — flips with the --card-shadow token */
+  .shadow-card {
+    box-shadow: var(--card-shadow);
+  }
+  /* Eyebrow label: "GROUP C", "YOUR SEASON", etc. */
+  .eyebrow {
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    color: rgb(var(--faint));
+  }
+}
+
+/* Modal enter animation */
+@keyframes mcIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes mcFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Leaderboard rank-change pop */
+@keyframes lbPop {
+  0%   { opacity: 0; transform: translateY(4px) scale(0.8); }
+  60%  { transform: translateY(0) scale(1.12); }
+  100% { opacity: 1; transform: none; }
 }
 
 /* Custom scrollbar (token-aware) */

@@ -9,7 +9,7 @@ import { resolveWeights, weightedMatchPoints, type MatchBreakdown } from '@/lib/
 const PRED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer'
 
 /** Snapshot every league's current ranking (league-weighted). Returns rows written. */
-export async function snapshotLeagueRanks(supabase: SupabaseClient): Promise<number> {
+export async function snapshotLeagueRanks(supabase: SupabaseClient, gwNumber?: number): Promise<number> {
   const [{ data: preds }, { data: leagues }, { data: members }] = await Promise.all([
     supabase.from('predictions').select(PRED_COLS).not('points_awarded', 'is', null),
     supabase.from('leagues').select('id, scoring'),
@@ -43,7 +43,7 @@ export async function snapshotLeagueRanks(supabase: SupabaseClient): Promise<num
     Array.from(agg.entries())
       .sort((a, b) => b[1] - a[1])
       .forEach(([user_id, points], idx) => {
-        snapshots.push({ user_id, league_id: league.id, rank: idx + 1, points, snapshot_at: now })
+        snapshots.push({ user_id, league_id: league.id, rank: idx + 1, points, snapshot_at: now, ...(gwNumber != null ? { gw_number: gwNumber } : {}) })
       })
   }
 

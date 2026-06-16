@@ -42,6 +42,26 @@ export interface ActiveLeague {
   memberProfiles: ProfileLite[]
 }
 
+function activeLeagueStorageKey(userId: string) {
+  return `matchday:active-league:${userId}`
+}
+
+function getStoredActiveLeagueId(userId: string): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    return window.localStorage.getItem(activeLeagueStorageKey(userId))
+  } catch {
+    return null
+  }
+}
+
+function setStoredActiveLeagueId(userId: string, leagueId: string) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(activeLeagueStorageKey(userId), leagueId)
+  } catch {}
+}
+
 /** Leagues the user belongs to (with join codes — only meaningful to admins). */
 export async function getMyLeagues(supabase: SupabaseClient, userId: string): Promise<League[]> {
   const { data } = await supabase
@@ -57,18 +77,10 @@ export async function getMyLeagues(supabase: SupabaseClient, userId: string): Pr
  * Falls back to the user's first membership when no active league is set.
  */
 export async function getActiveLeague(supabase: SupabaseClient, userId: string): Promise<ActiveLeague> {
-  const { data: prof } = await supabase
-    .from('profiles')
-    .select('active_league_id')
-    .eq('id', userId)
-    .maybeSingle()
-
-  let activeId = (prof as { active_league_id: string | null } | null)?.active_league_id ?? null
-
-  if (!activeId) {
-    const mine = await getMyLeagues(supabase, userId)
-    activeId = mine[0]?.id ?? null
-  }
+  const mine = await getMyLeagues(supabase, userId)
+  const storedId = getStoredActiveLeagueId(userId)
+  const activeId = mine.find((l) => l.id === storedId)?.id ?? mine[0]?.id ?? null
+  if (activeId) setStoredActiveLeagueId(userId, activeId)
   if (!activeId) return { league: null, weights: DEFAULT_WEIGHTS, allowGdManual: true, memberIds: [], memberProfiles: [] }
 
   // NB: league_members.user_id FKs to auth.users, not profiles — so we can't embed
@@ -97,5 +109,10 @@ export async function getActiveLeague(supabase: SupabaseClient, userId: string):
 
 /** Set the user's active (currently-viewed) league. */
 export async function setActiveLeague(supabase: SupabaseClient, userId: string, leagueId: string) {
-  return supabase.from('profiles').update({ active_league_id: leagueId }).eq('id', userId)
+  setStoredActiveLeagueId(userId, leagueId)
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('matchday:active-league-changed', { detail: { userId, leagueId } }))
+  }
+  const result = await supabase.from('profiles').update({ active_league_id: leagueId }).eq('id', userId)
+  return result
 }

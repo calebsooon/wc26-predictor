@@ -73,6 +73,8 @@ export default function RulesContent({
         </Section>
       )}
 
+      <ScoringExample />
+
       {groupActive && (
         <Section
           title="Group stage"
@@ -130,6 +132,50 @@ export default function RulesContent({
           </div>
         </div>
       </Section>}
+    </div>
+  )
+}
+
+function ScoringExample() {
+  const rows = [
+    { label: 'Correct outcome', pts: 3, earned: true, hint: 'Both picked Spain win' },
+    { label: 'Exact scoreline', pts: 3, earned: false, hint: '2-1 ≠ 3-2' },
+    { label: 'Goal difference', pts: 2, earned: true, hint: 'Both have a 1-goal diff' },
+    { label: 'Total goals', pts: 1, earned: false, hint: '3 goals ≠ 5 goals' },
+    { label: 'Both teams scored', pts: 1, earned: true, hint: 'Both picked yes correctly' },
+  ]
+  const total = rows.filter((r) => r.earned).reduce((s, r) => s + r.pts, 0)
+  return (
+    <div className="rounded-xl border border-border bg-surface overflow-hidden">
+      <div className="px-4 pt-4 pb-3 border-b border-border">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-texts mb-1.5">Scoring example</p>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 text-[13px]">
+          <div><span className="text-texts">Actual result</span></div>
+          <div className="font-bold text-textp">Spain 2–1 Morocco</div>
+          <div><span className="text-texts">Your pick</span></div>
+          <div className="font-bold text-textp">Spain 3–2 Morocco</div>
+        </div>
+      </div>
+      <div className="divide-y divide-border/50">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-center gap-3 px-4 py-2.5">
+            <div className={`w-8 h-8 grid place-items-center rounded-md shrink-0 text-[12px] font-extrabold tabular-nums ${r.earned ? 'bg-primary/10 text-primary' : 'bg-surface2 text-texts/40 line-through'}`}>
+              +{r.pts}
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className={`text-[13px] font-bold ${r.earned ? 'text-textp' : 'text-texts/60'}`}>{r.label}</span>
+              <span className="text-[11px] text-texts ml-2">{r.hint}</span>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={r.earned ? 'text-primary shrink-0' : 'text-texts/30 shrink-0'}>
+              {r.earned ? <path d="m5 12 5 5L20 7"/> : <><path d="M18 6 6 18"/><path d="m6 6 12 12"/></>}
+            </svg>
+          </div>
+        ))}
+      </div>
+      <div className="px-4 py-3 bg-primary/[0.06] border-t border-border flex items-center justify-between">
+        <span className="text-[12px] font-bold text-texts">Total for this match</span>
+        <span className="text-[18px] font-extrabold tabular-nums text-primary">+{total} pts</span>
+      </div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
@@ -9,6 +9,7 @@ import {
   Card, Pill, Button, ScoreStepper, SectionHeader, Avatar, Skeleton,
   LockIcon, Countdown, EmptyState,
 } from '@/components/ui'
+import FlagChip from '@/components/FlagChip'
 import { ScoreDisplay } from '@/components/football'
 import { type DBMatch } from '@/lib/match-ui'
 import { POINTS, weightedMatchPoints, DEFAULT_WEIGHTS, type MatchBreakdown, type ScoringWeights } from '@/lib/scoring'
@@ -31,7 +32,7 @@ interface OtherPred extends MatchBreakdown {
 }
 
 export default function MatchDetailPage() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
   const { id } = useParams<{ id: string }>()
 
@@ -52,11 +53,23 @@ export default function MatchDetailPage() {
   const [players, setPlayers] = useState<PlayerForPicker[]>([])
   const [others, setOthers] = useState<OtherPred[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
+  // Reactive lock: recalculate every second so form locks at kickoff even if page stays open
+  const [secsLeft, setSecsLeft] = useState<number | null>(null)
+  const matchDate = match?.match_date ?? null
+  useEffect(() => {
+    if (!matchDate) return
+    const update = () => setSecsLeft(Math.max(0, (new Date(matchDate).getTime() - Date.now()) / 1000))
+    update()
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
+  }, [matchDate])
 
   useEffect(() => {
     async function load() {
+      try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.replace('/login'); return }
       setUserId(user.id)
@@ -122,6 +135,10 @@ export default function MatchDetailPage() {
         profiles: profileMap.get((p as { user_id: string }).user_id) ?? null,
       })) as unknown as OtherPred[])
       setLoading(false)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load match')
+        setLoading(false)
+      }
     }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -143,11 +160,13 @@ export default function MatchDetailPage() {
   if (loading) {
     return <div className="max-w-2xl mx-auto space-y-4"><Skeleton className="h-8 w-32" /><Skeleton className="h-44 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div>
   }
+  if (error) return <EmptyState title="Couldn't load match" desc={error} />
   if (!match) return <EmptyState title="Match not found" desc="This fixture doesn't exist." />
 
   const home = getTeam(match.home_team), away = getTeam(match.away_team)
   const scored = match.real_home_score !== null && match.real_away_score !== null
-  const locked = scored || match.is_locked || new Date(match.match_date) <= new Date()
+  // secsLeft updates every second — form locks at kickoff even if user keeps the page open
+  const locked = scored || match.is_locked || (secsLeft !== null ? secsLeft <= 0 : new Date(match.match_date) <= new Date())
   const knockout = !match.group_name
   const canSubmit = h != null && a != null && !locked
 
@@ -187,7 +206,7 @@ export default function MatchDetailPage() {
         </div>
         <div className="flex items-center justify-between">
           <div className="flex-1 flex flex-col items-center gap-2.5">
-            <span className="text-[56px] leading-none">{home.flag}</span>
+            <FlagChip code={match.home_team} w={60} h={40} r={8} />
             <span className="font-extrabold text-textp text-center leading-tight">{home.name}</span>
           </div>
           <div className="px-3 text-center shrink-0">
@@ -197,7 +216,7 @@ export default function MatchDetailPage() {
             <div className="text-[11px] text-texts font-bold mt-1.5">{fmtDateTime(match.match_date)}</div>
           </div>
           <div className="flex-1 flex flex-col items-center gap-2.5">
-            <span className="text-[56px] leading-none">{away.flag}</span>
+            <FlagChip code={match.away_team} w={60} h={40} r={8} />
             <span className="font-extrabold text-textp text-center leading-tight">{away.name}</span>
           </div>
         </div>
@@ -226,12 +245,12 @@ export default function MatchDetailPage() {
 
           <div className="flex items-center justify-center gap-4 sm:gap-7 py-3">
             <div className="flex flex-col items-center gap-2">
-              <span className="text-[34px] leading-none">{home.flag}</span>
+              <FlagChip code={match.home_team} w={40} h={27} r={6} />
               <ScoreStepper value={h} onChange={setH} />
             </div>
             <span className="text-2xl font-black text-texts mt-7">:</span>
             <div className="flex flex-col items-center gap-2">
-              <span className="text-[34px] leading-none">{away.flag}</span>
+              <FlagChip code={match.away_team} w={40} h={27} r={6} />
               <ScoreStepper value={a} onChange={setA} />
             </div>
           </div>
@@ -353,7 +372,7 @@ export default function MatchDetailPage() {
                   ? displayPts >= 8 ? 'text-success' : displayPts > 0 ? 'text-gold' : 'text-error'
                   : 'text-texts'
                 const firstGoalTeam = o.pred_first_goal_team
-                  ? (o.pred_first_goal_team === 'NONE' ? 'No goal' : getTeam(o.pred_first_goal_team)?.flag ?? o.pred_first_goal_team)
+                  ? (o.pred_first_goal_team === 'NONE' ? 'No goal' : getTeam(o.pred_first_goal_team)?.name ?? o.pred_first_goal_team)
                   : null
                 const firstScorerName = o.pred_no_scorer
                   ? 'No scorer'
@@ -382,8 +401,8 @@ export default function MatchDetailPage() {
                     {o.pred_home != null && o.pred_away != null ? (
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         {/* score */}
-                        <span className="text-[15px] font-extrabold tabular-nums text-textp">
-                          {home.flag} {o.pred_home}–{o.pred_away} {away.flag}
+                        <span className="inline-flex items-center gap-1.5 text-[15px] font-extrabold tabular-nums text-textp">
+                          <FlagChip code={match.home_team} w={18} h={12} r={2} /> {o.pred_home}–{o.pred_away} <FlagChip code={match.away_team} w={18} h={12} r={2} />
                         </span>
                         {/* first goal team */}
                         {firstGoalTeam && (

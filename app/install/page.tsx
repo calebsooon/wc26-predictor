@@ -23,6 +23,85 @@ function isStandalone(): boolean {
     (navigator as Navigator & { standalone?: boolean }).standalone === true
 }
 
+/* ── Small icon set for install page ────────────────────────── */
+function PhoneIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/>
+    </svg>
+  )
+}
+function AndroidIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 10h16v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8z"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><line x1="12" y1="14" x2="12" y2="17"/>
+    </svg>
+  )
+}
+function MonitorIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+    </svg>
+  )
+}
+function BoltSmall() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
+    </svg>
+  )
+}
+function FullscreenIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+    </svg>
+  )
+}
+function HomeScreenIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9.5 12 3l9 6.5"/><path d="M9 21V12h6v9"/><path d="M3 9.5V21h18V9.5"/>
+    </svg>
+  )
+}
+function MoonIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </svg>
+  )
+}
+function CheckCircleIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>
+    </svg>
+  )
+}
+function InfoIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gold shrink-0">
+      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+  )
+}
+function ShareIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/>
+    </svg>
+  )
+}
+function InstallSmallIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/>
+    </svg>
+  )
+}
+
 /* ── Step component ──────────────────────────────────────────── */
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
@@ -48,12 +127,13 @@ function IOSGuide() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-2 mb-1">
-        <span className="text-xl"></span>
-        <span className="font-extrabold text-textp">iPhone & iPad (Safari)</span>
+        <PhoneIcon />
+        <span className="font-extrabold text-textp">iPhone &amp; iPad (Safari)</span>
         <Pill tone="blue">Recommended browser</Pill>
       </div>
-      <div className="rounded-xl border border-border bg-surface/60 p-4 text-[12px] text-texts font-medium">
-        ⚠️ Must use <strong className="text-textp">Safari</strong> — Chrome and Firefox on iOS don&apos;t support Add to Home Screen.
+      <div className="flex items-start gap-2.5 rounded-xl border border-border bg-surface/60 p-3 text-[12px] text-texts font-medium">
+        <InfoIcon />
+        <span>Must use <strong className="text-textp">Safari</strong> — Chrome and Firefox on iOS don&apos;t support Add to Home Screen.</span>
       </div>
       <div className="space-y-5">
         <Step n={1} title="Open MatchDay in Safari">
@@ -61,7 +141,7 @@ function IOSGuide() {
         </Step>
         <Step n={2} title='Tap the Share button'>
           At the bottom of the screen, tap the <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface border border-border text-[11px] font-bold text-textp">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg> Share
+            <ShareIcon /> Share
           </span> icon (a box with an arrow pointing up).
         </Step>
         <Step n={3} title='"Add to Home Screen"'>
@@ -82,7 +162,7 @@ function AndroidGuide() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-2 mb-1">
-        <span className="text-xl">🤖</span>
+        <AndroidIcon />
         <span className="font-extrabold text-textp">Android (Chrome)</span>
       </div>
       <div className="space-y-5">
@@ -93,7 +173,7 @@ function AndroidGuide() {
           Chrome may automatically show a banner at the bottom saying <strong className="text-textp">&ldquo;Add MatchDay to Home screen&rdquo;</strong> — tap it to install instantly.
         </Step>
         <Step n={3} title="Or install from the menu">
-          If no banner appears, tap the <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface border border-border text-[11px] font-bold text-textp">⋮</span> menu (three dots, top-right), then tap <strong className="text-textp">Add to Home screen</strong>.
+          If no banner appears, tap the <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface border border-border text-[11px] font-bold text-textp">&#8942;</span> menu (three dots, top-right), then tap <strong className="text-textp">Add to Home screen</strong>.
         </Step>
         <Step n={4} title="Confirm the install">
           Tap <strong className="text-textp">Add</strong> in the dialog. The MatchDay icon will appear on your home screen and app drawer.
@@ -110,13 +190,13 @@ function DesktopChromeGuide() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-2 mb-1">
-        <span className="text-xl">💻</span>
+        <MonitorIcon />
         <span className="font-extrabold text-textp">Desktop (Chrome / Edge)</span>
       </div>
       <div className="space-y-5">
         <Step n={1} title="Look for the install icon">
           In the Chrome or Edge address bar, look for a small <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface border border-border text-[11px] font-bold text-textp">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg> Install
+            <InstallSmallIcon /> Install
           </span> icon on the right side.
         </Step>
         <Step n={2} title="Click Install MatchDay">
@@ -133,10 +213,10 @@ function DesktopChromeGuide() {
 /* ── Benefits card ───────────────────────────────────────────── */
 function BenefitsCard() {
   const benefits = [
-    { icon: '⚡', title: 'Instant launch', desc: 'Opens straight to your league — no browser, no address bar.' },
-    { icon: '📱', title: 'Full-screen experience', desc: 'Uses the whole screen like a native app on every device.' },
-    { icon: '🔖', title: 'Always one tap away', desc: 'Lives on your home screen alongside your other apps.' },
-    { icon: '🌙', title: 'Matches your theme', desc: 'Dark status bar and splash screen match the MatchDay design.' },
+    { icon: <BoltSmall />, title: 'Instant launch', desc: 'Opens straight to your league — no browser, no address bar.' },
+    { icon: <FullscreenIcon />, title: 'Full-screen experience', desc: 'Uses the whole screen like a native app on every device.' },
+    { icon: <HomeScreenIcon />, title: 'Always one tap away', desc: 'Lives on your home screen alongside your other apps.' },
+    { icon: <MoonIcon />, title: 'Matches your theme', desc: 'Dark status bar and splash screen match the MatchDay design.' },
   ]
   return (
     <Card className="p-5">
@@ -144,7 +224,7 @@ function BenefitsCard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
         {benefits.map((b) => (
           <div key={b.title} className="flex gap-3 p-3 rounded-xl bg-surface border border-border/60">
-            <span className="text-xl shrink-0">{b.icon}</span>
+            <span className="text-primary shrink-0 mt-0.5">{b.icon}</span>
             <div>
               <p className="text-[13px] font-bold text-textp">{b.title}</p>
               <p className="text-[12px] text-texts mt-0.5">{b.desc}</p>
@@ -154,6 +234,13 @@ function BenefitsCard() {
       </div>
     </Card>
   )
+}
+
+/* ── Platform tab icons ────────────────────────────────────────── */
+const TAB_ICONS: Record<string, React.ReactNode> = {
+  ios: <PhoneIcon />,
+  android: <AndroidIcon />,
+  'desktop-chrome': <MonitorIcon />,
 }
 
 /* ── Main page ───────────────────────────────────────────────── */
@@ -166,16 +253,15 @@ export default function InstallPage() {
     const p = detectPlatform()
     setPlatform(p)
     setInstalled(isStandalone())
-    // Default the tab to the user's detected platform
     if (p === 'ios') setActiveTab('ios')
     else if (p === 'android') setActiveTab('android')
     else setActiveTab('desktop-chrome')
   }, [])
 
-  const tabs: { key: Platform; label: string; emoji: string }[] = [
-    { key: 'ios',            label: 'iPhone / iPad', emoji: '' },
-    { key: 'android',        label: 'Android',       emoji: '🤖' },
-    { key: 'desktop-chrome', label: 'Desktop',       emoji: '💻' },
+  const tabs: { key: Platform; label: string }[] = [
+    { key: 'ios',            label: 'iPhone / iPad' },
+    { key: 'android',        label: 'Android' },
+    { key: 'desktop-chrome', label: 'Desktop' },
   ]
 
   return (
@@ -183,13 +269,13 @@ export default function InstallPage() {
       <PageHeader
         eyebrow="Get the app"
         title="Install MatchDay"
-        sub="Add MatchDay to your home screen for a native app experience — no App Store needed."
+        sub="Add MatchDay to your home screen for a native app experience."
       />
 
       {installed ? (
         <Card className="p-5 border-primary/30 bg-primary/[0.05]">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">✅</span>
+            <CheckCircleIcon />
             <div>
               <p className="font-extrabold text-textp">Already installed</p>
               <p className="text-[13px] text-texts mt-0.5">You&apos;re running MatchDay as a standalone app. You&apos;re all set.</p>
@@ -199,7 +285,7 @@ export default function InstallPage() {
       ) : platform !== 'unknown' && (
         <Card className="p-4 border-gold/30 bg-gold/[0.05]">
           <div className="flex items-center gap-3">
-            <span className="text-xl">👇</span>
+            <InfoIcon />
             <p className="text-[13px] font-semibold text-textp">
               {platform === 'ios' && 'You\'re on iOS — follow the Safari steps below.'}
               {platform === 'android' && 'You\'re on Android — Chrome will offer to install automatically.'}
@@ -226,7 +312,7 @@ export default function InstallPage() {
                   : 'border-border text-texts hover:text-textp hover:border-texts/40'
               }`}
             >
-              <span>{t.emoji}</span>
+              <span className={activeTab === t.key ? 'text-primary' : 'text-texts'}>{TAB_ICONS[t.key]}</span>
               <span>{t.label}</span>
               {platform === t.key && !installed && (
                 <span className="text-[9px] font-extrabold px-1 py-0.5 rounded bg-gold/20 text-gold ml-1">YOUR DEVICE</span>

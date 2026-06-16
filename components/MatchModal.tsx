@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam, normalisePosition, POSITION_ORDER, POSITION_ABBR } from '@/lib/teams'
-import { fmtDateLong } from '@/lib/date-format'
+import { fmtDateLong, getTimeZoneShortLabel } from '@/lib/date-format'
 
 export interface ModalMatch {
   id: string
@@ -131,7 +131,7 @@ export default function MatchModal({ match, onClose }: { match: ModalMatch; onCl
           <div className="flex items-start justify-between mb-4">
             <div>
               <span className="text-xs font-bold text-texts uppercase tracking-widest">{match.group_name ? `Group ${match.group_name}` : match.round_name}</span>
-              <p className="text-xs text-texts mt-0.5">{fmtDateLong(match.match_date)} SGT</p>
+              <p className="text-xs text-texts mt-0.5">{fmtDateLong(match.match_date)} {getTimeZoneShortLabel()}</p>
             </div>
             <button onClick={onClose} className="text-texts hover:text-textp p-1 -mr-1">✕</button>
           </div>

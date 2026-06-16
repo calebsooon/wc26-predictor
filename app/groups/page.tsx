@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
-import { PageHeader, Card, Tabs, Button, Skeleton, Pill } from '@/components/ui'
+import { Skeleton, EmptyState } from '@/components/ui'
+import ThemeToggle from '@/components/ThemeToggle'
+import FlagChip from '@/components/FlagChip'
 import { getActiveLeague } from '@/lib/league'
 import { DEFAULT_WEIGHTS, weightedGroupPoints, type ScoringWeights } from '@/lib/scoring'
 
@@ -15,43 +17,449 @@ interface Match {
   real_away_score: number | null
   group_name: string
   gameweek: number
+  match_date: string
 }
 
-interface TeamRow { team: string; p: number; w: number; d: number; l: number; gf: number; ga: number; gd: number; pts: number }
 interface GroupPredRow { group_name: string; ranked_codes: string[]; points_awarded: number | null }
 
 const GROUPS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
 
-function buildTable(matches: Match[], group: string): TeamRow[] {
-  const map = new Map<string, TeamRow>()
-  const ensure = (t: string) => { if (!map.has(t)) map.set(t, { team: t, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0 }); return map.get(t)! }
+function getTeamsInGroup(matches: Match[], group: string): string[] {
+  const set = new Set<string>()
+  for (const m of matches) {
+    if (m.group_name === group) { set.add(m.home_team); set.add(m.away_team) }
+  }
+  return Array.from(set)
+}
+
+function buildRanking(matches: Match[], group: string): string[] {
+  const map = new Map<string, { team: string; pts: number; gd: number; gf: number }>()
+  const ensure = (t: string) => {
+    if (!map.has(t)) map.set(t, { team: t, pts: 0, gd: 0, gf: 0 })
+    return map.get(t)!
+  }
   for (const m of matches) {
     if (m.group_name !== group) continue
     ensure(m.home_team); ensure(m.away_team)
     if (m.real_home_score === null || m.real_away_score === null) continue
     const home = ensure(m.home_team), away = ensure(m.away_team)
     const rh = m.real_home_score, ra = m.real_away_score
-    home.p++; away.p++
-    home.gf += rh; home.ga += ra; home.gd = home.gf - home.ga
-    away.gf += ra; away.ga += rh; away.gd = away.gf - away.ga
-    if (rh > ra) { home.w++; home.pts += 3; away.l++ }
-    else if (rh < ra) { away.w++; away.pts += 3; home.l++ }
-    else { home.d++; home.pts++; away.d++; away.pts++ }
+    home.gf += rh; home.gd += rh - ra
+    away.gf += ra; away.gd += ra - rh
+    if (rh > ra) { home.pts += 3 }
+    else if (rh < ra) { away.pts += 3 }
+    else { home.pts++; away.pts++ }
   }
-  return Array.from(map.values()).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.team.localeCompare(b.team))
+  return Array.from(map.values())
+    .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.team.localeCompare(b.team))
+    .map((r) => r.team)
+}
+
+function isGroupComplete(matches: Match[], group: string): boolean {
+  const gMatches = matches.filter((m) => m.group_name === group)
+  return gMatches.length > 0 && gMatches.every((m) => m.real_home_score !== null)
+}
+
+// Sort/reorder icon
+function SortIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 6L8 18M8 6L5 9M8 6L11 9" />
+      <path d="M16 18L16 6M16 18L13 15M16 18L19 15" />
+    </svg>
+  )
+}
+
+// Up/down chevron buttons
+function ArrowBtn({ onClick, disabled, dir }: { onClick: () => void; disabled: boolean; dir: 'up' | 'down' }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="grid place-items-center p-0 border-0 bg-transparent rounded-[5px] transition-colors hover:bg-surface3 hover:text-primary disabled:hover:bg-transparent"
+      style={{
+        width: 22,
+        height: 16,
+        cursor: disabled ? 'default' : 'pointer',
+        color: disabled ? 'rgba(var(--faint),0.35)' : 'rgb(var(--faint))',
+      }}
+      aria-label={dir === 'up' ? 'Move up' : 'Move down'}
+    >
+      {dir === 'up' ? (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 15L12 9L6 15" />
+        </svg>
+      ) : (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M6 9L12 15L18 9" />
+        </svg>
+      )}
+    </button>
+  )
+}
+
+interface StandingRow { code: string; pts: number; gd: number; gf: number }
+
+function computeStandings(matches: Match[], group: string): StandingRow[] {
+  const map = new Map<string, StandingRow>()
+  const ensure = (t: string) => {
+    if (!map.has(t)) map.set(t, { code: t, pts: 0, gd: 0, gf: 0 })
+    return map.get(t)!
+  }
+  for (const m of matches) {
+    if (m.group_name !== group || m.real_home_score == null || m.real_away_score == null) continue
+    const home = ensure(m.home_team), away = ensure(m.away_team)
+    const hs = m.real_home_score, as_ = m.real_away_score
+    home.gf += hs; home.gd += hs - as_
+    away.gf += as_; away.gd += as_ - hs
+    if (hs > as_) { home.pts += 3 }
+    else if (hs === as_) { home.pts++; away.pts++ }
+    else { away.pts += 3 }
+  }
+  return Array.from(map.values()).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf)
+}
+
+interface GroupCardProps {
+  groupName: string
+  matches: Match[]
+  pred: GroupPredRow | undefined
+  userId: string | null
+  weights: ScoringWeights
+  activeTab: 'pred' | 'stand'
+  onSave: (group: string, order: string[]) => Promise<void>
+}
+
+function GroupCard({ groupName, matches, pred, userId, weights, activeTab, onSave }: GroupCardProps) {
+  const settled = isGroupComplete(matches, groupName)
+  const resultRanking = useMemo(() => buildRanking(matches, groupName), [matches, groupName])
+  const defaultOrder = useMemo(() => {
+    if (pred?.ranked_codes?.length) return pred.ranked_codes
+    const teams = getTeamsInGroup(matches, groupName)
+    return teams
+  }, [pred, matches, groupName])
+
+  const [order, setOrder] = useState<string[]>(defaultOrder)
+  const [saving, setSaving] = useState(false)
+  const [savedMsg, setSavedMsg] = useState<string | null>(null)
+
+  const standingsRows = useMemo(() => computeStandings(matches, groupName), [matches, groupName])
+  const hasStandings = standingsRows.length > 0
+  const displayStandingsRows = useMemo(() => {
+    if (hasStandings) return standingsRows
+    return defaultOrder.map((code) => ({ code, pts: 0, gd: 0, gf: 0 }))
+  }, [defaultOrder, hasStandings, standingsRows])
+
+  // Only reset order when the actual team IDs change, not on every reference update
+  const defaultOrderKey = defaultOrder.join(',')
+  useEffect(() => {
+    setOrder(defaultOrder)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultOrderKey])
+
+  function move(i: number, dir: -1 | 1) {
+    setOrder((o) => {
+      const n = [...o]; const j = i + dir
+      if (j < 0 || j >= n.length) return o
+      ;[n[i], n[j]] = [n[j], n[i]]
+      return n
+    })
+  }
+
+  async function handleSave() {
+    if (!userId || order.length === 0) return
+    setSaving(true)
+    try {
+      await onSave(groupName, order)
+      setSavedMsg('Saved')
+    } catch {
+      setSavedMsg('Error')
+    } finally {
+      setSaving(false)
+      setTimeout(() => setSavedMsg(null), 2000)
+    }
+  }
+
+  const ptsAwarded = pred?.points_awarded ?? null
+  const displayPts = ptsAwarded !== null ? weightedGroupPoints(ptsAwarded, weights) : null
+
+  // Badge
+  const badge = settled && displayPts !== null ? (
+    <span style={{
+      fontSize: 11,
+      fontWeight: 700,
+      padding: '3px 9px',
+      borderRadius: 20,
+      background: 'rgba(var(--primary),0.14)',
+      color: 'rgb(var(--primary))',
+      border: '1px solid rgba(var(--primary),0.25)',
+      fontFamily: 'var(--font-display, inherit)',
+    }}>
+      ✓ +{displayPts} pts
+    </span>
+  ) : activeTab === 'pred' ? (
+    <span style={{
+      fontSize: 11,
+      fontWeight: 600,
+      padding: '3px 9px',
+      borderRadius: 20,
+      background: 'rgb(var(--surface2))',
+      color: 'rgb(var(--texts))',
+      border: '1px solid rgb(var(--border))',
+      fontFamily: 'var(--font-display, inherit)',
+    }}>
+      Editable
+    </span>
+  ) : null
+
+  const displayTeams = settled ? resultRanking : order
+
+  return (
+    <div style={{
+      background: 'rgb(var(--card))',
+      border: '1px solid rgb(var(--border))',
+      boxShadow: 'var(--card-shadow)',
+      borderRadius: 16,
+      overflow: 'hidden',
+    }}>
+      {/* Card header */}
+      <div style={{
+        padding: '14px 16px',
+        borderBottom: '1px solid rgb(var(--border))',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+      }}>
+        <span style={{
+          fontSize: 15,
+          fontWeight: 700,
+          fontFamily: 'var(--font-display, inherit)',
+          color: 'rgb(var(--textp))',
+        }}>
+          Group {groupName}
+        </span>
+        {badge}
+      </div>
+
+      {/* Card body */}
+      <div style={{ padding: 8 }}>
+        {activeTab === 'stand' ? (
+          /* ── Standings tab ── */
+          <>
+            {!hasStandings && (
+              <div style={{
+                padding: '6px 10px 8px',
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'rgb(var(--texts))',
+              }}>
+                No results yet
+              </div>
+            )}
+            {displayStandingsRows.map((row, i) => {
+              const t = getTeam(row.code)
+              const qualifying = i < 2
+              return (
+                <div
+                  key={row.code}
+                  style={{
+                    position: 'relative',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '9px 10px',
+                    borderRadius: 11,
+                    background: qualifying ? 'rgba(var(--primary),0.05)' : 'transparent',
+                  }}
+                >
+                  {qualifying && (
+                    <div style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: 6,
+                      bottom: 6,
+                      width: 3,
+                      borderRadius: '0 999px 999px 0',
+                      background: 'rgb(var(--primary))',
+                    }} />
+                  )}
+                  {/* Position */}
+                  <span style={{
+                    width: 18,
+                    textAlign: 'center',
+                    fontSize: 14,
+                    fontWeight: 800,
+                    fontFamily: 'var(--font-display, inherit)',
+                    color: qualifying ? 'rgb(var(--primary))' : 'rgb(var(--texts))',
+                    flexShrink: 0,
+                  }}>
+                    {i + 1}
+                  </span>
+
+                  <FlagChip code={t.code} w={30} h={20} r={5} />
+
+                  <span style={{
+                    flex: 1,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    fontFamily: 'var(--font-display, inherit)',
+                    color: 'rgb(var(--textp))',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {t.name}
+                  </span>
+
+                  {/* Goal diff */}
+                  <span style={{
+                    fontSize: 11,
+                    color: 'rgb(var(--texts))',
+                    minWidth: 28,
+                    textAlign: 'right',
+                    flexShrink: 0,
+                  }}>
+                    {row.gd > 0 ? '+' : ''}{row.gd}
+                  </span>
+
+                  {/* Points badge */}
+                  <span style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    minWidth: 24,
+                    textAlign: 'right',
+                    flexShrink: 0,
+                    fontFamily: 'var(--font-display, inherit)',
+                    color: 'rgb(var(--textp))',
+                  }}>
+                    {row.pts}
+                  </span>
+                </div>
+              )
+            })}
+          </>
+        ) : (
+          /* ── Prediction tab ── */
+          <>
+            {displayTeams.map((code, i) => {
+              const t = getTeam(code)
+              const isCorrect = settled && resultRanking[i] === code
+
+              let resultLabel: React.ReactNode = null
+              if (settled) {
+                const suffix = ['1st', '2nd', '3rd', '4th'][i] ?? `${i + 1}th`
+                const myPredPos = pred?.ranked_codes?.indexOf(code) ?? -1
+                const predCorrect = myPredPos === i
+                resultLabel = (
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: predCorrect ? 'rgb(var(--primary))' : 'rgb(var(--coral))',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {predCorrect ? '✓' : '✕'} {suffix}
+                  </span>
+                )
+              }
+
+              void isCorrect
+
+              return (
+                <div
+                  key={code}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '9px 10px',
+                    borderRadius: 11,
+                    background: (settled && pred?.ranked_codes?.[i] === code)
+                      ? 'rgba(var(--primary),0.06)'
+                      : 'transparent',
+                    transition: 'background 0.15s',
+                  }}
+                >
+                  {/* Position number */}
+                  <span style={{
+                    width: 18,
+                    textAlign: 'center',
+                    fontSize: 14,
+                    fontWeight: 800,
+                    fontFamily: 'var(--font-display, inherit)',
+                    color: i === 0 ? 'rgb(var(--gold))' : 'rgb(var(--texts))',
+                    flexShrink: 0,
+                  }}>
+                    {i + 1}
+                  </span>
+
+                  <FlagChip code={t.code} w={30} h={20} r={5} />
+
+                  <span style={{
+                    flex: 1,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    fontFamily: 'var(--font-display, inherit)',
+                    color: 'rgb(var(--textp))',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {t.name}
+                  </span>
+
+                  {settled ? resultLabel : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+                      <ArrowBtn dir="up" disabled={i === 0} onClick={() => move(i, -1)} />
+                      <ArrowBtn dir="down" disabled={i === displayTeams.length - 1} onClick={() => move(i, 1)} />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* Save button row for editable groups */}
+            {!settled && userId && (
+              <div style={{ padding: '6px 10px 2px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
+                {savedMsg && (
+                  <span style={{ fontSize: 11, fontWeight: 600, color: savedMsg === 'Saved' ? 'rgb(var(--primary))' : 'rgb(var(--coral))' }}>
+                    {savedMsg === 'Saved' ? '✓ Saved' : 'Error'}
+                  </span>
+                )}
+                <button
+                  onClick={handleSave}
+                  disabled={saving || order.length === 0}
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    padding: '5px 14px',
+                    borderRadius: 8,
+                    background: 'rgb(var(--primary))',
+                    color: '#fff',
+                    border: 'none',
+                    cursor: saving ? 'default' : 'pointer',
+                    opacity: saving ? 0.7 : 1,
+                    fontFamily: 'var(--font-display, inherit)',
+                    transition: 'opacity 0.15s',
+                  }}
+                >
+                  {saving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
 }
 
 export default function GroupsPage() {
   const supabase = createClient()
   const [matches, setMatches] = useState<Match[]>([])
-  const [group, setGroup] = useState('A')
-  const [mode, setMode] = useState('standings')
   const [userId, setUserId] = useState<string | null>(null)
-  const [order, setOrder] = useState<string[]>([])
   const [savedPreds, setSavedPreds] = useState<Record<string, GroupPredRow>>({})
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
-  const [leagueName, setLeagueName] = useState('')
-  const [savingMsg, setSavingMsg] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'pred' | 'stand'>('stand')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -62,7 +470,7 @@ export default function GroupsPage() {
         setUserId(user?.id ?? null)
         const { data, error: matchErr } = await supabase
           .from('matches')
-          .select('id, home_team, away_team, real_home_score, real_away_score, group_name, gameweek')
+          .select('id, home_team, away_team, real_home_score, real_away_score, group_name, gameweek, match_date')
           .not('group_name', 'is', null)
           .order('match_date')
         if (matchErr) throw matchErr
@@ -77,7 +485,6 @@ export default function GroupsPage() {
           ])
           if (gpErr) throw gpErr
           setWeights(active.weights)
-          setLeagueName(active.league?.name ?? '')
           const map: Record<string, GroupPredRow> = {}
           for (const r of (gp ?? []) as GroupPredRow[]) map[r.group_name] = r
           setSavedPreds(map)
@@ -92,169 +499,188 @@ export default function GroupsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const table = useMemo(() => buildTable(matches, group), [matches, group])
-  const teamsInGroup = useMemo(() => {
-    const set = new Set<string>()
-    for (const m of matches) if (m.group_name === group) { set.add(m.home_team); set.add(m.away_team) }
-    return Array.from(set)
-  }, [matches, group])
-
-  const groupComplete = useMemo(() => {
-    const gMatches = matches.filter((m) => m.group_name === group)
-    return gMatches.length > 0 && gMatches.every((m) => m.real_home_score !== null)
-  }, [matches, group])
-
-  useEffect(() => {
-    if (mode !== 'predict') return
-    const saved = savedPreds[group]
-    const base = saved?.ranked_codes?.length ? saved.ranked_codes : (table.length ? table.map((t) => t.team) : teamsInGroup)
-    setOrder(base)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [group, mode, savedPreds, matches])
-
-  function move(i: number, dir: -1 | 1) {
-    setOrder((o) => {
-      const n = [...o]; const j = i + dir
-      if (j < 0 || j >= n.length) return o
-      ;[n[i], n[j]] = [n[j], n[i]]
-      return n
-    })
-  }
-
-  async function savePrediction() {
+  async function handleSaveGroup(group: string, order: string[]) {
     if (!userId || order.length === 0) return
-    setSavingMsg('Saving…')
-    try {
-      const { error } = await supabase.from('group_predictions').upsert(
-        { user_id: userId, group_name: group, ranked_codes: order, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id,group_name' },
-      )
-      setSavingMsg(error ? error.message : 'Saved ✓')
-      if (!error) setSavedPreds((s) => ({ ...s, [group]: { group_name: group, ranked_codes: order, points_awarded: s[group]?.points_awarded ?? null } }))
-    } catch (e) {
-      setSavingMsg(e instanceof Error ? e.message : 'Save failed')
-    }
-    setTimeout(() => setSavingMsg(null), 2500)
+    const { error } = await supabase.from('group_predictions').upsert(
+      { user_id: userId, group_name: group, ranked_codes: order, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,group_name' },
+    )
+    if (error) throw new Error(error.message)
+    setSavedPreds((s) => ({
+      ...s,
+      [group]: { group_name: group, ranked_codes: order, points_awarded: s[group]?.points_awarded ?? null },
+    }))
   }
 
-  if (loading) return <div className="space-y-5"><Skeleton className="h-9 w-40" /><Skeleton className="h-12 w-full" /><Skeleton className="h-72 rounded-xl" /></div>
-  if (error) return (
-    <div className="space-y-5">
-      <PageHeader eyebrow="World Cup 2026" title="Groups" />
-      <div className="py-12 text-center"><p className="text-sm text-texts">{error}</p></div>
-    </div>
+  const totalProjectedPts = useMemo(() => {
+    let total = 0
+    for (const g of GROUPS) {
+      const pred = savedPreds[g]
+      if (pred?.points_awarded != null) {
+        total += weightedGroupPoints(pred.points_awarded, weights)
+      }
+    }
+    return total
+  }, [savedPreds, weights])
+
+  const hasSomePts = useMemo(() =>
+    GROUPS.some((g) => savedPreds[g]?.points_awarded != null),
+    [savedPreds],
   )
 
-  const currentPred = savedPreds[group]
-  const ptsAwarded = currentPred?.points_awarded ?? null
-  const groupScoringActive = weights.groupPosition > 0
+  if (loading) {
+    return (
+      <div style={{ padding: '24px 16px' }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 16, maxWidth: 1000, margin: '0 auto' }}>
+          {GROUPS.map((g) => <Skeleton key={g} className="h-56 rounded-2xl" />)}
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: '40px 30px' }}>
+        <EmptyState title="Could not load groups" desc={error} />
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-5">
-      <PageHeader eyebrow="World Cup 2026" title="Groups" sub={leagueName ? `Live standings and ${leagueName} group-pick settings.` : 'Live standings and your predicted finishing order.'} />
-
-      <div className="flex flex-wrap gap-2">
-        {GROUPS.map((g) => {
-          const active = g === group
-          const pred = savedPreds[g]
-          const hasPts = pred?.points_awarded != null
-          return (
-            <button key={g} onClick={() => setGroup(g)}
-              className={`w-10 h-10 rounded-lg text-sm font-bold transition-all border relative ${active ? 'bg-primary/12 border-primary text-primary' : 'bg-card border-border text-texts hover:text-textp'}`}>
-              {g}
-              {hasPts && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-primary" />}
-            </button>
-          )
-        })}
-      </div>
-
-      <Tabs tabs={[{ key: 'standings', label: 'Standings' }, { key: 'predict', label: 'My Prediction' }]} value={mode} onChange={setMode} />
-
-      {mode === 'standings' ? (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-texts border-b border-border">
-                <th className="text-left py-2.5 px-3 font-bold w-6">#</th>
-                <th className="text-left py-2.5 px-3 font-bold">Team</th>
-                {['P', 'W', 'D', 'L', 'GF', 'GA', 'GD'].map((h) => <th key={h} className="py-2.5 px-2 font-bold text-center">{h}</th>)}
-                <th className="py-2.5 px-3 font-bold text-right">Pts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {table.map((row, i) => {
-                const t = getTeam(row.team)
-                const qualify = i < 2
-                return (
-                  <tr key={row.team} className={`border-b border-border/50 last:border-0 ${qualify ? '' : 'opacity-60'}`}>
-                    <td className="py-2.5 px-3 text-texts font-bold text-xs">{i + 1}</td>
-                    <td className="py-2.5 px-3 font-bold text-textp">
-                      <div className="flex items-center gap-2">
-                        {qualify && <div className="w-1 h-4 rounded-full bg-primary" />}
-                        <span>{t.flag}</span><span className="truncate">{t.name}</span>
-                      </div>
-                    </td>
-                    <td className="py-2.5 px-2 text-center text-texts">{row.p}</td>
-                    <td className="py-2.5 px-2 text-center text-texts">{row.w}</td>
-                    <td className="py-2.5 px-2 text-center text-texts">{row.d}</td>
-                    <td className="py-2.5 px-2 text-center text-texts">{row.l}</td>
-                    <td className="py-2.5 px-2 text-center text-texts">{row.gf}</td>
-                    <td className="py-2.5 px-2 text-center text-texts">{row.ga}</td>
-                    <td className="py-2.5 px-2 text-center text-texts">{row.gd > 0 ? `+${row.gd}` : row.gd}</td>
-                    <td className="py-2.5 px-3 text-right font-extrabold text-textp">{row.pts}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          <p className="text-[10px] text-texts px-3 py-2 border-t border-border/50">Green bar = qualify for Round of 32 · Sorted by Pts → GD → GF</p>
-        </Card>
-      ) : (
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-texts">Reorder how you think Group {group} finishes.</p>
-            <div className="flex items-center gap-2">
-              {groupScoringActive && ptsAwarded !== null && (
-                <Pill tone={ptsAwarded > 0 ? 'gold' : 'default'}>
-                  +{weightedGroupPoints(ptsAwarded, weights)} pts
-                </Pill>
-              )}
-              {groupScoringActive && ptsAwarded === null && groupComplete && (
-                <Pill tone="default">Awaiting scoring</Pill>
-              )}
-              {!groupScoringActive && <Pill tone="default">For fun</Pill>}
-              {savingMsg && <Pill tone={savingMsg.includes('✓') ? 'green' : 'default'}>{savingMsg}</Pill>}
-            </div>
-          </div>
-          <div className="space-y-2">
-            {order.map((code, i) => {
-              const t = getTeam(code)
-              const saved = currentPred?.ranked_codes?.[i]
-              const correct = groupComplete && saved === table[i]?.team
+    <div>
+      {/* Page header */}
+      <div style={{
+        padding: '20px 30px 0',
+        maxWidth: 1000,
+        margin: '0 auto',
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 12,
+      }}>
+        <div>
+          <p style={{
+            fontSize: '10.5px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.13em',
+            fontWeight: 600,
+            color: 'rgb(var(--primary))',
+            marginBottom: 4,
+          }}>
+            +2 per correct position · up to 8 / group
+          </p>
+          <h1 style={{
+            fontSize: 21,
+            fontWeight: 700,
+            fontFamily: 'var(--font-display, inherit)',
+            color: 'rgb(var(--textp))',
+            margin: 0,
+          }}>
+            Group predictor
+          </h1>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {(['pred', 'stand'] as const).map((tab) => {
+              const isActive = activeTab === tab
               return (
-                <div key={code} className={`flex items-center gap-3 p-2.5 rounded-lg border ${i < 2 ? 'border-primary/30 bg-primary/[0.06]' : 'border-border bg-surface'} ${correct ? 'border-green-500/40 bg-green-500/[0.05]' : ''}`}>
-                  <span className="w-6 text-center text-sm font-extrabold tabular-nums" style={{ color: i < 2 ? 'rgb(var(--primary))' : 'rgb(var(--texts))' }}>{i + 1}</span>
-                  <span className="text-lg">{t.flag}</span>
-                  <span className="font-bold text-sm flex-1 truncate">{t.name}</span>
-                  {correct && <span className="text-xs font-bold text-primary">✓</span>}
-                  <div className="flex gap-1">
-                    <button onClick={() => move(i, -1)} disabled={i === 0} className="w-8 h-8 grid place-items-center rounded-md border border-border text-texts hover:text-textp disabled:opacity-30">↑</button>
-                    <button onClick={() => move(i, 1)} disabled={i === order.length - 1} className="w-8 h-8 grid place-items-center rounded-md border border-border text-texts hover:text-textp disabled:opacity-30">↓</button>
-                  </div>
-                </div>
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  style={{
+                    height: 30,
+                    padding: '0 12px',
+                    borderRadius: 999,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    border: isActive
+                      ? '1px solid rgb(var(--textp))'
+                      : '1px solid rgb(var(--border))',
+                    background: isActive
+                      ? 'rgb(var(--textp))'
+                      : 'rgb(var(--surface2))',
+                    color: isActive
+                      ? 'rgb(var(--bg))'
+                      : 'rgb(var(--texts))',
+                    transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+                    fontFamily: 'var(--font-display, inherit)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {tab === 'pred' ? 'Prediction' : 'Standings'}
+                </button>
               )
             })}
           </div>
-          <div className="flex items-center justify-between mt-4 gap-2">
-            <p className="text-[11px] text-texts">
-              {groupScoringActive
-                ? `+${weights.groupPosition} pts per team in correct finishing position · max ${weights.groupPosition * 4} pts per group · scored once the group completes`
-                : 'Group picks are for fun in this league and do not affect standings.'}
+          {hasSomePts && (
+            <span style={{
+              fontSize: 12,
+              fontWeight: 700,
+              padding: '5px 12px',
+              borderRadius: 20,
+              background: 'rgba(var(--gold),0.13)',
+              color: 'rgb(var(--gold))',
+              border: '1px solid rgba(var(--gold),0.3)',
+              whiteSpace: 'nowrap',
+            }}>
+              {totalProjectedPts} pts projected
+            </span>
+          )}
+          <ThemeToggle />
+        </div>
+      </div>
+
+      {/* Info banner */}
+      {activeTab === 'pred' && (
+        <div style={{
+          maxWidth: 1000,
+          margin: '16px auto 0',
+          padding: '0 30px',
+        }}>
+          <div style={{
+            borderRadius: 14,
+            padding: '13px 18px',
+            background: 'rgba(var(--blue),0.07)',
+            border: '1px solid rgba(var(--blue),0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}>
+            <span style={{ color: 'rgb(var(--blue))', flexShrink: 0 }}>
+              <SortIcon />
+            </span>
+            <p style={{ fontSize: 13, color: 'rgb(var(--textp))', margin: 0, lineHeight: 1.5 }}>
+              Drag with the arrows to rank each group 1st → 4th.{' '}
+              <strong style={{ fontWeight: 700 }}>+2 points</strong> for every team you place in its exact finishing position.
             </p>
-            <Button onClick={savePrediction} disabled={!userId || order.length === 0}>Save</Button>
           </div>
-        </Card>
+        </div>
       )}
+
+      {/* Groups grid — single column on mobile, 2 columns on sm+ */}
+      <div
+        className="grid grid-cols-1 sm:grid-cols-2"
+        style={{
+          gap: 16,
+          maxWidth: 1000,
+          margin: '0 auto',
+          padding: '24px 16px 60px',
+        }}
+      >
+        {GROUPS.map((g) => (
+          <GroupCard
+            key={g}
+            groupName={g}
+            matches={matches}
+            pred={savedPreds[g]}
+            userId={userId}
+            weights={weights}
+            activeTab={activeTab}
+            onSave={handleSaveGroup}
+          />
+        ))}
+      </div>
     </div>
   )
 }

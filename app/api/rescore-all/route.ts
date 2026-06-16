@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/s
 import { requireAdmin } from '@/lib/require-admin'
 import { scorePrediction, type PredictionInput, type MatchResult } from '@/lib/scoring'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { snapshotLeagueRanks } from '@/lib/snapshot'
 
 export async function POST() {
   const supabase = createServerSupabaseClient()
@@ -59,6 +60,9 @@ export async function POST() {
     if (error) return NextResponse.json({ error: error.message, rescored: total }, { status: 500 })
     total += batch.length
   }
+
+  // Auto-snapshot ranks after full rescore
+  try { await snapshotLeagueRanks(serviceSupabase) } catch {}
 
   return NextResponse.json({ rescored: total, matches: matches.length })
 }

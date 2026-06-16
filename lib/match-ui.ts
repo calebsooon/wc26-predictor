@@ -18,6 +18,9 @@ export interface DBMatch {
 export interface MyPred {
   pred_home: number
   pred_away: number
+  pred_total_goals?: number | null
+  pred_goal_diff?: number | null
+  pred_btts?: boolean | null
   points_awarded: number | null
   pts_exact?: number | null
   pts_outcome?: number | null

@@ -2,7 +2,7 @@
 // code      = 3-letter code used in matches table
 // name      = short display name
 // fullName  = official full name
-// flag      = emoji flag
+// flag      = emoji flag (kept for accessibility/aria-label only)
 // playerKey = team_name used in the players table (from football-data.org)
 
 export interface TeamInfo {
@@ -11,6 +11,59 @@ export interface TeamInfo {
   fullName: string
   flag: string
   playerKey: string  // matches team_name in players table
+}
+
+// CSS gradient flags — simple stripe/band approximations keyed by team code.
+// Render as a <div> with background: FLAG_GRADIENTS[code] rather than emoji.
+export const FLAG_GRADIENTS: Record<string, string> = {
+  ARG: 'linear-gradient(180deg,#6CACE4 34%,#fff 34% 66%,#6CACE4 66%)',
+  ALG: 'linear-gradient(90deg,#fff 50%,#006233 50%)',
+  AUS: 'linear-gradient(135deg,#00008B 55%,#CC0001 55%)',
+  AUT: 'linear-gradient(180deg,#ED2939 34%,#fff 34% 66%,#ED2939 66%)',
+  BEL: 'linear-gradient(90deg,#000 34%,#FAE042 34% 66%,#EF3340 66%)',
+  BIH: 'linear-gradient(145deg,#002395 55%,#FECB00 55%)',
+  BRA: 'linear-gradient(160deg,#009C3B 34%,#FFDF00 34% 66%,#009C3B 66%)',
+  CAN: 'linear-gradient(90deg,#FF0000 24%,#fff 24% 76%,#FF0000 76%)',
+  CIV: 'linear-gradient(90deg,#F77F00 34%,#fff 34% 66%,#009A44 66%)',
+  COD: 'linear-gradient(135deg,#007FFF 50%,#CE1126 50%)',
+  COL: 'linear-gradient(180deg,#FCD116 40%,#003087 40% 72%,#CE1126 72%)',
+  CPV: 'linear-gradient(90deg,#003893 60%,#CF2027 60%)',
+  CRO: 'linear-gradient(180deg,#FF0000 34%,#fff 34% 66%,#003087 66%)',
+  CUW: 'linear-gradient(150deg,#002B7F 58%,#F9E300 58%)',
+  CZE: 'linear-gradient(135deg,#11457E 40%,#fff 40% 70%,#D7141A 70%)',
+  ECU: 'linear-gradient(180deg,#FFD100 40%,#003087 40% 72%,#CE1126 72%)',
+  EGY: 'linear-gradient(180deg,#CE1126 34%,#fff 34% 66%,#000 66%)',
+  ENG: 'linear-gradient(90deg,#fff 36%,#CF142B 36% 64%,#fff 64%)',
+  ESP: 'linear-gradient(180deg,#c60b1e 28%,#ffc400 28% 72%,#c60b1e 72%)',
+  FRA: 'linear-gradient(90deg,#0055A4 34%,#fff 34% 66%,#EF4135 66%)',
+  GER: 'linear-gradient(180deg,#000 34%,#DD0000 34% 66%,#FFCE00 66%)',
+  GHA: 'linear-gradient(180deg,#CE1126 34%,#FCD116 34% 66%,#006B3F 66%)',
+  HAI: 'linear-gradient(180deg,#00209F 50%,#D21034 50%)',
+  IRN: 'linear-gradient(180deg,#239F40 34%,#fff 34% 66%,#DA0000 66%)',
+  IRQ: 'linear-gradient(180deg,#CE1126 34%,#fff 34% 66%,#000 66%)',
+  JOR: 'linear-gradient(90deg,#000 34%,#fff 34% 66%,#007A3D 66%)',
+  JPN: 'linear-gradient(90deg,#fff 28%,#BC002D 28% 72%,#fff 72%)',
+  KOR: 'linear-gradient(180deg,#fff 50%,#C60C30 50%)',
+  KSA: 'linear-gradient(90deg,#165E26,#165E26)',
+  MAR: 'linear-gradient(90deg,#C1272D,#C1272D)',
+  MEX: 'linear-gradient(90deg,#006847 34%,#fff 34% 66%,#CE1126 66%)',
+  NED: 'linear-gradient(180deg,#AE1C28 34%,#fff 34% 66%,#21468B 66%)',
+  NOR: 'linear-gradient(90deg,#EF2B2D 30%,#fff 30% 37%,#002868 37% 50%,#EF2B2D 50%)',
+  NZL: 'linear-gradient(135deg,#00247D 58%,#CC142B 58%)',
+  PAN: 'linear-gradient(180deg,#fff 50%,#D21034 50%)',
+  PAR: 'linear-gradient(180deg,#D52B1E 34%,#fff 34% 66%,#0038A8 66%)',
+  POR: 'linear-gradient(90deg,#006600 40%,#FF0000 40%)',
+  QAT: 'linear-gradient(90deg,#8D1B3D 60%,#fff 60%)',
+  RSA: 'linear-gradient(90deg,#007A4D 34%,#FFB81C 34% 66%,#DE3831 66%)',
+  SCO: 'linear-gradient(135deg,#003078 50%,#fff 50%)',
+  SEN: 'linear-gradient(90deg,#00853F 34%,#FDEF42 34% 66%,#E31B23 66%)',
+  SUI: 'linear-gradient(90deg,#FF0000,#FF0000)',
+  SWE: 'linear-gradient(90deg,#006AA7 32%,#FECC02 32% 44%,#006AA7 44%)',
+  TUN: 'linear-gradient(90deg,#E70013,#E70013)',
+  TUR: 'linear-gradient(90deg,#E30A17,#E30A17)',
+  URU: 'linear-gradient(180deg,#fff 20%,#5EB6E4 20% 37%,#fff 37% 53%,#5EB6E4 53% 70%,#fff 70%)',
+  USA: 'linear-gradient(90deg,#002868 34%,#BF0A30 34%)',
+  UZB: 'linear-gradient(180deg,#1EB53A 34%,#fff 34% 66%,#0099B5 66%)',
 }
 
 export const TEAMS: Record<string, TeamInfo> = {

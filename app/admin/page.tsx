@@ -1,13 +1,14 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
-import { getTeam } from '@/lib/teams'
+import { getTeam, TEAMS } from '@/lib/teams'
 import {
   PageHeader, Card, Button, Pill, ScoreStepper, ChipRow, Skeleton, ChevDown, SearchIcon, SectionHeader, LeagueBadge,
 } from '@/components/ui'
+import FlagChip from '@/components/FlagChip'
 import { WEIGHT_FIELDS, resolveWeights, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { fmtDateTime } from '@/lib/date-format'
 
@@ -28,7 +29,10 @@ interface Match {
 
 interface Player { id: number; name: string; team_code: string }
 
-function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
+interface AdminRowHandle { save: () => Promise<void> }
+
+const AdminRow = forwardRef<AdminRowHandle, { m: Match; onSaved: (m: Match) => void }>(
+function AdminRow({ m, onSaved }, ref) {
   const supabase = createClient()
   const home = getTeam(m.home_team), away = getTeam(m.away_team)
   const [open, setOpen] = useState(false)
@@ -59,7 +63,7 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
     }
   }
 
-  async function scoreOnly() {
+  const scoreOnly = useCallback(async () => {
     setSaving(true)
     setScoringFailed(false)
     const res = await fetch('/api/score-match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ match_id: m.id }) })
@@ -71,9 +75,10 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
     }
     onSaved({ ...m, real_home_score: h, real_away_score: a, is_locked: true, first_goal_team: fgt, first_goal_player_id: scorerId, match_winner: matchWinner })
     toast.success(`${home.name} ${h}–${a} ${away.name} re-scored`)
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [h, a, fgt, scorerId, m.id, home.name, away.name])
 
-  async function save() {
+  const save = useCallback(async () => {
     if (h == null || a == null) { toast.error('Both scores required'); return }
     setSaving(true)
     setScoringFailed(false)
@@ -92,19 +97,22 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
     }
     onSaved({ ...m, real_home_score: h, real_away_score: a, is_locked: true, first_goal_team: fgt, first_goal_player_id: scorerId, match_winner: matchWinner })
     toast.success(`${home.name} ${h}–${a} ${away.name} saved & scored`)
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [h, a, fgt, scorerId, matchWinner, m.id, m.group_name, home.name, away.name])
+
+  useImperativeHandle(ref, () => ({ save }), [save])
 
   const scorerName = scorerId === -1 ? 'Own goal' : (players.find((p) => p.id === scorerId)?.name ?? '')
   const scorerOptions = players.filter((p) => !search || p.name.toLowerCase().includes(search.toLowerCase()))
 
   return (
     <Card className={`p-3 ${hasScore ? 'border-primary/30' : ''}`}>
-      <div className="flex items-center gap-3">
-        <div className="flex-1 min-w-0">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="basis-full sm:basis-auto flex-1 min-w-0">
           <div className="flex items-center gap-2 text-sm font-bold">
-            <span>{home.flag}</span><span className="truncate">{home.name}</span>
+            <FlagChip code={home.code} w={18} h={12} r={2} /><span className="truncate">{home.name}</span>
             <span className="text-texts">v</span>
-            <span>{away.flag}</span><span className="truncate">{away.name}</span>
+            <FlagChip code={away.code} w={18} h={12} r={2} /><span className="truncate">{away.name}</span>
           </div>
           <div className="text-[11px] text-texts mt-0.5">{fmtDateTime(m.match_date)} · {m.rounds?.name ?? '—'}</div>
         </div>
@@ -149,8 +157,8 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
                   </button>
                   {scorerOptions.map((o) => (
                     <button key={o.id} onClick={() => { setScorerId(o.id); setScorerOpen(false); setSearch('') }} className="w-full px-3 h-10 flex items-center gap-2 hover:bg-surface text-left">
-                      <span>{getTeam(o.team_code).flag}</span><span className="text-sm text-textp flex-1">{o.name}</span>
-                      {scorerId === o.id && <span className="text-primary">✓</span>}
+                      <FlagChip code={o.team_code} w={16} h={11} r={2} /><span className="text-sm text-textp flex-1">{o.name}</span>
+                      {scorerId === o.id && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-primary shrink-0"><path d="m5 12 5 5L20 7"/></svg>}
                     </button>
                   ))}
                 </div>
@@ -171,7 +179,7 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
                     className={`h-10 rounded-lg border text-sm font-bold flex items-center justify-center gap-1.5 transition-all
                       ${matchWinner === o.k ? 'border-gold bg-gold/10 text-gold' : 'border-border bg-surface text-texts'}`}
                   >
-                    <span>{o.t.flag}</span>{o.t.code}
+                    <FlagChip code={o.t.code} w={16} h={11} r={2} />{o.t.code}
                   </button>
                 ))}
               </div>
@@ -191,7 +199,7 @@ function AdminRow({ m, onSaved }: { m: Match; onSaved: (m: Match) => void }) {
       </div>
     </Card>
   )
-}
+})
 
 function AdminActions() {
   const [busy, setBusy] = useState<string | null>(null)
@@ -620,6 +628,124 @@ function LabelManager({ labels, onChanged }: { labels: LabelRow[]; onChanged: ()
   )
 }
 
+interface BracketRow { champion: string | null; runner_up: string | null; semi: string[]; quarter: string[] }
+
+function BracketResultsEditor() {
+  const supabase = useMemo(() => createClient(), [])
+  const [champion, setChampion] = useState<string | null>(null)
+  const [runnerUp, setRunnerUp] = useState<string | null>(null)
+  const [semi, setSemi] = useState<string[]>([])
+  const [quarter, setQuarter] = useState<string[]>([])
+  const [loadingBR, setLoadingBR] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  const allTeams = useMemo(
+    () => Object.values(TEAMS).sort((a, b) => a.name.localeCompare(b.name)),
+    [],
+  )
+
+  useEffect(() => {
+    supabase.from('bracket_results').select('champion, runner_up, semi, quarter').eq('id', 'wc2026').maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          const d = data as BracketRow
+          setChampion(d.champion ?? null)
+          setRunnerUp(d.runner_up ?? null)
+          setSemi(d.semi ?? [])
+          setQuarter(d.quarter ?? [])
+        }
+        setLoadingBR(false)
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function save() {
+    setSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error } = await supabase.from('bracket_results').upsert({
+      id: 'wc2026', champion, runner_up: runnerUp, semi, quarter,
+      updated_at: new Date().toISOString(), updated_by: user?.id ?? null,
+    })
+    setSaving(false)
+    if (error) toast.error(error.message)
+    else toast.success('Bracket results saved — correctness badges now appear on the bracket page')
+  }
+
+  function toggle(list: string[], set: (v: string[]) => void, code: string, max: number) {
+    set(list.includes(code) ? list.filter((c) => c !== code) : list.length < max ? [...list, code] : list)
+  }
+
+  const selectCls = 'w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-textp focus:outline-none focus:border-primary'
+
+  if (loadingBR) return <Skeleton className="h-28 rounded-xl" />
+
+  return (
+    <Card className="p-4">
+      <SectionHeader title="Bracket results" sub="Set the real knockout results so correctness badges show on users' bracket pages." />
+      <div className="mt-3 space-y-4">
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-texts mb-1">Champion</label>
+            <select value={champion ?? ''} onChange={(e) => setChampion(e.target.value || null)} className={selectCls}>
+              <option value="">— Not yet —</option>
+              {allTeams.map((t) => <option key={t.code} value={t.code}>{t.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-texts mb-1">Runner-up</label>
+            <select value={runnerUp ?? ''} onChange={(e) => setRunnerUp(e.target.value || null)} className={selectCls}>
+              <option value="">— Not yet —</option>
+              {allTeams.map((t) => <option key={t.code} value={t.code}>{t.name}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-texts mb-2">
+            Semi-finalists <span className="normal-case font-normal text-texts/60">({semi.length}/4 selected)</span>
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {allTeams.map((t) => {
+              const active = semi.includes(t.code)
+              return (
+                <button
+                  key={t.code}
+                  onClick={() => toggle(semi, setSemi, t.code, 4)}
+                  className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full border text-[11.5px] font-bold transition-all ${active ? 'border-primary bg-primary/12 text-primary' : 'border-border text-texts hover:border-texts/40'}`}
+                >
+                  <FlagChip code={t.code} w={16} h={11} r={2} />{t.code}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-texts mb-2">
+            Quarter-finalists <span className="normal-case font-normal text-texts/60">({quarter.length}/8 selected)</span>
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {allTeams.map((t) => {
+              const active = quarter.includes(t.code)
+              return (
+                <button
+                  key={t.code}
+                  onClick={() => toggle(quarter, setQuarter, t.code, 8)}
+                  className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full border text-[11.5px] font-bold transition-all ${active ? 'border-gold bg-gold/10 text-gold' : 'border-border text-texts hover:border-texts/40'}`}
+                >
+                  <FlagChip code={t.code} w={16} h={11} r={2} />{t.code}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <Button size="sm" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save bracket results'}</Button>
+      </div>
+    </Card>
+  )
+}
+
 function LeagueAdmin() {
   const supabase = createClient()
   const [leagues, setLeagues] = useState<LeagueAdminRow[]>([])
@@ -754,6 +880,8 @@ export default function AdminPage() {
   const [matches, setMatches] = useState<Match[]>([])
   const [filter, setFilter] = useState('pending')
   const [loading, setLoading] = useState(true)
+  const [batchSaving, setBatchSaving] = useState(false)
+  const rowHandles = useRef(new Map<string, AdminRowHandle>())
 
   useEffect(() => {
     async function load() {
@@ -783,18 +911,44 @@ export default function AdminPage() {
     return filter === 'all' ? true : filter === 'done' ? done : !done
   }), [matches, filter])
 
+  async function saveAll() {
+    const pending = filtered.filter((m) => m.real_home_score === null)
+    if (pending.length === 0) { toast.info('No pending matches to batch-save'); return }
+    setBatchSaving(true)
+    for (const m of pending) {
+      const handle = rowHandles.current.get(m.id)
+      if (handle) await handle.save()
+    }
+    setBatchSaving(false)
+  }
+
   if (loading) return <div className="space-y-3"><Skeleton className="h-9 w-40" />{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+
+  const pendingCount = filtered.filter((m) => m.real_home_score === null).length
 
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Admin" title="Admin console" sub="League setup, results entry, and tournament actions." />
       <LeagueAdmin />
       <AdminActions />
-      <SectionHeader title="Results entry" sub="Saving a result locks the match and recalculates points." />
+      <BracketResultsEditor />
+      <div className="flex items-center justify-between gap-3">
+        <SectionHeader title="Results entry" sub="Saving a result locks the match and recalculates points." />
+        {filter !== 'done' && pendingCount > 0 && (
+          <Button size="sm" variant="outline" onClick={saveAll} disabled={batchSaving} className="shrink-0">
+            {batchSaving ? 'Saving…' : `Save all ${pendingCount}`}
+          </Button>
+        )}
+      </div>
       <ChipRow chips={[{ key: 'pending', label: 'Pending' }, { key: 'done', label: 'Scored' }, { key: 'all', label: 'All' }]} value={filter} onChange={setFilter} />
       <div className="space-y-2.5">
         {filtered.map((m) => (
-          <AdminRow key={m.id} m={m} onSaved={(nm) => setMatches((prev) => prev.map((x) => x.id === nm.id ? nm : x))} />
+          <AdminRow
+            key={m.id}
+            ref={(handle) => { if (handle) rowHandles.current.set(m.id, handle); else rowHandles.current.delete(m.id) }}
+            m={m}
+            onSaved={(nm) => setMatches((prev) => prev.map((x) => x.id === nm.id ? nm : x))}
+          />
         ))}
       </div>
     </div>

@@ -1,19 +1,19 @@
 import type { Metadata, Viewport } from "next";
-import { Archivo, Space_Grotesk } from "next/font/google";
+import { Hanken_Grotesk, Schibsted_Grotesk } from "next/font/google";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
 
-const archivo = Archivo({
+const hankenGrotesk = Hanken_Grotesk({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800", "900"],
-  variable: "--font-archivo",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-body",
   display: "swap",
 });
 
-const spaceGrotesk = Space_Grotesk({
+const schibstedGrotesk = Schibsted_Grotesk({
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  variable: "--font-space-grotesk",
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-display",
   display: "swap",
 });
 
@@ -54,7 +54,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        <link rel="manifest" href="/manifest.json" />
+        {/* manifest is declared via metadata.manifest above — no duplicate link tag needed */}
         <link rel="apple-touch-icon" href="/icon-192.png" />
         <link rel="icon" type="image/svg+xml" href="/icon.svg" />
         <meta name="mobile-web-app-capable" content="yes" />
@@ -62,7 +62,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="MatchDay" />
       </head>
-      <body className={`${archivo.variable} ${spaceGrotesk.variable} antialiased min-h-screen bg-bg text-textp`}>
+      <body className={`${hankenGrotesk.variable} ${schibstedGrotesk.variable} antialiased min-h-screen bg-bg text-textp`}>
         <AppShell>{children}</AppShell>
       </body>
     </html>

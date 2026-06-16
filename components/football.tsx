@@ -7,9 +7,10 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { getTeam } from '@/lib/teams'
 import {
-  Card, Pill, StatusBadge, Avatar, Countdown, LockIcon, ScoreStepper,
+  Card, Pill, StatusBadge, Avatar, Countdown, LockIcon, ScoreStepper, BoltIcon,
   type PredStatus,
 } from '@/components/ui'
+import FlagChip from '@/components/FlagChip'
 import { fmtTime } from '@/lib/date-format'
 
 export interface UIMatch {
@@ -63,7 +64,7 @@ export function MatchCard({ m, onClick, compact = false }: { m: UIMatch; onClick
 
       <div className="flex items-center">
         <div className="flex-1 flex items-center gap-2.5 min-w-0">
-          <span className="text-[26px] leading-none shrink-0">{home.flag}</span>
+          <FlagChip code={m.home} w={28} h={18} r={4} />
           <span className="font-bold text-textp truncate">{home.name}</span>
         </div>
 
@@ -94,29 +95,25 @@ export function MatchCard({ m, onClick, compact = false }: { m: UIMatch; onClick
 
         <div className="flex-1 flex items-center gap-2.5 justify-end min-w-0">
           <span className="font-bold text-textp truncate text-right">{away.name}</span>
-          <span className="text-[26px] leading-none shrink-0">{away.flag}</span>
+          <FlagChip code={m.away} w={28} h={18} r={4} />
         </div>
       </div>
 
       {!compact && (
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/60">
-          <span className="text-[11px] text-texts truncate font-medium">{m.venue ?? stageLabel}</span>
-          {isScored ? (
-            m.pred ? (
-              <span className="text-[11px] font-bold tabular-nums" style={{ color: predColor }}>
-                Pred: {m.pred.h}–{m.pred.a}{m.pts != null ? ` · +${m.pts}pts` : ''}
-              </span>
-            ) : (
-              <span className="text-[11px] text-texts/50 font-medium">No prediction submitted</span>
-            )
-          ) : !kickedOff ? (
-            <span className="text-[11px] flex items-center gap-1 font-semibold">
-              <LockIcon size={11} className="text-texts" />
-              <span className="text-texts">locks in</span> <Countdown kickoff={m.kickoff} className="text-[11px]" />
-            </span>
-          ) : (
-            <span className="text-[11px] text-error font-bold flex items-center gap-1"><LockIcon size={11} /> Locked</span>
-          )}
+          <span className="text-[11px] text-texts truncate font-medium">
+            {isScored && m.pred
+              ? <span className="tabular-nums">you: {m.pred.h}–{m.pred.a}{m.pts != null ? <span style={{ color: predColor }} className="font-bold"> · +{m.pts}pts</span> : ''}</span>
+              : isScored
+              ? <span className="opacity-40 italic">no pick made</span>
+              : !kickedOff
+              ? <span className="flex items-center gap-1"><LockIcon size={11} className="text-texts" /><span className="text-texts">locks</span> <Countdown kickoff={m.kickoff} className="text-[11px]" /></span>
+              : <span className="text-error font-bold flex items-center gap-1"><LockIcon size={11} /> Locked</span>
+            }
+          </span>
+          <span className="text-[11px] font-bold shrink-0 ml-2" style={{ color: isScored ? 'rgb(var(--texts))' : m.pred ? 'rgb(var(--blue))' : 'rgb(var(--error))' }}>
+            {isScored ? 'View result →' : m.pred ? 'Edit pick →' : kickedOff ? 'Locked' : 'Predict now →'}
+          </span>
         </div>
       )}
     </Card>
@@ -134,12 +131,15 @@ export function NextPredictCard({
     <Card hover onClick={onOpen} className={`p-4 cursor-pointer group/card ${missing ? 'border-l-2 border-l-error' : ''}`}>
       <div className="flex items-center justify-between mb-3">
         <Pill tone={m.knockout ? 'gold' : 'default'}>{m.stage === 'Group' ? `Group ${m.group ?? ''}`.trim() : m.stage}</Pill>
-        {missing ? <Pill tone="red">● Missing</Pill> : <Pill tone="blue">✓ Submitted</Pill>}
+        {missing
+          ? <Pill tone="red" icon={<svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>}>Missing</Pill>
+          : <Pill tone="blue" icon={<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5L20 7"/></svg>}>Submitted</Pill>
+        }
       </div>
 
       <div className="flex items-center gap-2">
-        <div className="flex flex-col items-center gap-1 w-10 shrink-0">
-          <span className="text-[28px] leading-none">{home.flag}</span>
+        <div className="flex flex-col items-center gap-1.5 w-10 shrink-0">
+          <FlagChip code={m.home} w={24} h={16} r={3} />
           <span className="text-[11px] font-bold text-textp group-hover/card:text-primary transition-colors">{home.code}</span>
         </div>
         {/* Steppers must not trigger card navigation */}
@@ -148,8 +148,8 @@ export function NextPredictCard({
           <span className="text-texts font-bold px-0.5">:</span>
           <ScoreStepper value={pred.a} onChange={(v) => onChange('a', v)} compact />
         </div>
-        <div className="flex flex-col items-center gap-1 w-10 shrink-0">
-          <span className="text-[28px] leading-none">{away.flag}</span>
+        <div className="flex flex-col items-center gap-1.5 w-10 shrink-0">
+          <FlagChip code={m.away} w={24} h={16} r={3} />
           <span className="text-[11px] font-bold text-textp group-hover/card:text-primary transition-colors">{away.code}</span>
         </div>
       </div>
@@ -161,7 +161,9 @@ export function NextPredictCard({
             <LockIcon size={11} className="text-gold" />
             <Countdown kickoff={m.kickoff} className="text-[11px]" />
           </span>
-          <span className="text-[11px] font-bold text-primary group-hover/card:underline">View →</span>
+          <span className="text-[11px] font-bold text-primary group-hover/card:underline">
+            {missing ? 'Predict now →' : 'Edit pick →'}
+          </span>
         </div>
       </div>
     </Card>
@@ -190,7 +192,7 @@ function MoveArrow({ move }: { move?: number }) {
 
 function PrizeTag({ amount }: { amount: number }) {
   const label = amount > 0 ? `+$${amount}` : amount < 0 ? `-$${Math.abs(amount)}` : '$0'
-  const cls = amount > 0 ? 'text-success' : amount < 0 ? 'text-error' : 'text-texts'
+  const cls = amount > 0 ? 'text-primary' : amount < 0 ? 'text-coral' : 'text-texts'
   return <span className={`text-[11px] font-extrabold tabular-nums ${cls}`}>{label}</span>
 }
 
@@ -215,7 +217,7 @@ export function LeaderboardTable({
               exit={{ opacity: 0, x: 10 }}
               transition={{ layout: { type: 'spring', stiffness: 300, damping: 30 }, opacity: { duration: 0.2 }, x: { duration: 0.2 } }}
               onClick={onRow ? () => onRow(p) : undefined}
-              className={`flex items-center gap-3 ${dense ? 'py-2.5' : 'py-3'} px-3 ${onRow ? 'cursor-pointer hover:bg-surface/60' : ''} ${p.you ? 'bg-blue/[0.07]' : ''}`}
+              className={`flex items-center gap-3 ${dense ? 'py-2.5' : 'py-3'} px-3 ${onRow ? 'cursor-pointer hover:bg-surface2/60' : ''} ${p.you ? 'bg-primary/[0.08]' : ''}`}
             >
               <div className="w-7 text-center shrink-0">
                 <span className="text-sm font-extrabold tabular-nums" style={{ color: rankColor }}>{i + 1}</span>
@@ -224,9 +226,11 @@ export function LeaderboardTable({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className={`font-bold truncate ${isFirst ? 'text-gold' : 'text-textp'}`}>{p.name}</span>
-                  {p.you && <Pill tone="blue" className="!px-1.5 !py-0.5 !text-[9px]">YOU</Pill>}
+                  {p.you && <Pill tone="green" className="!px-1.5 !py-0.5 !text-[9px]">YOU</Pill>}
                   {(p.streak ?? 0) >= 3 && (
-                    <span className="text-[10px] ml-1" title={`${p.streak} in a row`}>🔥{p.streak}</span>
+                    <span className="flex items-center gap-0.5 text-amber text-[10px] font-bold" title={`${p.streak} in a row`}>
+                      <BoltIcon size={10} className="text-amber" />{p.streak}
+                    </span>
                   )}
                 </div>
                 {!dense && showMeta && (

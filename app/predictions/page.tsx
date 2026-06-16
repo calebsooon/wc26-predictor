@@ -3,14 +3,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
-import { PageHeader, ChipRow, EmptyState, Skeleton, CalIcon, StaggerList, StaggerItem } from '@/components/ui'
-import { MatchCard } from '@/components/football'
-import { toUIMatch, type DBMatch, type MyPred } from '@/lib/match-ui'
+import { EmptyState, Skeleton, CalIcon } from '@/components/ui'
+import { toUIMatch, matchStatus, type DBMatch, type MyPred } from '@/lib/match-ui'
 import { getActiveLeague } from '@/lib/league'
 import { DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
-import { fmtDateKey } from '@/lib/date-format'
+import { fmtDateKey, fmtDateOnlyKey, fmtTime, getUserTimeZone } from '@/lib/date-format'
+import FlagChip from '@/components/FlagChip'
+import PredictionModal from '@/components/PredictionModal'
+import { getTeam } from '@/lib/teams'
 
 interface RoundRow { id: string; name: string; order: number; matches: DBMatch[] }
+
+type MainFilter = 'open' | 'today' | 'missing' | 'full'
+type StageFilter = 'all' | 'group' | 'knockout'
 
 export default function FixturesPage() {
   const supabase = createClient()
@@ -18,9 +23,17 @@ export default function FixturesPage() {
   const [matches, setMatches] = useState<DBMatch[]>([])
   const [preds, setPreds] = useState<Record<string, MyPred>>({})
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
-  const [filter, setFilter] = useState('all')
+  const [mainFilter, setMainFilter] = useState<MainFilter>('open')
+  const [stageFilter, setStageFilter] = useState<StageFilter>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [modalMatchId, setModalMatchId] = useState<string | null>(null)
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
+  const [timeZone, setTimeZone] = useState('Asia/Singapore')
+
+  useEffect(() => {
+    setTimeZone(getUserTimeZone())
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -42,7 +55,7 @@ export default function FixturesPage() {
 
         const { data: myData, error: predErr } = await supabase
           .from('predictions')
-          .select('match_id, pred_home, pred_away, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
+          .select('match_id, pred_home, pred_away, pred_total_goals, pred_goal_diff, pred_btts, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
           .eq('user_id', user.id)
         if (predErr) throw predErr
         const map: Record<string, MyPred> = {}
@@ -61,107 +74,590 @@ export default function FixturesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const localDateKey = (d: Date) => fmtDateOnlyKey(d.toISOString(), timeZone)
+  const todayLocal = localDateKey(new Date())
+  const tomorrowLocal = localDateKey(new Date(Date.now() + 86_400_000))
+
   const counts = useMemo(() => {
-    const ui = matches.map((m) => toUIMatch(m, preds[m.id]))
-    return {
-      all: ui.length,
-      missing: ui.filter((m) => m.status === 'missing').length,
-      locked: ui.filter((m) => m.status === 'locked').length,
-      finished: ui.filter((m) => m.status === 'scored').length,
+    const missing = matches.filter((m) => matchStatus(m, preds[m.id]) === 'missing').length
+    const today = matches.filter((m) => fmtDateOnlyKey(m.match_date, timeZone) === todayLocal).length
+    const open = matches.filter((m) => m.real_home_score === null || m.real_away_score === null).length
+    const full = matches.length
+    return { open, missing, today, full }
+  }, [matches, preds, timeZone, todayLocal])
+
+  const groupNames = useMemo(() => {
+    const seen = new Set<string>()
+    for (const m of matches) {
+      if (!toUIMatch(m, preds[m.id]).knockout && m.group_name) seen.add(m.group_name)
     }
+    return Array.from(seen).sort()
   }, [matches, preds])
 
-  const chips = [
-    { key: 'all', label: 'All', count: counts.all },
-    { key: 'today', label: 'Today' },
-    { key: 'missing', label: 'Missing', count: counts.missing },
-    { key: 'locked', label: 'Locked', count: counts.locked },
-    { key: 'finished', label: 'Finished', count: counts.finished },
-    { key: 'group', label: 'Group' },
-    { key: 'knockout', label: 'Knockout' },
-  ]
-
-  const sgtDate = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(d)
-  const todaySGT = sgtDate(new Date())
   const filtered = useMemo(() => matches.filter((m) => {
     const ui = toUIMatch(m, preds[m.id])
-    switch (filter) {
-      case 'today': return sgtDate(new Date(m.match_date)) === todaySGT
-      case 'missing': return ui.status === 'missing'
-      case 'locked': return ui.status === 'locked'
-      case 'finished': return ui.status === 'scored'
-      case 'group': return !ui.knockout
-      case 'knockout': return ui.knockout
-      default: return true
+
+    const passesMain =
+      mainFilter === 'full'
+        ? true
+        : mainFilter === 'open'
+        ? (m.real_home_score === null || m.real_away_score === null)
+        : mainFilter === 'today'
+        ? fmtDateOnlyKey(m.match_date, timeZone) === todayLocal
+        : matchStatus(m, preds[m.id]) === 'missing'
+
+    if (!passesMain) return false
+
+    switch (stageFilter) {
+      case 'group':
+        if (selectedGroup) return m.group_name === selectedGroup
+        return !ui.knockout
+      case 'knockout':
+        return ui.knockout
+      default:
+        return true
     }
-  }), [matches, preds, filter, todaySGT])
+  }), [matches, preds, mainFilter, stageFilter, selectedGroup, timeZone, todayLocal])
 
   const byDate = useMemo(() => {
     const g: Record<string, DBMatch[]> = {}
     for (const m of filtered) {
-      const key = sgtDate(new Date(m.match_date))
+      const key = fmtDateOnlyKey(m.match_date, timeZone)
       ;(g[key] ||= []).push(m)
     }
     return g
-  }, [filtered])
+  }, [filtered, timeZone])
   const dates = Object.keys(byDate).sort()
 
+  // ── Loading state ──────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="space-y-5">
-        <Skeleton className="h-9 w-40" />
-        <Skeleton className="h-9 w-full" />
-        {[0, 1, 2].map((i) => (
-          <div key={i}>
-            <Skeleton className="h-5 w-32 mb-3" />
-            <div className="grid sm:grid-cols-2 gap-3">
-              <Skeleton className="h-32 rounded-xl" />
-              <Skeleton className="h-32 rounded-xl" />
-            </div>
+      <div style={{ maxWidth: 860, width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <Skeleton className="h-[70px] w-64 rounded-[12px]" />
+        <Skeleton className="h-10 w-full rounded-[12px]" />
+        {[0, 1].map((i) => (
+          <div key={i} style={{ background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))', borderRadius: 16, overflow: 'hidden' }}>
+            {[0, 1, 2].map((j) => (
+              <div key={j} style={{ marginTop: j > 0 ? 1 : 0 }}>
+                <Skeleton className="h-[72px] w-full rounded-none" />
+              </div>
+            ))}
           </div>
         ))}
       </div>
     )
   }
 
+  // ── Error state ────────────────────────────────────────────────────────────
   if (error) {
-    return (
-      <div className="space-y-5">
-        <PageHeader eyebrow="World Cup 2026" title="Fixtures" />
-        <EmptyState icon={<CalIcon size={22} />} title="Couldn't load fixtures" desc={error} />
-      </div>
-    )
+    return <EmptyState icon={<CalIcon size={22} />} title="Couldn't load fixtures" desc={error} />
   }
 
+  // ── Main render ────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5">
-      <PageHeader eyebrow="World Cup 2026" title="Fixtures" sub={`${counts.missing} predictions still missing across the schedule.`} />
-      <ChipRow chips={chips} value={filter} onChange={setFilter} />
+    <div style={{ maxWidth: 860, width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
+      {/* Page Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <div className="eyebrow" style={{ marginBottom: 4 }}>World Cup 2026</div>
+          <h1 style={{ fontSize: 26, fontWeight: 800, fontFamily: 'Schibsted Grotesk, sans-serif', lineHeight: 1.15, margin: 0 }}>
+            Fixtures
+          </h1>
+        </div>
+        {counts.missing > 0 && (
+          <div style={{
+            color: 'rgb(var(--coral))',
+            background: 'rgba(var(--coral),0.12)',
+            padding: '6px 12px',
+            borderRadius: 999,
+            fontSize: 12.5,
+            fontWeight: 700,
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}>
+            {counts.missing} open to predict
+          </div>
+        )}
+      </div>
+
+      {/* Filter Bar */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
+          {/* Left: main filter chips */}
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2, flex: 1 }} className="no-scrollbar">
+            {(
+              [
+                { key: 'open' as MainFilter, label: 'Open', count: counts.open },
+                { key: 'today' as MainFilter, label: 'Today', count: counts.today },
+                { key: 'missing' as MainFilter, label: 'Missing', count: counts.missing },
+                { key: 'full' as MainFilter, label: 'Full schedule', count: counts.full },
+              ] as { key: MainFilter; label: string; count: number }[]
+            ).map(({ key, label, count }) => {
+              const active = mainFilter === key
+              return (
+                <button
+                  key={key}
+                  onClick={() => setMainFilter(key)}
+                  style={{
+                    height: 36,
+                    padding: '0 15px',
+                    borderRadius: 999,
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    cursor: 'pointer',
+                    background: active ? 'rgb(var(--textp))' : 'rgb(var(--card))',
+                    color: active ? 'rgb(var(--bg))' : 'rgb(var(--texts))',
+                    border: active ? '1px solid rgb(var(--textp))' : '1px solid rgb(var(--border))',
+                    flexShrink: 0,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {label}
+                  <span style={{
+                    background: active ? 'rgba(0,0,0,0.20)' : 'rgb(var(--surface3))',
+                    color: active ? '#fff' : 'rgb(var(--textp))',
+                    borderRadius: 999,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                  }}>
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Right: stage filter chips */}
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            {(
+              [
+                { key: 'all' as StageFilter, label: 'All' },
+                { key: 'group' as StageFilter, label: 'Group' },
+                { key: 'knockout' as StageFilter, label: 'Knockout' },
+              ] as { key: StageFilter; label: string }[]
+            ).map(({ key, label }) => {
+              const active = stageFilter === key
+              return (
+                <button
+                  key={key}
+                  onClick={() => {
+                    setStageFilter(key)
+                    if (key !== 'group') setSelectedGroup(null)
+                  }}
+                  style={{
+                    height: 36,
+                    padding: '0 15px',
+                    borderRadius: 999,
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    background: active ? 'rgb(var(--textp))' : 'rgb(var(--card))',
+                    color: active ? 'rgb(var(--bg))' : 'rgb(var(--texts))',
+                    border: active ? '1px solid rgb(var(--textp))' : '1px solid rgb(var(--border))',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Group letter sub-chips */}
+        {stageFilter === 'group' && groupNames.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {groupNames.map((g) => {
+              const active = selectedGroup === g
+              return (
+                <button
+                  key={g}
+                  onClick={() => setSelectedGroup(active ? null : g)}
+                  style={{
+                    height: 28,
+                    padding: '0 12px',
+                    borderRadius: 999,
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                    background: active ? 'rgb(var(--primary))' : 'rgb(var(--surface2))',
+                    color: active ? 'rgb(var(--bg))' : 'rgb(var(--texts))',
+                    border: 'none',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {g}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Date groups */}
       {dates.length === 0 ? (
-        <EmptyState icon={<CalIcon size={22} />} title="Nothing here" desc="No matches match this filter. Try a different one." />
+        <EmptyState icon={<CalIcon size={22} />} title="Nothing here" desc="No matches match this filter." />
       ) : (
         dates.map((d) => (
-          <div key={d}>
-            <div className="flex items-center gap-3 mb-3 mt-2">
-              <h2 className="text-sm font-extrabold uppercase tracking-wider text-texts">{fmtDateKey(d)}</h2>
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-texts font-bold tabular-nums">{byDate[d].length} matches</span>
-            </div>
-            <StaggerList className="grid sm:grid-cols-2 gap-3">
-              {byDate[d].map((m) => (
-                <StaggerItem key={m.id}>
-                  <MatchCard
-                    m={toUIMatch(m, preds[m.id], weights)}
-                    onClick={() => router.push(`/match/${m.id}`)}
-                  />
-                </StaggerItem>
-              ))}
-            </StaggerList>
-          </div>
+          <DateGroup
+            key={d}
+            dateKey={d}
+            isToday={d === todayLocal}
+            isTomorrow={d === tomorrowLocal}
+            matches={byDate[d]}
+            preds={preds}
+            weights={weights}
+            onOpen={setModalMatchId}
+            timeZone={timeZone}
+          />
         ))
       )}
 
+      {modalMatchId && (
+        <PredictionModal matchId={modalMatchId} onClose={() => setModalMatchId(null)} />
+      )}
     </div>
+  )
+}
+
+/* ─── DateGroup ─────────────────────────────────────────────────────────── */
+function DateGroup({
+  dateKey, isToday, isTomorrow, matches, preds, weights, onOpen,
+  timeZone,
+}: {
+  dateKey: string
+  isToday: boolean
+  isTomorrow: boolean
+  matches: DBMatch[]
+  preds: Record<string, MyPred>
+  weights: ScoringWeights
+  onOpen: (id: string) => void
+  timeZone: string
+}) {
+  // Build label: "TODAY, 15 JUNE" / "TOMORROW" / formatted date
+  const [year, month, day] = dateKey.split('-').map(Number)
+  const baseFmt = new Intl.DateTimeFormat('en-SG', {
+    day: 'numeric', month: 'long', timeZone,
+  }).format(new Date(Date.UTC(year, (month ?? 1) - 1, day ?? 1, 12)))
+
+  let dateLabel: string
+  if (isToday) {
+    dateLabel = `TODAY, ${baseFmt.toUpperCase()}`
+  } else if (isTomorrow) {
+    dateLabel = 'TOMORROW'
+  } else {
+    dateLabel = fmtDateKey(dateKey, timeZone).toUpperCase()
+  }
+
+  return (
+    <div>
+      {/* Date header row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, marginBottom: 0 }}>
+        <span className="eb" style={{ color: 'rgb(var(--faint))', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+          {dateLabel}
+        </span>
+        <div style={{ flex: 1, height: 1, background: 'rgb(var(--border))' }} />
+        <span style={{ fontSize: 11.5, fontWeight: 600, color: 'rgb(var(--faint))' }} className="tabular-nums">
+          {matches.length}
+        </span>
+      </div>
+
+      {/* Card container */}
+      <div style={{
+        background: 'rgb(var(--card))',
+        border: '1px solid rgb(var(--border))',
+        boxShadow: 'var(--card-shadow)',
+        borderRadius: 16,
+        overflow: 'hidden',
+        marginTop: 10,
+      }}>
+        {matches.map((m, i) => (
+          <MatchRow
+            key={m.id}
+            m={m}
+            pred={preds[m.id] ?? null}
+            weights={weights}
+            divider={i > 0}
+            onOpen={() => onOpen(m.id)}
+            timeZone={timeZone}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ─── MatchRow ──────────────────────────────────────────────────────────── */
+function MatchRow({
+  m, pred, weights, divider, onOpen,
+  timeZone,
+}: {
+  m: DBMatch
+  pred: MyPred | null
+  weights: ScoringWeights
+  divider: boolean
+  onOpen: () => void
+  timeZone: string
+}) {
+  const ui = toUIMatch(m, pred, weights)
+  const home = getTeam(m.home_team)
+  const away = getTeam(m.away_team)
+  const timeStr = fmtTime(m.match_date, timeZone)
+  const hasScore = m.real_home_score !== null && m.real_away_score !== null
+  const canOpen = !hasScore
+  const isKO = ui.knockout
+
+  // Determine status pill props
+  type PillCfg = { label: string; color: string; bg: string; border: string }
+  let pill: PillCfg
+
+  if (hasScore) {
+    // settled
+    if (ui.pts != null) {
+      pill = {
+        label: `+${ui.pts} pts`,
+        color: 'rgb(var(--primary))',
+        bg: 'rgba(var(--primary),0.12)',
+        border: 'rgba(var(--primary),0.25)',
+      }
+    } else {
+      pill = {
+        label: 'Settled',
+        color: 'rgb(var(--faint))',
+        bg: 'rgb(var(--surface2))',
+        border: 'rgb(var(--border))',
+      }
+    }
+  } else if (ui.status === 'missing') {
+    pill = {
+      label: 'Predict now',
+      color: 'rgb(var(--coral))',
+      bg: 'rgba(var(--coral),0.12)',
+      border: 'rgba(var(--coral),0.3)',
+    }
+  } else if (ui.status === 'submitted' && pred) {
+    // predicted, not yet locked
+    pill = {
+      label: `Your pick ${pred.pred_home}–${pred.pred_away}`,
+      color: 'rgb(var(--blue))',
+      bg: 'rgba(var(--blue),0.12)',
+      border: 'rgba(var(--blue),0.3)',
+    }
+  } else if (ui.status === 'locked') {
+    if (pred) {
+      pill = {
+        label: `${pred.pred_home}–${pred.pred_away}`,
+        color: 'rgb(var(--blue))',
+        bg: 'rgba(var(--blue),0.12)',
+        border: 'rgba(var(--blue),0.3)',
+      }
+    } else {
+      pill = {
+        label: 'Locked',
+        color: 'rgb(var(--faint))',
+        bg: 'rgb(var(--surface2))',
+        border: 'rgb(var(--border))',
+      }
+    }
+  } else {
+    pill = {
+      label: 'Locked',
+      color: 'rgb(var(--faint))',
+      bg: 'rgb(var(--surface2))',
+      border: 'rgb(var(--border))',
+    }
+  }
+
+  return (
+    <button
+      onClick={canOpen ? onOpen : undefined}
+      disabled={!canOpen}
+      className={canOpen ? 'hover:bg-textp/[0.035]' : ''}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        padding: '14px 18px',
+        cursor: canOpen ? 'pointer' : 'default',
+        transition: 'background 0.15s',
+        borderTop: divider ? '1px solid rgba(var(--border),0.55)' : undefined,
+        width: '100%',
+        textAlign: 'left',
+        border: divider ? undefined : 'none',
+        borderLeft: 'none',
+        borderRight: 'none',
+        borderBottom: 'none',
+        background: 'transparent',
+      }}
+    >
+      {/* Time / group block */}
+      <div style={{ width: 52, flexShrink: 0 }}>
+        <div style={{
+          fontSize: 12.5,
+          fontWeight: 700,
+          color: 'rgb(var(--textp))',
+          fontFamily: 'Schibsted Grotesk, sans-serif',
+        }}>
+          {timeStr}
+        </div>
+        {!isKO && m.group_name ? (
+          <div className="eb" style={{
+            color: 'rgb(var(--blue))',
+            fontSize: 11,
+            fontWeight: 700,
+            marginTop: 2,
+          }}>
+            GRP {m.group_name}
+          </div>
+        ) : isKO ? (
+          <div className="eb" style={{
+            color: 'rgb(var(--blue))',
+            fontSize: 11,
+            fontWeight: 700,
+            marginTop: 2,
+          }}>
+            KO
+          </div>
+        ) : null}
+      </div>
+
+      {/* Teams block */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {/* Home */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FlagChip code={m.home_team} w={26} h={18} r={4} />
+          <span style={{
+            fontSize: 14,
+            fontWeight: 700,
+            fontFamily: 'Schibsted Grotesk, sans-serif',
+            color: 'rgb(var(--textp))',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flex: 1,
+          }}>
+            {home.name}
+          </span>
+          {hasScore && (
+            <span style={{ fontSize: 14, fontWeight: 800, color: 'rgb(var(--textp))', marginLeft: 'auto', paddingRight: 4 }}>
+              {m.real_home_score}
+            </span>
+          )}
+        </div>
+        {/* Away */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FlagChip code={m.away_team} w={26} h={18} r={4} />
+          <span style={{
+            fontSize: 14,
+            fontWeight: 700,
+            fontFamily: 'Schibsted Grotesk, sans-serif',
+            color: 'rgb(var(--textp))',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flex: 1,
+          }}>
+            {away.name}
+          </span>
+          {hasScore && (
+            <span style={{ fontSize: 14, fontWeight: 800, color: 'rgb(var(--textp))', marginLeft: 'auto', paddingRight: 4 }}>
+              {m.real_away_score}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Status pill / countdown */}
+      <div style={{ width: 140, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+        {!hasScore && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+            <MiniCountdown kickoff={m.match_date} />
+          </div>
+        )}
+        {hasScore ? (
+          <span style={{
+            padding: '6px 11px',
+            borderRadius: 999,
+            border: `1px solid ${pill.border}`,
+            fontSize: 11.5,
+            fontWeight: 700,
+            textAlign: 'center',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            color: pill.color,
+            background: pill.bg,
+            whiteSpace: 'nowrap',
+          }}>
+            {pill.label}
+          </span>
+        ) : (
+          <span style={{
+            padding: '6px 11px',
+            borderRadius: 999,
+            border: `1px solid ${pill.border}`,
+            fontSize: 11.5,
+            fontWeight: 700,
+            textAlign: 'center',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            color: pill.color,
+            background: pill.bg,
+            whiteSpace: 'nowrap',
+            marginTop: 4,
+          }}>
+            {pill.label}
+          </span>
+        )}
+      </div>
+    </button>
+  )
+}
+
+/* ─── MiniCountdown ─────────────────────────────────────────────────────── */
+function MiniCountdown({ kickoff }: { kickoff: string }) {
+  const [label, setLabel] = useState('')
+  const [isUrgent, setIsUrgent] = useState(false)
+  const [locked, setLocked] = useState(false)
+
+  useEffect(() => {
+    function update() {
+      const diff = new Date(kickoff).getTime() - Date.now()
+      if (diff <= 0) { setLabel('Live'); setLocked(true); return }
+      const totalMins = Math.floor(diff / 60_000)
+      const h = Math.floor(diff / 3_600_000)
+      const m = Math.floor((diff % 3_600_000) / 60_000)
+      setIsUrgent(totalMins < 60)
+      setLocked(false)
+      setLabel(h > 0 ? `${h}h ${m}m` : `${m}m`)
+    }
+    update()
+    const t = setInterval(update, 60_000)
+    return () => clearInterval(t)
+  }, [kickoff])
+
+  if (!label) return null
+
+  return (
+    <span style={{
+      fontSize: 11.5,
+      fontWeight: 700,
+      color: locked ? 'rgb(var(--faint))' : isUrgent ? 'rgb(var(--coral))' : 'rgb(var(--amber))',
+    }} className="tabular-nums">
+      {label}
+    </span>
   )
 }
