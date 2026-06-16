@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import {
-  Button, Avatar, Skeleton, EmptyState, TrophyIcon, LockIcon,
+  Button, Avatar, Skeleton, EmptyState, TrophyIcon, LockIcon, Modal,
 } from '@/components/ui'
 import FlagChip from '@/components/FlagChip'
 import { BarChart, DonutChart, RankLine } from '@/components/charts'
@@ -270,6 +270,11 @@ export default function ProfilePage() {
   /* ─── Handlers ───────────────────────────────────────────────────────────── */
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; if (!file || !profile) return
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(`Image must be under 5 MB (yours is ${(file.size / 1024 / 1024).toFixed(1)} MB)`)
+      e.target.value = ''
+      return
+    }
     setUploading(true)
     const ext = file.name.split('.').pop()
     const path = `${profile.id}/avatar.${ext}`
@@ -416,7 +421,7 @@ export default function ProfilePage() {
           {isMoney && (
             <div style={{ padding: '0 18px', textAlign: 'center' }}>
               <p style={eyebrow}>Net pool</p>
-              <p style={{ fontSize: 22, fontWeight: 800, margin: 0, marginTop: 2, color: 'rgb(var(--success,var(--primary)))', lineHeight: 1 }}>
+              <p style={{ fontSize: 22, fontWeight: 800, margin: 0, marginTop: 2, color: netPool != null && netPool >= 0 ? 'rgb(var(--success))' : 'rgb(var(--coral))', lineHeight: 1 }}>
                 {netPool != null ? (netPool >= 0 ? `+$${netPool}` : `-$${Math.abs(netPool)}`) : '–'}
               </p>
             </div>
@@ -774,7 +779,7 @@ export default function ProfilePage() {
                   {/* Score */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: 150, flexShrink: 0 }}>
                     <FlagChip code={m.home_team} w={28} h={19} r={4} />
-                    <span style={{ fontSize: 14, fontWeight: 700, color: 'rgb(var(--textp))', tabularNums: true } as React.CSSProperties}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: 'rgb(var(--textp))', fontVariantNumeric: 'tabular-nums' }}>
                       {m.real_home_score}–{m.real_away_score}
                     </span>
                     <FlagChip code={m.away_team} w={28} h={19} r={4} />
@@ -807,63 +812,44 @@ export default function ProfilePage() {
       )}
 
       {/* ── Edit profile modal ── */}
-      {editOpen && (
-        <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 50,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
-          }}
-          onClick={() => setEditOpen(false)}
-        >
-          <div
-            style={{
-              background: 'rgb(var(--card))', borderRadius: 20,
-              border: '1px solid rgb(var(--border))',
-              padding: 24, width: '100%', maxWidth: 400,
-              display: 'flex', flexDirection: 'column', gap: 16,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'rgb(var(--textp))' }}>Edit profile</p>
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit profile" maxWidth="max-w-sm">
+        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Avatar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <Avatar name={profile.username} src={avatarUrl} size={56} />
+            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
+              {uploading ? 'Uploading…' : 'Change photo'}
+            </Button>
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarChange} />
+          </div>
 
-            {/* Avatar */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <Avatar name={profile.username} src={avatarUrl} size={56} />
-              <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
-                {uploading ? 'Uploading…' : 'Change photo'}
-              </Button>
-              <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarChange} />
-            </div>
+          {/* Username */}
+          <div>
+            <p style={{ ...eyebrow, marginBottom: 6 }}>Display name</p>
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              maxLength={40}
+              placeholder="Username"
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                padding: '10px 14px', borderRadius: 12,
+                border: '1px solid rgb(var(--border))',
+                background: 'rgb(var(--surface))',
+                color: 'rgb(var(--textp))',
+                fontSize: 14, outline: 'none',
+              }}
+            />
+          </div>
 
-            {/* Username */}
-            <div>
-              <p style={{ ...eyebrow, marginBottom: 6 }}>Display name</p>
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                maxLength={40}
-                placeholder="Username"
-                style={{
-                  width: '100%', boxSizing: 'border-box',
-                  padding: '10px 14px', borderRadius: 12,
-                  border: '1px solid rgb(var(--border))',
-                  background: 'rgb(var(--surface))',
-                  color: 'rgb(var(--textp))',
-                  fontSize: 14, outline: 'none',
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <Button variant="outline" size="sm" onClick={() => setEditOpen(false)}>Cancel</Button>
-              <Button size="sm" onClick={saveUsername} disabled={saving || !username.trim()}>
-                {saving ? 'Saving…' : 'Save'}
-              </Button>
-            </div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button size="sm" onClick={saveUsername} disabled={saving || !username.trim()}>
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   )
 }

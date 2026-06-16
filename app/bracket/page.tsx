@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam, TEAMS } from '@/lib/teams'
 import { Skeleton, EmptyState, TrophyIcon } from '@/components/ui'
+// Suspense removed — wrapping a useEffect-based component has no effect
 import FlagChip from '@/components/FlagChip'
 import { getActiveLeague } from '@/lib/league'
 import { TOURNAMENT_POINTS } from '@/lib/scoring'
@@ -268,7 +269,7 @@ function SemiCorrectnessBadge({ code, settled, correct }: { code: string | null;
 
 /* ---------- main inner component ---------- */
 function BracketPageInner() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [loading, setLoading] = useState(true)
   const [phase, setPhase] = useState<BracketPhase>('pre')
   const [predsByPhase, setPredsByPhase] = useState<Record<BracketPhase, TournamentPred>>({
@@ -288,10 +289,10 @@ function BracketPageInner() {
       // Load active league context
       await getActiveLeague(supabase, user.id)
 
-      // Load tournament predictions for both phases
+      // Load tournament predictions for both phases (include scored pts columns)
       const { data: predData } = await supabase
         .from('tournament_predictions')
-        .select('phase, champion, runner_up, semi, quarter')
+        .select('phase, champion, runner_up, semi, quarter, pts_champion, pts_runner_up, pts_semi, pts_quarter')
         .eq('user_id', user.id)
         .in('phase', ['pre', 'r32'])
 
@@ -322,10 +323,29 @@ function BracketPageInner() {
         }
       }
 
-      // Load bracket results — for now check if there's a settled bracket
-      // We check tournament_predictions from a special 'results' marker or use match data
-      // For now, results are not settled unless tournament is over
-      setBracketResults({ champion: null, runner_up: null, semi: [], quarter: [], settled: false })
+      // Load real bracket results (set by admin in bracket_results table).
+      // Also check if this user's pts columns have been populated by score-tournament.
+      const preRow = predData?.find((r: Record<string, unknown>) => r.phase === 'pre') as Record<string, unknown> | undefined
+      const hasScoring = preRow && (preRow.pts_champion != null || preRow.pts_runner_up != null || preRow.pts_semi != null || preRow.pts_quarter != null)
+
+      const { data: brData } = await supabase
+        .from('bracket_results')
+        .select('champion, runner_up, semi, quarter')
+        .eq('id', 'wc2026')
+        .maybeSingle()
+
+      const brChampion = (brData as Record<string, unknown> | null)?.champion as string | null ?? null
+      const brRunnerUp = (brData as Record<string, unknown> | null)?.runner_up as string | null ?? null
+      const brSemi = ((brData as Record<string, unknown> | null)?.semi as string[]) ?? []
+      const brQuarter = ((brData as Record<string, unknown> | null)?.quarter as string[]) ?? []
+
+      setBracketResults({
+        champion: brChampion,
+        runner_up: brRunnerUp,
+        semi: brSemi,
+        quarter: brQuarter,
+        settled: !!hasScoring || !!(brChampion || brRunnerUp || brSemi.length > 0),
+      })
 
       setLoading(false)
     }
@@ -546,7 +566,7 @@ function BracketPageInner() {
                     border: 'none',
                     cursor: saving ? 'default' : 'pointer',
                     background: 'rgb(var(--primary))',
-                    color: '#062b18',
+                    color: 'rgb(4,38,20)',
                     fontSize: 13,
                     fontWeight: 800,
                     opacity: saving || draft.quarter.length !== 8 || draft.semi.length !== 4 || !draft.runner_up || !draft.champion ? 0.55 : 1,
@@ -1020,16 +1040,5 @@ function SinglePickSection({
 }
 
 export default function BracketPage() {
-  return (
-    <Suspense fallback={
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <Skeleton className="h-9 w-44" />
-        <Skeleton className="h-40 rounded-[20px]" />
-        <Skeleton className="h-24 rounded-[16px]" />
-        <Skeleton className="h-32 rounded-[16px]" />
-      </div>
-    }>
-      <BracketPageInner />
-    </Suspense>
-  )
+  return <BracketPageInner />
 }

@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/s
 import { requireAdmin } from '@/lib/require-admin'
 import { scoreGroupPrediction } from '@/lib/scoring'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { snapshotLeagueRanks } from '@/lib/snapshot'
 
 const GROUPS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
 
@@ -98,6 +99,9 @@ export async function POST(req: Request) {
     pts_distributed: null,
     scored_count: predictionsUpdated,
   }).then(() => {})
+
+  // Auto-snapshot ranks at group-stage boundary
+  try { await snapshotLeagueRanks(serviceSupabase) } catch {}
 
   return NextResponse.json({ groups: results, predictions_updated: predictionsUpdated })
 }
