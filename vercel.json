@@ -6,7 +6,7 @@
   "crons": [
     {
       "path": "/api/cron/kickoff-reminders",
-      "schedule": "*/10 * * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }
