@@ -480,14 +480,11 @@ function MatchRow({
     }
   }
 
-  const [hovered, setHovered] = useState(false)
-
   return (
     <button
       onClick={canOpen ? onOpen : undefined}
       disabled={!canOpen}
-      onMouseEnter={canOpen ? () => setHovered(true) : undefined}
-      onMouseLeave={canOpen ? () => setHovered(false) : undefined}
+      className={canOpen ? 'hover:bg-textp/[0.035]' : ''}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -495,7 +492,6 @@ function MatchRow({
         padding: '14px 18px',
         cursor: canOpen ? 'pointer' : 'default',
         transition: 'background 0.15s',
-        background: hovered && canOpen ? 'rgba(var(--textp),0.035)' : 'transparent',
         borderTop: divider ? '1px solid rgba(var(--border),0.55)' : undefined,
         width: '100%',
         textAlign: 'left',
@@ -503,6 +499,7 @@ function MatchRow({
         borderLeft: 'none',
         borderRight: 'none',
         borderBottom: 'none',
+        background: 'transparent',
       }}
     >
       {/* Time / group block */}
@@ -634,15 +631,17 @@ function MatchRow({
 function MiniCountdown({ kickoff }: { kickoff: string }) {
   const [label, setLabel] = useState('')
   const [isUrgent, setIsUrgent] = useState(false)
+  const [locked, setLocked] = useState(false)
 
   useEffect(() => {
     function update() {
       const diff = new Date(kickoff).getTime() - Date.now()
-      if (diff <= 0) { setLabel(''); return }
+      if (diff <= 0) { setLabel('Live'); setLocked(true); return }
       const totalMins = Math.floor(diff / 60_000)
       const h = Math.floor(diff / 3_600_000)
       const m = Math.floor((diff % 3_600_000) / 60_000)
       setIsUrgent(totalMins < 60)
+      setLocked(false)
       setLabel(h > 0 ? `${h}h ${m}m` : `${m}m`)
     }
     update()
@@ -656,7 +655,7 @@ function MiniCountdown({ kickoff }: { kickoff: string }) {
     <span style={{
       fontSize: 11.5,
       fontWeight: 700,
-      color: isUrgent ? 'rgb(var(--coral))' : 'rgb(var(--amber))',
+      color: locked ? 'rgb(var(--faint))' : isUrgent ? 'rgb(var(--coral))' : 'rgb(var(--amber))',
     }} className="tabular-nums">
       {label}
     </span>

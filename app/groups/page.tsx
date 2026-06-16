@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
-import { Skeleton } from '@/components/ui'
+import { Skeleton, EmptyState } from '@/components/ui'
 import ThemeToggle from '@/components/ThemeToggle'
 import FlagChip from '@/components/FlagChip'
 import { getActiveLeague } from '@/lib/league'
@@ -149,9 +149,12 @@ function GroupCard({ groupName, matches, pred, userId, weights, activeTab, onSav
     return defaultOrder.map((code) => ({ code, pts: 0, gd: 0, gf: 0 }))
   }, [defaultOrder, hasStandings, standingsRows])
 
+  // Only reset order when the actual team IDs change, not on every reference update
+  const defaultOrderKey = defaultOrder.join(',')
   useEffect(() => {
     setOrder(defaultOrder)
-  }, [defaultOrder])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultOrderKey])
 
   function move(i: number, dir: -1 | 1) {
     setOrder((o) => {
@@ -527,8 +530,8 @@ export default function GroupsPage() {
 
   if (loading) {
     return (
-      <div style={{ padding: '24px 30px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, maxWidth: 1000, margin: '0 auto' }}>
+      <div style={{ padding: '24px 16px' }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 16, maxWidth: 1000, margin: '0 auto' }}>
           {GROUPS.map((g) => <Skeleton key={g} className="h-56 rounded-2xl" />)}
         </div>
       </div>
@@ -537,8 +540,8 @@ export default function GroupsPage() {
 
   if (error) {
     return (
-      <div style={{ padding: '40px 30px', textAlign: 'center' }}>
-        <p style={{ fontSize: 14, color: 'rgb(var(--texts))' }}>{error}</p>
+      <div style={{ padding: '40px 30px' }}>
+        <EmptyState title="Could not load groups" desc={error} />
       </div>
     )
   }
@@ -655,15 +658,16 @@ export default function GroupsPage() {
         </div>
       )}
 
-      {/* Groups grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: 16,
-        maxWidth: 1000,
-        margin: '0 auto',
-        padding: '24px 30px 60px',
-      }}>
+      {/* Groups grid — single column on mobile, 2 columns on sm+ */}
+      <div
+        className="grid grid-cols-1 sm:grid-cols-2"
+        style={{
+          gap: 16,
+          maxWidth: 1000,
+          margin: '0 auto',
+          padding: '24px 16px 60px',
+        }}
+      >
         {GROUPS.map((g) => (
           <GroupCard
             key={g}

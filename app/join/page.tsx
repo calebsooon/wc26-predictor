@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { getMyLeagues, setActiveLeague, isMoneyLeague, type League } from '@/lib/league'
@@ -10,6 +10,7 @@ import { Card, Button, PageHeader, Skeleton, TrophyIcon, LeagueBadge } from '@/c
 export default function JoinPage() {
   const supabase = createClient()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [userId, setUserId] = useState<string | null>(null)
   const [leagues, setLeagues] = useState<League[]>([])
   const [code, setCode] = useState('')
@@ -42,10 +43,9 @@ export default function JoinPage() {
   }, [])
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const c = params.get('code')
+    const c = searchParams.get('code')
     if (c) setCode(c.toUpperCase())
-  }, [])
+  }, [searchParams])
 
   async function join(e: React.FormEvent) {
     e.preventDefault()
@@ -60,7 +60,6 @@ export default function JoinPage() {
     if (data) {
       await setActiveLeague(supabase, userId, data as string)
       router.replace('/dashboard')
-      router.refresh()
     }
   }
 
@@ -69,7 +68,6 @@ export default function JoinPage() {
     setBusy(true)
     await setActiveLeague(supabase, userId, id)
     router.replace('/dashboard')
-    router.refresh()
   }
 
   return (

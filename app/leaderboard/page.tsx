@@ -151,8 +151,7 @@ export default function LeaderboardPage() {
       }
     }
     load()
-    const channel = supabase.channel('lb').on('postgres_changes', { event: '*', schema: 'public', table: 'predictions' }, () => { if (memberIdsRef.current.length) fetchRows(memberIdsRef.current) }).subscribe()
-    return () => { supabase.removeChannel(channel) }
+    // No generic Realtime channel here — the scoped league channel below handles real-time updates
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

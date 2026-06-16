@@ -56,9 +56,10 @@ function smoothPath(pts: { x: number; y: number }[]): string {
 }
 
 export default function H2HPage() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [members, setMembers] = useState<ProfileLite[]>([])
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
+  const [currentUserId, setCurrentUserId] = useState('')
   const [aId, setAId] = useState('')
   const [bId, setBId] = useState('')
   const [raceView, setRaceView] = useState<'season' | 'gameweek' | 'specific'>('season')
@@ -76,6 +77,7 @@ export default function H2HPage() {
         const { weights: w, memberProfiles } = await getActiveLeague(supabase, user.id)
         setWeights(w)
         setMembers(memberProfiles)
+        setCurrentUserId(user.id)
         setAId(user.id)
         const other = memberProfiles.find((m) => m.id !== user.id)
         setBId(other?.id ?? '')
@@ -395,18 +397,20 @@ export default function H2HPage() {
                         width: 60, height: 60, borderRadius: 18,
                         background: 'linear-gradient(145deg,rgb(var(--heroFrom)),rgb(var(--heroTo)))',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 24, fontWeight: 800, color: '#eafff3',
+                        fontSize: 24, fontWeight: 800, color: 'rgb(var(--primary))',
                       }}>
                         {initials(a.username)}
                       </div>
                     )}
                     <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', justifyContent: 'center' }}>
                       <span style={{ fontSize: 14, fontWeight: 700, color: 'rgb(var(--textp))' }}>{a.username}</span>
-                      <span style={{
-                        fontSize: '8.5px', fontWeight: 700, color: 'rgb(var(--primary))',
-                        background: 'rgba(var(--primary),0.16)', padding: '2px 6px',
-                        borderRadius: 999, verticalAlign: 'middle',
-                      }}>YOU</span>
+                      {aId === currentUserId && (
+                        <span style={{
+                          fontSize: '8.5px', fontWeight: 700, color: 'rgb(var(--primary))',
+                          background: 'rgba(var(--primary),0.16)', padding: '2px 6px',
+                          borderRadius: 999, verticalAlign: 'middle',
+                        }}>YOU</span>
+                      )}
                     </div>
                     <p style={{ fontSize: 30, fontWeight: 800, color: 'rgb(var(--primary))', lineHeight: 1.1, fontFamily: 'Schibsted Grotesk, sans-serif', marginTop: 4 }}>
                       {stats.a.pts}
