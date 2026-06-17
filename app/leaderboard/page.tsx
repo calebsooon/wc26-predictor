@@ -7,7 +7,7 @@ import FlagChip from '@/components/FlagChip'
 import { type LBRow } from '@/components/football'
 import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
 import { getActiveLeague, getMyLeagues, setActiveLeague, isMoneyLeague, type League, type LeagueLabel } from '@/lib/league'
-import { DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
+import { DEFAULT_WEIGHTS, weightedMatchPoints, type ScoringWeights } from '@/lib/scoring'
 import { GW_NAMES, GW_SHORT, GW_PRIZES, OVERALL_PRIZES, formatPrize, prizeTone } from '@/lib/prizes'
 import { getTeam } from '@/lib/teams'
 import { fmtDateTime } from '@/lib/date-format'
@@ -47,6 +47,14 @@ interface PickPred {
   pred_home: number | null
   pred_away: number | null
   points_awarded: number | null
+  pts_outcome: number | null
+  pts_exact: number | null
+  pts_goal_diff: number | null
+  pts_total_goals: number | null
+  pts_team_goals: number | null
+  pts_btts: number | null
+  pts_first_team: number | null
+  pts_first_scorer: number | null
 }
 
 function downloadCSV(rows: LBRow[], gwLabel: string, includePrize: boolean) {
@@ -195,7 +203,7 @@ export default function LeaderboardPage() {
         const matchIds = (matches as PickMatch[]).map((m) => m.id)
         const { data: preds, error: pErr } = await supabase
           .from('predictions')
-          .select('match_id, user_id, pred_home, pred_away, points_awarded')
+          .select('match_id, user_id, pred_home, pred_away, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
           .in('match_id', matchIds)
           .in('user_id', memberIdsRef.current)
         if (pErr) throw pErr
@@ -301,6 +309,7 @@ export default function LeaderboardPage() {
           members={members}
           userId={userId}
           loading={picksLoading}
+          weights={weights}
         />
       ) : (
         <>
@@ -404,7 +413,7 @@ export default function LeaderboardPage() {
               )}
 
               {/* Stat highlights */}
-              <StatHighlights board={board} rows={rows} />
+              <StatHighlights board={board} rows={rows} weights={weights} />
 
               {/* Full table */}
               <div style={{
@@ -704,7 +713,7 @@ function PodiumSlot({ player, place, isMoney, tab }: { player: LBRow; place: 1 |
 }
 
 /* ── Stat highlights (4 cards) ─────────────────── */
-function StatHighlights({ board, rows }: { board: LBRow[]; rows: PredRow[] }) {
+function StatHighlights({ board, rows, weights }: { board: LBRow[]; rows: PredRow[]; weights: ScoringWeights }) {
   // 1. Most exact scores
   const topExact = [...board].sort((a, b) => (b.exact ?? 0) - (a.exact ?? 0))[0]
 
@@ -732,7 +741,7 @@ function StatHighlights({ board, rows }: { board: LBRow[]; rows: PredRow[] }) {
     const gw = r.matches?.gw_number
     if (gw == null) continue
     const key = `${r.user_id}|${gw}`
-    gwTotals.set(key, (gwTotals.get(key) ?? 0) + r.points_awarded)
+    gwTotals.set(key, (gwTotals.get(key) ?? 0) + weightedMatchPoints(r, weights))
   }
   let bestGwUser: LBRow | null = null
   let bestGwPts = 0
@@ -840,13 +849,14 @@ function StatHighlights({ board, rows }: { board: LBRow[]; rows: PredRow[] }) {
    Picks view — one card per match, one row per member
    ────────────────────────────────────────────── */
 function PicksView({
-  matches, preds, members, userId, loading,
+  matches, preds, members, userId, loading, weights,
 }: {
   matches: PickMatch[]
   preds: PickPred[]
   members: ProfileLite[]
   userId: string | null
   loading: boolean
+  weights: ScoringWeights
 }) {
   const [filter, setFilter] = useState<'upcoming' | 'all'>('upcoming')
 
@@ -928,11 +938,14 @@ function PicksView({
                         <span className="font-extrabold tabular-nums text-sm text-textp">
                           {pick.pred_home}–{pick.pred_away}
                         </span>
-                        {scored && (
-                          <span className={`text-[11px] font-bold tabular-nums ${(pick.points_awarded ?? 0) >= 8 ? 'text-primary' : (pick.points_awarded ?? 0) > 0 ? 'text-gold' : 'text-error'}`}>
-                            +{pick.points_awarded}pts
-                          </span>
-                        )}
+                        {scored && (() => {
+                          const wPts = weightedMatchPoints(pick, weights)
+                          return (
+                            <span className={`text-[11px] font-bold tabular-nums ${wPts >= 8 ? 'text-primary' : wPts > 0 ? 'text-gold' : 'text-error'}`}>
+                              +{wPts}pts
+                            </span>
+                          )
+                        })()}
                       </div>
                     ) : (
                       <span className="text-[11px] text-texts font-medium italic">no pick</span>

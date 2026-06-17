@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
-import { POINTS } from '@/lib/scoring'
+import { POINTS, weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { getActiveLeague } from '@/lib/league'
 import { SearchIcon } from '@/components/ui'
 import FlagChip from '@/components/FlagChip'
@@ -30,6 +30,14 @@ interface OtherPred {
   pred_first_scorer_id: number | null
   pred_no_scorer: boolean | null
   points_awarded: number | null
+  pts_outcome: number | null
+  pts_exact: number | null
+  pts_goal_diff: number | null
+  pts_total_goals: number | null
+  pts_team_goals: number | null
+  pts_btts: number | null
+  pts_first_team: number | null
+  pts_first_scorer: number | null
   profiles: { username: string; avatar_url: string | null } | null
 }
 
@@ -85,6 +93,7 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
   } | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [allowGdManual, setAllowGdManual] = useState(true)
+  const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [players, setPlayers] = useState<PlayerRow[]>([])
   const [others, setOthers] = useState<OtherPred[]>([])
   const [loading, setLoading] = useState(true)
@@ -152,16 +161,24 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
         setH(p.pred_home as number); setA(p.pred_away as number)
         setFirstTeam((p.pred_first_goal_team as string) ?? null)
         setScorerId(p.pred_no_scorer ? 'none' : ((p.pred_first_scorer_id as number) ?? null))
-        if (p.pred_total_goals != null) { setPredTotalGoals(p.pred_total_goals as number); setTgManual(true) }
-        if (p.pred_goal_diff != null) { setPredGoalDiff(p.pred_goal_diff as number); setGdManual(true) }
+        const ph = p.pred_home as number, pa = p.pred_away as number
+        if (p.pred_total_goals != null) {
+          setPredTotalGoals(p.pred_total_goals as number)
+          if ((p.pred_total_goals as number) !== ph + pa) setTgManual(true)
+        }
+        if (p.pred_goal_diff != null) {
+          setPredGoalDiff(p.pred_goal_diff as number)
+          if ((p.pred_goal_diff as number) !== ph - pa) setGdManual(true)
+        }
         if (p.pred_btts != null) { setPredBtts(p.pred_btts as boolean); setBttsManual(true) }
       }
 
       setAllowGdManual(leagueResult.allowGdManual)
+      setWeights(leagueResult.weights)
 
       // Load others' predictions
       const { memberIds } = leagueResult
-      const predSelect = 'user_id, pred_home, pred_away, pred_total_goals, pred_goal_diff, pred_btts, pred_first_scorer_id, pred_no_scorer, points_awarded'
+      const predSelect = 'user_id, pred_home, pred_away, pred_total_goals, pred_goal_diff, pred_btts, pred_first_scorer_id, pred_no_scorer, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer'
       const predBase = supabase.from('predictions').select(predSelect).eq('match_id', matchId)
       const { data: predRows } = await (memberIds.length ? predBase.in('user_id', memberIds) : predBase)
       const predUserIds = (predRows ?? []).map((p) => (p as { user_id: string }).user_id)
@@ -1098,8 +1115,8 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
                 {others.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                     {[...others].sort((oa, ob) => {
-                      const pa = oa.points_awarded ?? -Infinity
-                      const pb = ob.points_awarded ?? -Infinity
+                      const pa = oa.points_awarded != null ? weightedMatchPoints(oa, weights) : -Infinity
+                      const pb = ob.points_awarded != null ? weightedMatchPoints(ob, weights) : -Infinity
                       return pb - pa
                     }).map((o) => {
                       const isYou = o.user_id === userId
@@ -1108,7 +1125,7 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
                       const totalGoals = o.pred_total_goals ?? (o.pred_home + o.pred_away)
                       const goalDiff = o.pred_goal_diff ?? (o.pred_home - o.pred_away)
                       const btts = o.pred_btts == null ? '—' : o.pred_btts ? 'Yes' : 'No'
-                      const pts = o.points_awarded
+                      const pts = o.points_awarded != null ? weightedMatchPoints(o, weights) : null
                       const ptsColor = pts == null
                         ? 'rgb(var(--texts))'
                         : pts >= 8

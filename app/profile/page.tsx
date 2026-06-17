@@ -330,7 +330,7 @@ export default function ProfilePage() {
     )
     let streak = 0
     for (const p of sorted) {
-      if (p.points_awarded > 0) streak++
+      if (weightedMatchPoints(p, weights) > 0) streak++
       else break
     }
 
@@ -342,10 +342,10 @@ export default function ProfilePage() {
     for (const p of preds) {
       const gw = p.matches?.gw_number
       if (gw == null) continue
-      map.set(gw, (map.get(gw) ?? 0) + p.points_awarded)
+      map.set(gw, (map.get(gw) ?? 0) + weightedMatchPoints(p, weights))
     }
     return Array.from({ length: 8 }, (_, i) => map.get(i + 1) ?? 0)
-  }, [preds])
+  }, [preds, weights])
 
   const gwLabels = ['GW1','GW2','GW3','GW4','GW5','GW6','GW7','GW8']
 
@@ -1020,7 +1020,7 @@ export default function ProfilePage() {
             .sort((a, b) => new Date(b.matches!.match_date).getTime() - new Date(a.matches!.match_date).getTime())
             .map((p) => {
               const m = p.matches!
-              const pts = p.points_awarded
+              const pts = weightedMatchPoints(p, weights)
               const ptsBg = pts >= 8
                 ? 'rgba(var(--primary),0.15)'
                 : pts > 0
