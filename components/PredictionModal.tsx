@@ -1124,7 +1124,8 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
                       const scorerLabel = o.pred_no_scorer ? 'No scorer' : o.pred_first_scorer_id === -1 ? 'Own goal' : scorerP ? scorerP.name : '—'
                       const totalGoals = o.pred_total_goals ?? (o.pred_home + o.pred_away)
                       const goalDiff = o.pred_goal_diff ?? (o.pred_home - o.pred_away)
-                      const btts = o.pred_btts == null ? '—' : o.pred_btts ? 'Yes' : 'No'
+                      const effectiveBtts = o.pred_btts ?? (o.pred_home > 0 && o.pred_away > 0)
+                      const btts = effectiveBtts ? 'Yes' : 'No'
                       const pts = o.points_awarded != null ? weightedMatchPoints(o, weights) : null
                       const ptsColor = pts == null
                         ? 'rgb(var(--texts))'
