@@ -851,9 +851,9 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
                     gap: 9,
                   }}>
                     {[
-                      { id: 'home' as const, label: home?.name ?? 'Home' },
+                      { id: match.home_team, label: home?.name ?? 'Home' },
                       { id: null, label: 'No goal' },
-                      { id: 'away' as const, label: away?.name ?? 'Away' },
+                      { id: match.away_team, label: away?.name ?? 'Away' },
                     ].map((opt) => {
                       const active = firstTeam === opt.id
                       return (
