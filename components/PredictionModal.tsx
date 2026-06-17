@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
@@ -29,6 +30,7 @@ interface OtherPred {
   pred_btts: boolean | null
   pred_first_scorer_id: number | null
   pred_no_scorer: boolean | null
+  pred_first_goal_team: string | null
   points_awarded: number | null
   pts_outcome: number | null
   pts_exact: number | null
@@ -178,7 +180,7 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
 
       // Load others' predictions
       const { memberIds } = leagueResult
-      const predSelect = 'user_id, pred_home, pred_away, pred_total_goals, pred_goal_diff, pred_btts, pred_first_scorer_id, pred_no_scorer, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer'
+      const predSelect = 'user_id, pred_home, pred_away, pred_total_goals, pred_goal_diff, pred_btts, pred_first_scorer_id, pred_no_scorer, pred_first_goal_team, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer'
       const predBase = supabase.from('predictions').select(predSelect).eq('match_id', matchId)
       const { data: predRows } = await (memberIds.length ? predBase.in('user_id', memberIds) : predBase)
       const predUserIds = (predRows ?? []).map((p) => (p as { user_id: string }).user_id)
@@ -302,7 +304,7 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
   const isEditing = h != null && a != null && others.some((o) => o.user_id === userId)
 
   /* ─── Render ─────────────────────────────────────── */
-  return (
+  const modal = (
     <div
       ref={overlayRef}
       role="dialog"
@@ -1183,8 +1185,21 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
                               color: 'rgb(var(--texts))',
                               marginTop: 1,
                             }}>
-                              TG {totalGoals} · GD {goalDiff > 0 ? `+${goalDiff}` : goalDiff} · BTTS {btts} · First scorer {scorerLabel}
+                              TG {totalGoals} · GD {goalDiff > 0 ? `+${goalDiff}` : goalDiff} · BTTS {btts} · ⚽ {scorerLabel}
                             </div>
+                            {(() => {
+                              const fgt = o.pred_first_goal_team
+                              if (!fgt) return null
+                              const fgtTeam = getTeam(fgt)
+                              return (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                                  <FlagChip code={fgt} w={14} h={10} r={2} />
+                                  <span style={{ fontSize: 10.5, color: 'rgb(var(--texts))' }}>
+                                    First team: <span style={{ fontWeight: 600, color: 'rgb(var(--textp))' }}>{fgtTeam?.name ?? fgt}</span>
+                                  </span>
+                                </div>
+                              )
+                            })()}
                           </div>
 
                           {/* Mini scoreline */}
@@ -1226,4 +1241,5 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
       </div>
     </div>
   )
+  return createPortal(modal, document.body)
 }
