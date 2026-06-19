@@ -3,10 +3,26 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { TEAMS, getTeam, type TeamInfo, normalisePosition, POSITION_ORDER, POSITION_ABBR } from '@/lib/teams'
-import { PageHeader, Card, Skeleton, SearchIcon, Pill, EmptyState, UsersIcon } from '@/components/ui'
+import { PageHeader, Card, Skeleton, SearchIcon, Pill, EmptyState, UsersIcon, Avatar } from '@/components/ui'
 import FlagChip from '@/components/FlagChip'
 
-interface Player { id: number; name: string; position: string | null; jersey_number: number | null; nationality: string | null; team_name: string }
+interface Player {
+  id: number; name: string; position: string | null; jersey_number: number | null
+  nationality: string | null; team_name: string
+  photo_url: string | null; dob: string | null; club: string | null
+  goals: number | null; assists: number | null
+}
+
+function ageFromDob(dob: string | null): number | null {
+  if (!dob) return null
+  const d = new Date(dob)
+  if (Number.isNaN(d.getTime())) return null
+  const now = new Date()
+  let age = now.getFullYear() - d.getFullYear()
+  const m = now.getMonth() - d.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--
+  return age
+}
 
 const ALL_TEAMS: TeamInfo[] = Object.values(TEAMS).sort((a, b) => a.name.localeCompare(b.name))
 
@@ -17,7 +33,39 @@ function sortPlayers(players: Player[]) {
   })
 }
 
-function SquadDetail({ team, players }: { team: TeamInfo; players: Player[] }) {
+function ScorerStar() {
+  return (
+    <span title="Your first-scorer pick" aria-label="Your first-scorer pick"
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-gold/15 border border-gold/30 text-gold text-[10px] font-bold shrink-0">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.3 6.9.7-5.1 4.6 1.4 6.8L12 17.8 5.9 20.4l1.4-6.8L2.2 9l6.9-.7z"/></svg>
+      Pick
+    </span>
+  )
+}
+
+function PlayerRow({ p, last, picked }: { p: Player; last: boolean; picked: boolean }) {
+  const age = ageFromDob(p.dob)
+  const meta = [p.club, age != null ? `${age}y` : null].filter(Boolean).join(' · ')
+  return (
+    <div className={`flex items-center gap-3 px-4 py-2.5 ${last ? '' : 'border-b border-border/60'} ${picked ? 'bg-gold/[0.06]' : ''}`}>
+      <span className="w-6 text-center text-sm font-mono text-texts shrink-0">{p.jersey_number ?? '–'}</span>
+      <Avatar src={p.photo_url} name={p.name} size={28} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-textp truncate">{p.name}</span>
+          {picked && <ScorerStar />}
+        </div>
+        {meta && <span className="text-[11px] text-texts truncate block">{meta}</span>}
+      </div>
+      {p.goals != null && p.goals > 0 && (
+        <span className="shrink-0 text-[11px] font-bold text-textp tabular-nums" title="Goals (club season)">⚽ {p.goals}</span>
+      )}
+    </div>
+  )
+}
+
+function SquadDetail({ team, players, myScorerPicks }: { team: TeamInfo; players: Player[]; myScorerPicks: Set<number> }) {
+  const coach = players.find((p) => normalisePosition(p.position) === 'Coach') ?? null
   const sorted = sortPlayers(players.filter((p) => normalisePosition(p.position) !== 'Coach'))
   const grouped: Record<string, Player[]> = {}
   for (const p of sorted) { const pos = normalisePosition(p.position); (grouped[pos] ||= []).push(p) }
@@ -25,9 +73,12 @@ function SquadDetail({ team, players }: { team: TeamInfo; players: Player[] }) {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-4">
         <FlagChip code={team.code} w={40} h={27} r={6} />
-        <div><h2 className="text-xl font-extrabold text-textp">{team.fullName}</h2><p className="text-sm text-texts">{sorted.length} players</p></div>
+        <div>
+          <h2 className="text-xl font-extrabold text-textp">{team.fullName}</h2>
+          <p className="text-sm text-texts">{sorted.length} players{coach ? ` · Coach: ${coach.name}` : ''}</p>
+        </div>
       </div>
       {sorted.length === 0 ? <p className="text-sm text-texts italic">No squad data available.</p> : (
         <div className="space-y-5">
@@ -39,10 +90,7 @@ function SquadDetail({ team, players }: { team: TeamInfo; players: Player[] }) {
               </div>
               <Card className="overflow-hidden">
                 {grouped[pos].map((p, idx) => (
-                  <div key={p.id} className={`flex items-center gap-3 px-4 py-2.5 ${idx < grouped[pos].length - 1 ? 'border-b border-border/60' : ''}`}>
-                    <span className="w-7 text-center text-sm font-mono text-texts shrink-0">{p.jersey_number ?? '–'}</span>
-                    <span className="text-sm font-medium text-textp flex-1">{p.name}</span>
-                  </div>
+                  <PlayerRow key={p.id} p={p} last={idx === grouped[pos].length - 1} picked={myScorerPicks.has(p.id)} />
                 ))}
               </Card>
             </div>
@@ -56,6 +104,7 @@ function SquadDetail({ team, players }: { team: TeamInfo; players: Player[] }) {
 export default function SquadsPage() {
   const supabase = createClient()
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
+  const [myScorerPicks, setMyScorerPicks] = useState<Set<number>>(new Set())
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -73,7 +122,7 @@ export default function SquadsPage() {
         while (true) {
           const { data, error: e } = await supabase
             .from('players')
-            .select('id, name, position, jersey_number, nationality, team_name')
+            .select('id, name, position, jersey_number, nationality, team_name, photo_url, dob, club, goals, assists')
             .range(from, from + PAGE - 1)
           if (e) throw e
           if (!data || data.length === 0) break
@@ -82,6 +131,18 @@ export default function SquadsPage() {
           from += PAGE
         }
         setAllPlayers(all)
+
+        // My own first-scorer picks (RLS always allows reading own rows) — used to
+        // star players I've backed. No league-consensus counts (kept fair pre-kickoff).
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data: picks } = await supabase
+            .from('predictions')
+            .select('pred_first_scorer_id')
+            .eq('user_id', user.id)
+            .not('pred_first_scorer_id', 'is', null)
+          if (picks) setMyScorerPicks(new Set(picks.map((r) => (r as { pred_first_scorer_id: number }).pred_first_scorer_id)))
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load squads')
       } finally {
@@ -184,7 +245,7 @@ export default function SquadsPage() {
         </div>
 
         <div className="hidden lg:block flex-1 min-w-0">
-          {selectedTeam ? <SquadDetail team={selectedTeam} players={selectedPlayers} /> : (
+          {selectedTeam ? <SquadDetail team={selectedTeam} players={selectedPlayers} myScorerPicks={myScorerPicks} /> : (
             <EmptyState icon={<UsersIcon size={22} />} title="Select a team" desc="Choose a nation from the list to view their squad." />
           )}
         </div>
@@ -197,7 +258,7 @@ export default function SquadsPage() {
             <div className="flex items-center justify-end px-5 pt-4 pb-2 shrink-0">
               <button onClick={() => setMobileOpen(false)} className="text-texts hover:text-textp p-1">✕</button>
             </div>
-            <div className="flex-1 overflow-y-auto px-5 pb-8"><SquadDetail team={selectedTeam} players={selectedPlayers} /></div>
+            <div className="flex-1 overflow-y-auto px-5 pb-8"><SquadDetail team={selectedTeam} players={selectedPlayers} myScorerPicks={myScorerPicks} /></div>
           </div>
         </div>
       )}

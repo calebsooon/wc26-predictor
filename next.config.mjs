@@ -36,6 +36,12 @@ const nextConfig = {
         hostname: '*.supabase.co',
         pathname: '/storage/v1/object/public/**',
       },
+      {
+        // Player headshots back-filled from API-FOOTBALL (api-sports.io).
+        protocol: 'https',
+        hostname: 'media.api-sports.io',
+        pathname: '/football/players/**',
+      },
     ],
   },
 }
