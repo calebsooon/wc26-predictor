@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam, TEAMS } from '@/lib/teams'
 import { Skeleton, EmptyState, TrophyIcon } from '@/components/ui'
@@ -279,6 +279,7 @@ function BracketPageInner() {
   const [draft, setDraft] = useState<TournamentPred>(EMPTY_PRED)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
+  const saveMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [bracketResults, setBracketResults] = useState<BracketResults>({ champion: null, runner_up: null, semi: [], quarter: [], settled: false })
 
   useEffect(() => {
@@ -417,6 +418,8 @@ function BracketPageInner() {
     }
     setPredsByPhase((prev) => ({ ...prev, [phase]: payload }))
     setSaveMsg('Saved')
+    if (saveMsgTimer.current) clearTimeout(saveMsgTimer.current)
+    saveMsgTimer.current = setTimeout(() => setSaveMsg(null), 3000)
   }
 
   if (loading) {

@@ -375,6 +375,77 @@ function AdminRow({ m, onSaved }, ref) {
   )
 })
 
+/* ── QuickImport ─────────────────────────────────────────────────────────── */
+function QuickImport({ matches, onDone }: { matches: Match[]; onDone: (updated: Match[]) => void }) {
+  const supabase = createClient()
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function run() {
+    const lines = text.trim().split('\n').filter(Boolean)
+    if (lines.length === 0) return
+    setBusy(true)
+    let ok = 0; let fail = 0
+    const updatedMatches = [...matches]
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/)
+      if (parts.length !== 4) { fail++; continue }
+      const [homeCode, awayCode, hs, as_] = parts
+      const homeScore = parseInt(hs ?? '', 10)
+      const awayScore = parseInt(as_ ?? '', 10)
+      if (isNaN(homeScore) || isNaN(awayScore) || homeScore < 0 || homeScore > 20 || awayScore < 0 || awayScore > 20) { fail++; continue }
+      const idx = updatedMatches.findIndex(
+        (m) => m.home_team.toUpperCase() === homeCode?.toUpperCase() &&
+               m.away_team.toUpperCase() === awayCode?.toUpperCase() &&
+               m.real_home_score === null
+      )
+      if (idx < 0) { fail++; continue }
+      const match = updatedMatches[idx]!
+      const { error } = await supabase.from('matches').update({
+        real_home_score: homeScore, real_away_score: awayScore, is_locked: true,
+      }).eq('id', match.id)
+      if (error) { fail++; continue }
+      await fetch('/api/score-match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ match_id: match.id }) })
+      updatedMatches[idx] = { ...match, real_home_score: homeScore, real_away_score: awayScore, is_locked: true }
+      ok++
+    }
+    setBusy(false)
+    if (ok > 0) { toast.success(`Imported ${ok} result${ok !== 1 ? 's' : ''}`); onDone(updatedMatches); setText(''); setOpen(false) }
+    if (fail > 0) toast.error(`${fail} line${fail !== 1 ? 's' : ''} skipped — check codes or already scored`)
+  }
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="text-xs font-bold text-primary hover:underline"
+      >
+        {open ? 'Hide quick import' : '+ Quick import (paste results)'}
+      </button>
+      {open && (
+        <div className="mt-2 p-3 rounded-xl border border-border bg-surface/40 space-y-2">
+          <p className="text-[11px] text-texts font-medium">
+            One result per line: <code className="bg-surface2 px-1 py-0.5 rounded text-[10px]">HOME AWAY home_score away_score</code>
+            {' '}e.g. <code className="bg-surface2 px-1 py-0.5 rounded text-[10px]">ARG BRA 2 1</code>
+          </p>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={5}
+            placeholder={'ARG BRA 2 1\nFRA ENG 0 0\nESP GER 3 2'}
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm font-mono text-textp placeholder:text-texts/40 focus:outline-none focus:border-primary resize-none"
+          />
+          <div className="flex gap-2">
+            <Button size="sm" onClick={run} disabled={busy || !text.trim()}>{busy ? 'Importing…' : 'Import & score'}</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setOpen(false); setText('') }}>Cancel</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AdminActions() {
   const [busy, setBusy] = useState<string | null>(null)
 
@@ -1114,6 +1185,7 @@ export default function AdminPage() {
           </Button>
         )}
       </div>
+      <QuickImport matches={matches} onDone={(updated) => setMatches(updated)} />
       <ChipRow chips={[{ key: 'pending', label: 'Pending' }, { key: 'done', label: 'Scored' }, { key: 'all', label: 'All' }]} value={filter} onChange={setFilter} />
       <div className="space-y-2.5">
         {filtered.map((m) => (

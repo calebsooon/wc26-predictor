@@ -113,15 +113,47 @@ export default function H2HPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aId, bId])
 
-  const { stats, catStats, commonMatches, formA, formB, gwSeriesA, gwSeriesB, gwTotalsA, gwTotalsB, gwMatchSeriesA, gwMatchSeriesB, availableGws } = useMemo(() => {
+  const { stats, catStats, commonMatches, divergerMatches, gwRivalry, formA, formB, gwSeriesA, gwSeriesB, gwTotalsA, gwTotalsB, gwMatchSeriesA, gwMatchSeriesB, availableGws, badgesA, badgesB, h2hStreak } = useMemo(() => {
     const forUser = (uid: string) => rows.filter((r) => r.user_id === uid)
+    const pickOutcome = (ph: number, pa: number) => ph > pa ? 'H' : ph < pa ? 'A' : 'D'
+    const realOutcome = (rh: number | null, ra: number | null) => rh == null || ra == null ? null : rh > ra ? 'H' : rh < ra ? 'A' : 'D'
     const calc = (uid: string) => {
       const ps = forUser(uid)
       const pts = ps.reduce((s, p) => s + weightedMatchPoints(p, weights), 0)
       const scored = ps.length
       const exact = ps.filter((p) => (p.pts_exact ?? 0) > 0).length
       const correct = ps.filter((p) => (p.pts_outcome ?? 0) > 0).length
-      return { pts, scored, exact, acc: scored ? Math.round((correct / scored) * 100) : 0 }
+      const skillPts = ps.reduce((s, p) => s + (p.pts_outcome ?? 0) + (p.pts_exact ?? 0) + (p.pts_goal_diff ?? 0) + (p.pts_total_goals ?? 0) + (p.pts_btts ?? 0), 0)
+      const luckPts = ps.reduce((s, p) => s + (p.pts_first_team ?? 0) + (p.pts_first_scorer ?? 0), 0)
+      const bestMatch = ps.length ? Math.max(...ps.map((p) => weightedMatchPoints(p, weights))) : 0
+      const avgPredGoals = ps.length > 0 ? ps.reduce((s, p) => s + p.pred_home + p.pred_away, 0) / ps.length : 0
+      return { pts, scored, exact, acc: scored ? Math.round((correct / scored) * 100) : 0, skillPts, luckPts, bestMatch, avgPredGoals }
+    }
+    const computeBadges = (ps: PredRow[]) => {
+      const exact = ps.filter((p) => (p.pts_exact ?? 0) > 0).length
+      const pts = ps.reduce((s, p) => s + weightedMatchPoints(p, weights), 0)
+      const scored = ps.length
+      const correct = ps.filter((p) => (p.pts_outcome ?? 0) > 0).length
+      const acc = scored ? Math.round((correct / scored) * 100) : 0
+      const firstScorers = ps.filter((p) => (p.pts_first_scorer ?? 0) > 0).length
+      const firstTeam = ps.filter((p) => (p.pts_first_team ?? 0) > 0).length
+      const best = ps.length ? Math.max(...ps.map((p) => weightedMatchPoints(p, weights))) : 0
+      // Hot hand: 5+ correct outcome consecutive — sort by match date and count streak
+      const sortedPs = [...ps].sort((a, b) =>
+        (matchMap.get(b.match_id)?.match_date ?? '').localeCompare(matchMap.get(a.match_id)?.match_date ?? '')
+      )
+      let streak = 0
+      for (const p of sortedPs) { if ((p.pts_outcome ?? 0) > 0) streak++; else break }
+      return [
+        { id: 'sniper', name: 'Scoreline Sniper', earned: exact >= 5 },
+        { id: 'genius', name: 'Genius', earned: pts >= 100 },
+        { id: 'merchant', name: 'Upset Merchant', earned: scored >= 20 && acc >= 60 },
+        { id: 'boot', name: 'Boot Guru', earned: firstScorers >= 3 },
+        { id: 'prophet', name: 'First Blood', earned: firstTeam >= 10 },
+        { id: 'highroller', name: 'High Roller', earned: best >= 12 },
+        { id: 'hothand', name: 'Hot Hand', earned: streak >= 5 },
+        { id: 'fraud', name: 'Fraud Watch', earned: scored >= 10 && acc < 30 },
+      ].filter((b) => b.earned)
     }
     const psA = forUser(aId), psB = forUser(bId)
     const byMatchA = new Map(psA.map((p) => [p.match_id, p]))
@@ -237,10 +269,48 @@ export default function H2HPage() {
       ...gwTotalsB.map((g) => g.gw),
     ])).sort((a, b) => a - b)
 
+    // Diverger matches: they predicted different outcomes
+    const divergerMatches = commonMatches
+      .filter(({ pa, pb }) => pickOutcome(pa.pred_home, pa.pred_away) !== pickOutcome(pb.pred_home, pb.pred_away))
+      .map(({ match_id, match, pa, pb, ptsA, ptsB }) => ({
+        match_id, match, pa, pb, ptsA, ptsB,
+        pickA: pickOutcome(pa.pred_home, pa.pred_away),
+        pickB: pickOutcome(pb.pred_home, pb.pred_away),
+        real: realOutcome(match?.real_home_score ?? null, match?.real_away_score ?? null),
+      }))
+      .slice(0, 8)
+
+    // H2H streak: from most recent common matches, who won consecutively
+    const h2hSequence = [...commonMatches]
+      .sort((x, y) => (x.match?.match_date ?? '').localeCompare(y.match?.match_date ?? ''))
+      .map(({ ptsA, ptsB }) => ptsA > ptsB ? 'A' : ptsB > ptsA ? 'B' : 'T')
+    let h2hStreakCount = 0
+    let h2hStreakWho: 'A' | 'B' | null = null
+    for (let i = h2hSequence.length - 1; i >= 0; i--) {
+      const r = h2hSequence[i]
+      if (r === 'T') break
+      if (h2hStreakWho === null) { h2hStreakWho = r as 'A' | 'B'; h2hStreakCount = 1 }
+      else if (r === h2hStreakWho) h2hStreakCount++
+      else break
+    }
+
+    // GW rivalry: who won each gameweek head-to-head
+    const gwTotalsMapA = new Map(gwTotalsA.map((g) => [g.gw, g.pts]))
+    const gwTotalsMapB = new Map(gwTotalsB.map((g) => [g.gw, g.pts]))
+    const allGws = Array.from(new Set([...Array.from(gwTotalsMapA.keys()), ...Array.from(gwTotalsMapB.keys())])).sort((x, y) => x - y)
+    const gwRivalry = allGws.map((gw) => {
+      const pA = gwTotalsMapA.get(gw) ?? 0
+      const pB = gwTotalsMapB.get(gw) ?? 0
+      return { gw, ptsA: pA, ptsB: pB, winner: pA > pB ? 'A' : pB > pA ? 'B' : 'T' as 'A' | 'B' | 'T' }
+    })
+
     return {
       stats: { a: calc(aId), b: calc(bId), winA, winB, tie, common },
       catStats,
       commonMatches: commonMatches.slice(0, 15),
+      divergerMatches,
+      gwRivalry,
+      h2hStreak: h2hStreakCount >= 2 ? { who: h2hStreakWho, count: h2hStreakCount } : null,
       formA: sortByDate(psA).slice(0, 5),
       formB: sortByDate(psB).slice(0, 5),
       gwSeriesA,
@@ -250,6 +320,8 @@ export default function H2HPage() {
       gwMatchSeriesA,
       gwMatchSeriesB,
       availableGws,
+      badgesA: computeBadges(psA),
+      badgesB: computeBadges(psB),
     }
   }, [rows, aId, bId, weights, matchMap])
 
@@ -412,6 +484,15 @@ export default function H2HPage() {
                         }}>YOU</span>
                       )}
                     </div>
+                    {badgesA.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center', marginTop: 6 }}>
+                        {badgesA.map((b) => (
+                          <span key={b.id} title={b.name} style={{ fontSize: '9px', fontWeight: 700, padding: '2px 6px', borderRadius: 999, background: 'rgba(var(--primary),0.12)', color: 'rgb(var(--primary))' }}>
+                            {b.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <p style={{ fontSize: 30, fontWeight: 800, color: 'rgb(var(--primary))', lineHeight: 1.1, fontFamily: 'Schibsted Grotesk, sans-serif', marginTop: 4 }}>
                       {stats.a.pts}
                     </p>
@@ -429,6 +510,13 @@ export default function H2HPage() {
                       <span style={{ fontSize: 26, fontWeight: 800, color: 'rgb(var(--blue))', fontFamily: 'Schibsted Grotesk, sans-serif', fontVariantNumeric: 'tabular-nums' }}>{stats.winB}</span>
                     </div>
                     <p style={{ fontSize: 11, color: 'rgb(var(--faint))', marginTop: 4 }}>{stats.common} common matches</p>
+                    {h2hStreak && (
+                      <div style={{ marginTop: 8, padding: '3px 10px', borderRadius: 999, background: h2hStreak.who === 'A' ? 'rgba(var(--primary),0.12)' : 'rgba(var(--blue),0.12)' }}>
+                        <span style={{ fontSize: '9.5px', fontWeight: 700, color: h2hStreak.who === 'A' ? 'rgb(var(--primary))' : 'rgb(var(--blue))' }}>
+                          {h2hStreak.who === 'A' ? a.username : b.username} on {h2hStreak.count}-match run
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Right: opponent */}
@@ -446,6 +534,15 @@ export default function H2HPage() {
                       </div>
                     )}
                     <p style={{ fontSize: 14, fontWeight: 700, color: 'rgb(var(--textp))', marginTop: 10 }}>{b.username}</p>
+                    {badgesB.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center', marginTop: 6 }}>
+                        {badgesB.map((bdg) => (
+                          <span key={bdg.id} title={bdg.name} style={{ fontSize: '9px', fontWeight: 700, padding: '2px 6px', borderRadius: 999, background: 'rgba(var(--blue),0.12)', color: 'rgb(var(--blue))' }}>
+                            {bdg.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <p style={{ fontSize: 30, fontWeight: 800, color: 'rgb(var(--blue))', lineHeight: 1.1, fontFamily: 'Schibsted Grotesk, sans-serif', marginTop: 4 }}>
                       {stats.b.pts}
                     </p>
@@ -474,6 +571,61 @@ export default function H2HPage() {
                   <span style={{ fontSize: 10, fontWeight: 700, color: 'rgb(var(--blue))' }}>{stats.winB} won</span>
                 </div>
               </div>
+
+              {/* GW Rivalry */}
+              {gwRivalry.length > 0 && (() => {
+                const gwWinsA = gwRivalry.filter((g) => g.winner === 'A').length
+                const gwWinsB = gwRivalry.filter((g) => g.winner === 'B').length
+                const gwTies = gwRivalry.filter((g) => g.winner === 'T').length
+                return (
+                  <div style={{ background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))', borderRadius: 18, boxShadow: 'var(--card-shadow)', padding: '20px 22px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+                      <div>
+                        <p style={{ fontSize: 16, fontWeight: 700, fontFamily: 'Schibsted Grotesk, sans-serif', color: 'rgb(var(--textp))' }}>
+                          Gameweek rivalry
+                        </p>
+                        <p style={{ fontSize: 11, color: 'rgb(var(--texts))', marginTop: 3 }}>
+                          Who took each week
+                        </p>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{ textAlign: 'center' }}>
+                          <span style={{ fontSize: 18, fontWeight: 800, color: 'rgb(var(--primary))', fontFamily: 'Schibsted Grotesk, sans-serif' }}>{gwWinsA}</span>
+                          <p style={{ fontSize: 10, fontWeight: 600, color: 'rgb(var(--faint))', marginTop: 1 }}>You</p>
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: 'rgb(var(--texts))', fontFamily: 'Schibsted Grotesk, sans-serif' }}>{gwTies}</span>
+                          <p style={{ fontSize: 10, fontWeight: 600, color: 'rgb(var(--faint))', marginTop: 1 }}>Tied</p>
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                          <span style={{ fontSize: 18, fontWeight: 800, color: 'rgb(var(--blue))', fontFamily: 'Schibsted Grotesk, sans-serif' }}>{gwWinsB}</span>
+                          <p style={{ fontSize: 10, fontWeight: 600, color: 'rgb(var(--faint))', marginTop: 1 }}>{b.username}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {gwRivalry.map(({ gw, ptsA, ptsB, winner }) => {
+                        const bg = winner === 'A' ? 'rgba(var(--primary),0.14)' : winner === 'B' ? 'rgba(var(--blue),0.14)' : 'rgb(var(--surface2))'
+                        const border = winner === 'A' ? '1.5px solid rgba(var(--primary),0.4)' : winner === 'B' ? '1.5px solid rgba(var(--blue),0.4)' : '1.5px solid rgb(var(--border))'
+                        const labelColor = winner === 'A' ? 'rgb(var(--primary))' : winner === 'B' ? 'rgb(var(--blue))' : 'rgb(var(--texts))'
+                        return (
+                          <div key={gw} title={`GW${gw}: You ${ptsA} — ${b.username} ${ptsB}`} style={{
+                            padding: '8px 14px', borderRadius: 12, background: bg, border, minWidth: 56, textAlign: 'center', cursor: 'default',
+                          }}>
+                            <p style={{ fontSize: 9.5, fontWeight: 700, color: 'rgb(var(--faint))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>GW{gw}</p>
+                            <p style={{ fontSize: 13, fontWeight: 800, color: labelColor, fontFamily: 'Schibsted Grotesk, sans-serif', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
+                              {ptsA}–{ptsB}
+                            </p>
+                            <p style={{ fontSize: 9, fontWeight: 600, color: labelColor, marginTop: 1 }}>
+                              {winner === 'A' ? 'You' : winner === 'B' ? b.username : '—'}
+                            </p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* Season points race chart */}
               {(gwSeriesA.length > 0 || gwSeriesB.length > 0) && (
@@ -682,17 +834,94 @@ export default function H2HPage() {
                         {([
                           ['Accuracy', `${stats.a.acc}%`, `${stats.b.acc}%`, stats.a.acc, stats.b.acc],
                           ['Exact scores', stats.a.exact, stats.b.exact, stats.a.exact, stats.b.exact],
-                          ['Scored', stats.a.scored, stats.b.scored, stats.a.scored, stats.b.scored],
+                          ['Best match', stats.a.bestMatch, stats.b.bestMatch, stats.a.bestMatch, stats.b.bestMatch],
+                          ['Boldness', stats.a.avgPredGoals.toFixed(1), stats.b.avgPredGoals.toFixed(1), stats.a.avgPredGoals, stats.b.avgPredGoals],
+                          ['Skill pts', stats.a.skillPts, stats.b.skillPts, stats.a.skillPts, stats.b.skillPts],
+                          ['Luck pts', stats.a.luckPts, stats.b.luckPts, stats.a.luckPts, stats.b.luckPts],
                         ] as [string, string | number, string | number, number, number][]).map(([label, av, bv, an, bn]) => (
-                          <div key={label} style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8 }}>
-                            <span style={{ textAlign: 'right', fontSize: 15, fontWeight: 800, fontFamily: 'Schibsted Grotesk, sans-serif', color: an >= bn ? 'rgb(var(--primary))' : 'rgb(var(--texts))' }}>{av}</span>
-                            <span style={{ ...eyebrow, color: 'rgb(var(--faint))', whiteSpace: 'nowrap', textAlign: 'center' }}>{label}</span>
-                            <span style={{ textAlign: 'left', fontSize: 15, fontWeight: 800, fontFamily: 'Schibsted Grotesk, sans-serif', color: bn >= an ? 'rgb(var(--blue))' : 'rgb(var(--texts))' }}>{bv}</span>
+                          <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8 }}>
+                              <span style={{ textAlign: 'right', fontSize: 15, fontWeight: 800, fontFamily: 'Schibsted Grotesk, sans-serif', color: an >= bn ? 'rgb(var(--primary))' : 'rgb(var(--texts))' }}>{av}</span>
+                              <span style={{ ...eyebrow, color: 'rgb(var(--faint))', whiteSpace: 'nowrap', textAlign: 'center' }}>{label}</span>
+                              <span style={{ textAlign: 'left', fontSize: 15, fontWeight: 800, fontFamily: 'Schibsted Grotesk, sans-serif', color: bn >= an ? 'rgb(var(--blue))' : 'rgb(var(--texts))' }}>{bv}</span>
+                            </div>
+                            {/* Diverging bar for skill/luck */}
+                            {(label === 'Skill pts' || label === 'Luck pts') && (an + bn) > 0 && (
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1px 1fr', gap: 0, height: 5 }}>
+                                <div style={{ overflow: 'hidden', display: 'flex', justifyContent: 'flex-end', background: 'rgb(var(--surface2))', borderRadius: '999px 0 0 999px' }}>
+                                  <div style={{ width: `${(an / (an + bn)) * 100}%`, height: '100%', background: 'rgb(var(--primary))', borderRadius: '999px 0 0 999px' }} />
+                                </div>
+                                <div style={{ background: 'rgb(var(--border))', width: 1 }} />
+                                <div style={{ overflow: 'hidden', display: 'flex', justifyContent: 'flex-start', background: 'rgb(var(--surface2))', borderRadius: '0 999px 999px 0' }}>
+                                  <div style={{ width: `${(bn / (an + bn)) * 100}%`, height: '100%', background: 'rgb(var(--blue))', borderRadius: '0 999px 999px 0' }} />
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* Diverged picks */}
+              {divergerMatches.length > 0 && (
+                <div style={{ background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))', borderRadius: 18, boxShadow: 'var(--card-shadow)', overflow: 'hidden' }}>
+                  <div style={{ padding: '14px 22px', borderBottom: '1px solid rgb(var(--border))' }}>
+                    <p style={{ fontSize: 15, fontWeight: 700, fontFamily: 'Schibsted Grotesk, sans-serif', color: 'rgb(var(--textp))' }}>
+                      Diverged picks
+                    </p>
+                    <p style={{ fontSize: 11, color: 'rgb(var(--texts))', marginTop: 3 }}>
+                      Matches where you called different outcomes — the real battleground
+                    </p>
+                  </div>
+                  {divergerMatches.map(({ match_id, match, pa, pb, ptsA, ptsB, pickA, pickB, real }) => {
+                    const home = match ? getTeam(match.home_team) : null
+                    const away = match ? getTeam(match.away_team) : null
+                    const outcomeLabel = (o: string) => o === 'H' ? 'Home' : o === 'A' ? 'Away' : 'Draw'
+                    const outcomeColor = (pick: string, result: string | null, isA: boolean) => {
+                      if (result == null) return 'rgb(var(--texts))'
+                      return pick === result ? (isA ? 'rgb(var(--primary))' : 'rgb(var(--blue))') : 'rgb(var(--faint))'
+                    }
+                    return (
+                      <div key={match_id} style={{
+                        display: 'grid', gridTemplateColumns: '1fr auto 1fr',
+                        alignItems: 'center', padding: '12px 22px',
+                        borderTop: '1px solid rgba(var(--border),0.55)',
+                      }}>
+                        {/* Left: Player A pick */}
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: outcomeColor(pickA, real, true) }}>{outcomeLabel(pickA)}</div>
+                          <div style={{ fontSize: 10, fontWeight: 600, color: 'rgb(var(--primary))', opacity: 0.7, marginTop: 1 }}>
+                            {pa.pred_home}–{pa.pred_away} · {ptsA}pts
+                          </div>
+                        </div>
+                        {/* Center: match */}
+                        <div style={{ minWidth: 120, textAlign: 'center', padding: '0 10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                            {home && <FlagChip code={home.code} w={22} h={15} r={3} />}
+                            <span style={{ fontSize: 12, fontWeight: 700, color: 'rgb(var(--textp))' }}>
+                              {match?.real_home_score != null ? `${match.real_home_score}–${match.real_away_score}` : 'vs'}
+                            </span>
+                            {away && <FlagChip code={away.code} w={22} h={15} r={3} />}
+                          </div>
+                          {real && (
+                            <div style={{ fontSize: 9.5, fontWeight: 600, color: 'rgb(var(--faint))', marginTop: 2 }}>
+                              Result: {outcomeLabel(real)}
+                            </div>
+                          )}
+                        </div>
+                        {/* Right: Player B pick */}
+                        <div style={{ textAlign: 'left' }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: outcomeColor(pickB, real, false) }}>{outcomeLabel(pickB)}</div>
+                          <div style={{ fontSize: 10, fontWeight: 600, color: 'rgb(var(--blue))', opacity: 0.7, marginTop: 1 }}>
+                            {pb.pred_home}–{pb.pred_away} · {ptsB}pts
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
 
