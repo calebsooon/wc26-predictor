@@ -260,7 +260,7 @@ export default function LeaderboardPage() {
     const gwHasData = gwNums.map((gw) => rows.some((r) => r.matches?.gw_number === gw))
     let last = -1
     for (let i = 0; i < gwNums.length; i++) { if (gwHasData[i]) last = i }
-    if (last < 0) return ['GW1']
+    if (last < 0) return [GW_SHORT[1] ?? 'GS1']
     return gwNums.slice(0, last + 1).map((gw) => GW_SHORT[gw] ?? `GW${gw}`)
   }, [rows])
 

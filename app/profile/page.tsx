@@ -13,7 +13,7 @@ import { getTeam } from '@/lib/teams'
 import { weightedMatchPoints, weightedGroupPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { subscribeToPush, unsubscribeFromPush, getPushState } from '@/lib/push'
 import { getActiveLeague, isMoneyLeague } from '@/lib/league'
-import { computePrizeSnapshot, formatPrize, prizeTone } from '@/lib/prizes'
+import { computePrizeSnapshot, formatPrize, prizeTone, GW_SHORT } from '@/lib/prizes'
 
 /* ─── Types ────────────────────────────────────────────────────────────────── */
 interface Profile { id: string; username: string; avatar_url: string | null; is_admin: boolean }
@@ -369,7 +369,7 @@ export default function ProfilePage() {
     return Array.from({ length: 8 }, (_, i) => map.get(i + 1) ?? 0)
   }, [preds, weights])
 
-  const gwLabels = ['GW1','GW2','GW3','GW4','GW5','GW6','GW7','GW8']
+  const gwLabels = [1,2,3,4,5,6,7,8].map((gw) => GW_SHORT[gw] ?? `GW${gw}`)
 
   const badges = useMemo(() => {
     const c = (key: keyof ScoredPred) => preds.filter((p) => ((p[key] as number) ?? 0) > 0).length

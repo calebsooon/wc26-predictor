@@ -19,7 +19,7 @@ import { getActiveLeague, isMoneyLeague } from '@/lib/league'
 import { isKnockout, type DBMatch, type MyPred } from '@/lib/match-ui'
 import { getTeam } from '@/lib/teams'
 import { SCORING_RULES, weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
-import { computePrizeSnapshot, formatPrize, prizeTone, GW_NAMES, GW_PRIZES, OVERALL_PRIZES } from '@/lib/prizes'
+import { computePrizeSnapshot, formatPrize, prizeTone, GW_NAMES, GW_SHORT, GW_PRIZES, OVERALL_PRIZES } from '@/lib/prizes'
 import { useAppBadge } from '@/lib/pwa'
 import { fmtDateOnlyKey, fmtTime, getUserTimeZone } from '@/lib/date-format'
 
@@ -243,7 +243,7 @@ export default function DashboardPage() {
 
   const gwNumbers = Object.keys(scoredByGW).map(Number).sort((a, b) => a - b)
   const gwSeries = gwNumbers.map((gw) => scoredByGW[gw])
-  const gwLabels = gwNumbers.map((gw) => `GW${gw}`)
+  const gwLabels = gwNumbers.map((gw) => GW_SHORT[gw] ?? `GW${gw}`)
 
   // Rank trajectory from real snapshots
   const rankSeries = rankSnapshots.map((s) => s.rank)
