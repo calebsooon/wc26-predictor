@@ -66,10 +66,22 @@ export default function SquadsPage() {
   useEffect(() => {
     async function load() {
       try {
-        // WC2026 has 48 teams × ~26 players = ~1248 players; range(0,1499) covers all safely
-        const { data, error: e } = await supabase.from('players').select('id, name, position, jersey_number, nationality, team_name').range(0, 1499)
-        if (e) throw e
-        setAllPlayers((data ?? []) as Player[])
+        // Supabase caps at 1000 rows per request; paginate to get all ~1250 players
+        const PAGE = 1000
+        const all: Player[] = []
+        let from = 0
+        while (true) {
+          const { data, error: e } = await supabase
+            .from('players')
+            .select('id, name, position, jersey_number, nationality, team_name')
+            .range(from, from + PAGE - 1)
+          if (e) throw e
+          if (!data || data.length === 0) break
+          all.push(...(data as Player[]))
+          if (data.length < PAGE) break
+          from += PAGE
+        }
+        setAllPlayers(all)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load squads')
       } finally {
