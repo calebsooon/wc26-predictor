@@ -37,10 +37,16 @@ const nextConfig = {
         pathname: '/storage/v1/object/public/**',
       },
       {
-        // Player headshots back-filled from API-FOOTBALL (api-sports.io).
+        // Player headshots back-filled from Wikidata → Wikimedia Commons.
         protocol: 'https',
-        hostname: 'media.api-sports.io',
-        pathname: '/football/players/**',
+        hostname: 'commons.wikimedia.org',
+        pathname: '/wiki/Special:FilePath/**',
+      },
+      {
+        // Special:FilePath 302-redirects to the upload host where bytes live.
+        protocol: 'https',
+        hostname: 'upload.wikimedia.org',
+        pathname: '/**',
       },
     ],
   },
