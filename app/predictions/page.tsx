@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { EmptyState, Skeleton, CalIcon } from '@/components/ui'
+import { CalendarExportButton } from '@/components/CalendarExport'
 import { toUIMatch, matchStatus, type DBMatch, type MyPred } from '@/lib/match-ui'
 import { getActiveLeague } from '@/lib/league'
 import { DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
@@ -93,6 +94,26 @@ export default function FixturesPage() {
     }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Refetch a single match (+ my prediction for it) — called when the modal closes
+  // so a freshly-entered score or updated pick shows on the card without waiting on
+  // realtime (the matches table may not be in the realtime publication).
+  const refreshMatch = useCallback(async (matchId: string) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    const [{ data: m }, predRes] = await Promise.all([
+      supabase.from('matches')
+        .select('id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, gameweek')
+        .eq('id', matchId).single(),
+      user
+        ? supabase.from('predictions')
+            .select('match_id, pred_home, pred_away, pred_total_goals, pred_goal_diff, pred_btts, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
+            .eq('user_id', user.id).eq('match_id', matchId).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
+    if (m) setMatches((prev) => prev.map((x) => x.id === matchId ? { ...x, ...(m as Partial<DBMatch>) } : x))
+    if (predRes?.data) setPreds((prev) => ({ ...prev, [matchId]: predRes.data as unknown as MyPred }))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Realtime: update match scores without requiring a page refresh
@@ -217,20 +238,22 @@ export default function FixturesPage() {
             Fixtures
           </h1>
         </div>
-        {counts.missing > 0 && (
-          <div style={{
-            color: 'rgb(var(--coral))',
-            background: 'rgba(var(--coral),0.12)',
-            padding: '6px 12px',
-            borderRadius: 999,
-            fontSize: 12.5,
-            fontWeight: 700,
-            whiteSpace: 'nowrap',
-            flexShrink: 0,
-          }}>
-            {counts.missing} open to predict
-          </div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          {counts.missing > 0 && (
+            <div style={{
+              color: 'rgb(var(--coral))',
+              background: 'rgba(var(--coral),0.12)',
+              padding: '6px 12px',
+              borderRadius: 999,
+              fontSize: 12.5,
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+            }}>
+              {counts.missing} open to predict
+            </div>
+          )}
+          <CalendarExportButton variant="outline" size="sm" />
+        </div>
       </div>
 
       {/* Filter Bar */}
@@ -377,7 +400,10 @@ export default function FixturesPage() {
       )}
 
       {modalMatchId && (
-        <PredictionModal matchId={modalMatchId} onClose={() => setModalMatchId(null)} />
+        <PredictionModal
+          matchId={modalMatchId}
+          onClose={() => { const id = modalMatchId; setModalMatchId(null); if (id) refreshMatch(id) }}
+        />
       )}
     </div>
   )

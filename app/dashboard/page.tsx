@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -11,6 +11,7 @@ import {
 } from '@/components/ui'
 import { type LBRow } from '@/components/football'
 import RulesModal from '@/components/RulesModal'
+import { CalendarExportButton } from '@/components/CalendarExport'
 import FlagChip from '@/components/FlagChip'
 import { BarChart, RankLine, DonutChart } from '@/components/charts'
 import PredictionModal from '@/components/PredictionModal'
@@ -148,6 +149,24 @@ export default function DashboardPage() {
     }
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Refetch a single match (+ my prediction) when the modal closes, so a pick made
+  // from the dashboard shows on the hero/upcoming cards without a full reload.
+  const refreshMatch = useCallback(async (matchId: string) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const [{ data: m }, predRes] = await Promise.all([
+      supabase.from('matches')
+        .select('id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, gameweek')
+        .eq('id', matchId).single(),
+      supabase.from('predictions')
+        .select('match_id, pred_home, pred_away, points_awarded, pts_exact, pts_outcome, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, pred_first_goal_team, pred_first_scorer_id')
+        .eq('user_id', user.id).eq('match_id', matchId).maybeSingle(),
+    ])
+    if (m) setMatches((prev) => prev.map((x) => x.id === matchId ? { ...x, ...(m as Partial<DBMatch>) } : x))
+    if (predRes?.data) setPreds((prev) => ({ ...prev, [matchId]: predRes.data as unknown as MyPred }))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Realtime: re-fetch scored predictions + GW match status when scores are saved
@@ -432,9 +451,12 @@ export default function DashboardPage() {
               <span className="w-2 h-2 rounded-full bg-coral" style={{ boxShadow: '0 0 0 4px rgba(var(--coral),0.18)' }} />
               <span className="font-bold text-[16px] font-display">Up next — your pick is open</span>
             </div>
-            <Link href="/predictions" className="flex items-center gap-1 text-[12.5px] text-primary font-semibold">
-              All fixtures <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
-            </Link>
+            <div className="flex items-center gap-3">
+              <CalendarExportButton variant="ghost" size="sm" label="Calendar" />
+              <Link href="/predictions" className="flex items-center gap-1 text-[12.5px] text-primary font-semibold">
+                All fixtures <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
+              </Link>
+            </div>
           </div>
           <div className={`grid gap-4 ${alsoToday.length > 0 ? 'grid-cols-1 lg:grid-cols-[1fr_300px]' : ''}`}>
             {/* Hero card */}
@@ -734,7 +756,7 @@ export default function DashboardPage() {
       {modalMatchId && (
         <PredictionModal
           matchId={modalMatchId}
-          onClose={() => setModalMatchId(null)}
+          onClose={() => { const id = modalMatchId; setModalMatchId(null); if (id) refreshMatch(id) }}
         />
       )}
 

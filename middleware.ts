@@ -27,6 +27,6 @@ export const config = {
   matcher: [
     // Exclude Next internals, auth callback, and public metadata (manifest/icons)
     // so the PWA manifest and favicon load without an auth redirect.
-    '/((?!_next/static|_next/image|favicon.ico|auth/callback|manifest\\.json|manifest\\.webmanifest|icon|apple-icon|sitemap\\.xml|robots\\.txt).*)',
+    '/((?!_next/static|_next/image|favicon.ico|auth/callback|api/calendar|manifest\\.json|manifest\\.webmanifest|icon|apple-icon|sitemap\\.xml|robots\\.txt).*)',
   ],
 }
