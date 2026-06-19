@@ -9,6 +9,7 @@ import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
 import { getActiveLeague, getMyLeagues, setActiveLeague, isMoneyLeague, type League, type LeagueLabel } from '@/lib/league'
 import { DEFAULT_WEIGHTS, weightedMatchPoints, type ScoringWeights } from '@/lib/scoring'
 import { GW_NAMES, GW_SHORT, GW_PRIZES, OVERALL_PRIZES, formatPrize, prizeTone } from '@/lib/prizes'
+import { PointsRaceChart, PLAYER_PALETTE, type RaceSeries } from '@/components/charts'
 import { getTeam } from '@/lib/teams'
 import { fmtDateTime } from '@/lib/date-format'
 
@@ -92,6 +93,7 @@ export default function LeaderboardPage() {
   const [rows, setRows] = useState<PredRow[]>([])
   const [members, setMembers] = useState<ProfileLite[]>([])
   const memberIdsRef = useRef<string[]>([])
+  const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [leagueName, setLeagueName] = useState<string>('')
   const [leagueLabel, setLeagueLabel] = useState<LeagueLabel | null>(null)
@@ -163,21 +165,23 @@ export default function LeaderboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Realtime subscription scoped to active league — re-fetch when any prediction is scored
+  // Realtime subscription — debounced re-fetch when predictions are scored (fires once per batch, not per row)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!activeLeagueId) return
+    const debouncedFetch = () => {
+      if (!memberIdsRef.current.length) return
+      if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current)
+      fetchTimeoutRef.current = setTimeout(() => fetchRows(memberIdsRef.current), 1500)
+    }
     const channel = supabase
       .channel(`lb-realtime-${activeLeagueId}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'predictions' },
-        () => {
-          if (memberIdsRef.current.length) fetchRows(memberIdsRef.current)
-        }
-      )
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'predictions' }, debouncedFetch)
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      supabase.removeChannel(channel)
+      if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLeagueId, fetchRows])
 
@@ -250,6 +254,39 @@ export default function LeaderboardPage() {
   const podium = board.slice(0, 3)
   const hasSnapshots = prevRanks.size > 0
   const gwLabel = tab === 'all' ? 'Overall' : (GW_NAMES[parseInt(tab)] ?? tab)
+
+  const raceLabels = useMemo(() => {
+    const gwNums = [1, 2, 3, 4, 5, 6, 7, 8]
+    const gwHasData = gwNums.map((gw) => rows.some((r) => r.matches?.gw_number === gw))
+    let last = -1
+    for (let i = 0; i < gwNums.length; i++) { if (gwHasData[i]) last = i }
+    if (last < 0) return ['GW1']
+    return gwNums.slice(0, last + 1).map((gw) => GW_SHORT[gw] ?? `GW${gw}`)
+  }, [rows])
+
+  const raceSeries = useMemo<RaceSeries[]>(() => {
+    return board.map((p, idx) => {
+      const userRows = rows.filter((r) => r.user_id === p.id)
+      const color = PLAYER_PALETTE[idx % PLAYER_PALETTE.length]
+      if (tab === 'all') {
+        const gwCount = raceLabels.length
+        let cum = 0
+        const data = [1, 2, 3, 4, 5, 6, 7, 8].slice(0, gwCount).map((gw) => {
+          cum += userRows
+            .filter((r) => r.matches?.gw_number === gw)
+            .reduce((s, r) => s + weightedMatchPoints(r, weights), 0)
+          return cum
+        })
+        return { id: p.id, name: p.name, color, data }
+      } else {
+        const gw = parseInt(tab)
+        const pts = userRows
+          .filter((r) => r.matches?.gw_number === gw)
+          .reduce((s, r) => s + weightedMatchPoints(r, weights), 0)
+        return { id: p.id, name: p.name, color, data: [pts] }
+      }
+    })
+  }, [rows, board, tab, raceLabels, weights])
   const myIdx = board.findIndex((r) => r.you)
   const srStatus = myIdx >= 0 ? `You are ranked ${myIdx + 1} of ${board.length}${leagueName ? ` in ${leagueName}` : ''} with ${board[myIdx].pts} points.` : ''
 
@@ -573,9 +610,30 @@ export default function LeaderboardPage() {
 
               <div className="px-1">
                 <p className="text-[11px] text-texts font-medium">
-                  Tiebreaker: most correct outcomes, then alphabetical.{isMoney ? ' Prize pool per GW: 1st +$15 · 2nd +$10 · 3rd +$5 · 4th $0 · 5th -$5 · 6th -$10 · 7th -$15. Overall: 1st +$40 · 7th -$40.' : ' This is a points-only league — no prize pool.'}
+                  Tiebreaker: most correct outcomes, then most exact scorelines, then shared rank.{isMoney ? ' Prize pool per GW: 1st +$15 · 2nd +$10 · 3rd +$5 · 4th $0 · 5th -$5 · 6th -$10 · 7th -$15. Overall: 1st +$40 · 7th -$40.' : ' This is a points-only league — no prize pool.'}
                 </p>
               </div>
+
+              {/* Points race chart */}
+              {raceSeries.length > 0 && (
+                <div style={{
+                  marginTop: 20,
+                  padding: '20px 16px 16px',
+                  background: 'rgb(var(--card))',
+                  border: '1px solid rgb(var(--border))',
+                  borderRadius: 16,
+                }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: 'rgb(var(--textp))', marginBottom: 14 }}>
+                    {tab === 'all' ? 'Season Points Race' : `${gwLabel} Points`}
+                  </p>
+                  <PointsRaceChart
+                    series={raceSeries}
+                    labels={tab === 'all' ? raceLabels : []}
+                    youId={userId}
+                    mode={tab === 'all' ? 'line' : 'bar'}
+                  />
+                </div>
+              )}
             </>
           )}
         </>
