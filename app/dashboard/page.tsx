@@ -520,7 +520,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-2">
             <div>
               <p className="text-[13px] font-bold text-textp">
-                {playedMatches === 0 ? 'Tournament not started' : playedMatches === totalMatches ? 'Tournament complete' : currentGW ? `GW${currentGW} underway` : 'Group stage'}
+                {playedMatches === 0 ? 'Tournament not started' : playedMatches === totalMatches ? 'Tournament complete' : currentGW ? `${GW_SHORT[currentGW] ?? `GW${currentGW}`} underway` : 'Group stage'}
               </p>
               <p className="text-[11.5px] text-texts mt-0.5">{playedMatches} of {totalMatches} matches played</p>
             </div>

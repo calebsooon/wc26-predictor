@@ -434,7 +434,7 @@ export default function ProfilePage() {
     }
     const gws = Array.from(byGW.keys()).sort((a, b) => a - b)
     return {
-      labels: gws.map((g) => `GW${g}`),
+      labels: gws.map((g) => GW_SHORT[g] ?? `GW${g}`),
       series: gws.map((g) => { const d = byGW.get(g)!; return d.scored > 0 ? Math.round((d.correct / d.scored) * 100) : 0 }),
     }
   }, [preds])
@@ -755,7 +755,7 @@ export default function ProfilePage() {
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
               <div>
                 <p style={{ fontSize: 14, fontWeight: 700, margin: 0, color: 'rgb(var(--textp))' }}>
-                  {rankChartMode === 'season' ? 'Rank movement' : rankChartMode === 'byGW' ? 'Points by gameweek' : `GW${selectedRankGw} breakdown`}
+                  {rankChartMode === 'season' ? 'Rank movement' : rankChartMode === 'byGW' ? 'Points by round' : `${GW_SHORT[selectedRankGw] ?? `GW${selectedRankGw}`} breakdown`}
                 </p>
                 <p style={{ fontSize: 12, color: 'rgb(var(--texts))', margin: 0, marginTop: 2 }}>
                   {rankChartMode === 'season'
@@ -793,7 +793,7 @@ export default function ProfilePage() {
                   onChange={(e) => setSelectedRankGw(Number(e.target.value))}
                   style={{ height: 30, borderRadius: 8, border: '1px solid rgb(var(--border))', background: 'rgb(var(--surface))', color: 'rgb(var(--textp))', fontSize: 12, padding: '0 8px', cursor: 'pointer' }}
                 >
-                  {allGws.map((gw) => <option key={gw} value={gw}>{`GW${gw}`}</option>)}
+                  {allGws.map((gw) => <option key={gw} value={gw}>{GW_SHORT[gw] ?? `GW${gw}`}</option>)}
                 </select>
               )}
             </div>
@@ -806,7 +806,7 @@ export default function ProfilePage() {
             />
           ) : rankChartMode === 'byGW' ? (
             allGws.length > 0
-              ? <BarChart series={gwPointsSeries} labels={allGws.map((g) => `GW${g}`)} showVals />
+              ? <BarChart series={gwPointsSeries} labels={allGws.map((g) => GW_SHORT[g] ?? `GW${g}`)} showVals />
               : <p style={{ fontSize: 13, color: 'rgb(var(--texts))', textAlign: 'center', paddingTop: 40 }}>No scored gameweeks yet</p>
           ) : (
             specificGwMatches.length > 0
@@ -815,7 +815,7 @@ export default function ProfilePage() {
                   labels={specificGwMatches.map((p) => `${p.matches?.home_team ?? '?'}-${p.matches?.away_team ?? '?'}`)}
                   showVals
                 />
-              : <p style={{ fontSize: 13, color: 'rgb(var(--texts))', textAlign: 'center', paddingTop: 40 }}>No predictions for GW{selectedRankGw}</p>
+              : <p style={{ fontSize: 13, color: 'rgb(var(--texts))', textAlign: 'center', paddingTop: 40 }}>No predictions for {GW_SHORT[selectedRankGw] ?? `GW${selectedRankGw}`}</p>
           )}
         </div>
 

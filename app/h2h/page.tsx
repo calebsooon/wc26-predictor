@@ -8,6 +8,7 @@ import { getActiveLeague } from '@/lib/league'
 import { weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights, type MatchBreakdown } from '@/lib/scoring'
 import type { ProfileLite } from '@/lib/leaderboard'
 import { getTeam } from '@/lib/teams'
+import { GW_SHORT } from '@/lib/prizes'
 
 interface PredRow extends MatchBreakdown { user_id: string; match_id: string; points_awarded: number; pred_home: number; pred_away: number }
 
@@ -609,10 +610,10 @@ export default function H2HPage() {
                         const border = winner === 'A' ? '1.5px solid rgba(var(--primary),0.4)' : winner === 'B' ? '1.5px solid rgba(var(--blue),0.4)' : '1.5px solid rgb(var(--border))'
                         const labelColor = winner === 'A' ? 'rgb(var(--primary))' : winner === 'B' ? 'rgb(var(--blue))' : 'rgb(var(--texts))'
                         return (
-                          <div key={gw} title={`GW${gw}: You ${ptsA} — ${b.username} ${ptsB}`} style={{
+                          <div key={gw} title={`${GW_SHORT[gw] ?? `GW${gw}`}: You ${ptsA} — ${b.username} ${ptsB}`} style={{
                             padding: '8px 14px', borderRadius: 12, background: bg, border, minWidth: 56, textAlign: 'center', cursor: 'default',
                           }}>
-                            <p style={{ fontSize: 9.5, fontWeight: 700, color: 'rgb(var(--faint))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>GW{gw}</p>
+                            <p style={{ fontSize: 9.5, fontWeight: 700, color: 'rgb(var(--faint))', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{GW_SHORT[gw] ?? `GW${gw}`}</p>
                             <p style={{ fontSize: 13, fontWeight: 800, color: labelColor, fontFamily: 'Schibsted Grotesk, sans-serif', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
                               {ptsA}–{ptsB}
                             </p>
@@ -641,7 +642,7 @@ export default function H2HPage() {
                             ? 'Cumulative points, gameweek by gameweek'
                             : raceView === 'gameweek'
                             ? "Each player's points haul in every gameweek"
-                            : `Inside GW${selectedGw}, match by match`}
+                            : `Inside ${GW_SHORT[parseInt(selectedGw)] ?? `GW${selectedGw}`}, match by match`}
                         </p>
                       </div>
                     </div>
@@ -675,7 +676,7 @@ export default function H2HPage() {
                       {raceView === 'specific' && availableGws.length > 0 && (
                         <div style={{ minWidth: 118 }}>
                           <Select id="race-gw" label="" value={selectedGw} onChange={setSelectedGw}>
-                            {availableGws.map((gw) => <option key={gw} value={String(gw)}>{`GW${gw}`}</option>)}
+                            {availableGws.map((gw) => <option key={gw} value={String(gw)}>{GW_SHORT[gw] ?? `GW${gw}`}</option>)}
                           </Select>
                         </div>
                       )}
@@ -716,7 +717,7 @@ export default function H2HPage() {
                     {/* GW labels */}
                     {xLabels.map(({ value, x }) => (
                       <text key={value} x={x} y={H - 4} textAnchor="middle" fontSize={10} fill="rgb(var(--faint))">
-                        {raceView === 'specific' ? value : `GW${value}`}
+                        {raceView === 'specific' ? value : (GW_SHORT[Number(value)] ?? `GW${value}`)}
                       </text>
                     ))}
                   </svg>
