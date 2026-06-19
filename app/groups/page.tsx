@@ -302,8 +302,7 @@ function GroupCard({ groupName, matches, pred, userId, weights, activeTab, onSav
               )
             })}
             {hasStandings && (
-              <div style={{ padding: '4px 10px 6px', fontSize: 10, fontWeight: 600, color: 'rgb(var(--faint))', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <span>Pts → GD → GF → A–Z</span>
+              <div style={{ padding: '4px 10px 6px', fontSize: 10, fontWeight: 600, color: 'rgb(var(--faint))', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                 <span style={{ color: 'rgb(var(--primary))', fontWeight: 700 }}>Top 2 qualify ↑</span>
               </div>
             )}
@@ -603,11 +602,7 @@ export default function GroupsPage() {
 
       {/* Info banner */}
       {activeTab === 'pred' && (
-        <div style={{
-          maxWidth: 1000,
-          margin: '16px auto 0',
-          padding: '0 30px',
-        }}>
+        <div style={{ maxWidth: 1000, margin: '16px auto 0', padding: '0 30px' }}>
           <div style={{
             borderRadius: 14,
             padding: '13px 18px',
@@ -621,10 +616,21 @@ export default function GroupsPage() {
               <SortIcon />
             </span>
             <p style={{ fontSize: 13, color: 'rgb(var(--textp))', margin: 0, lineHeight: 1.5 }}>
-              Drag with the arrows to rank each group 1st → 4th.{' '}
-              <strong style={{ fontWeight: 700 }}>+2 points</strong> for every team you place in its exact finishing position.
+              Drag with the arrows to rank each group 1st → 4th.
+              {(weights.groupPosition ?? 0) > 0 && (
+                <> <strong style={{ fontWeight: 700 }}>+{weights.groupPosition} {weights.groupPosition === 1 ? 'point' : 'points'}</strong> for every team placed in its exact finishing position.</>
+              )}
             </p>
           </div>
+        </div>
+      )}
+
+      {/* Standings tiebreaker note — shown once above all groups */}
+      {activeTab === 'stand' && (
+        <div style={{ maxWidth: 1000, margin: '12px auto 0', padding: '0 30px' }}>
+          <p style={{ fontSize: 11, fontWeight: 600, color: 'rgb(var(--faint))', margin: 0 }}>
+            Group tiebreaker order: Pts → GD → GF → H2H pts → H2H GD → H2H GF → Disciplinary → FIFA ranking
+          </p>
         </div>
       )}
 

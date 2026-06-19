@@ -278,16 +278,18 @@ export default function DashboardPage() {
       cum += countByGW.get(gw) ?? 0
       return { gw, pct: totalMatches > 0 ? (cum / totalMatches) * 100 : (gw / 8) * 100 }
     })
-    // Only show labels that are at least 9% apart (prevents knockout GWs from clustering).
-    // Always force-include GW1 and GW8.
+    // Show labels at least 12% apart; always include GW1 and the last GW (Final).
+    // Second pass removes any label too close to its successor (handles forced-last overlap).
     const visible: typeof all = []
     for (const b of all) {
       const prev = visible[visible.length - 1]
-      if (b.gw === 1 || b.gw === 8 || !prev || b.pct - prev.pct >= 9) {
+      if (b.gw === 1 || b.gw === 8 || !prev || b.pct - prev.pct >= 12) {
         visible.push(b)
       }
     }
-    return visible
+    return visible.filter((b, i, arr) =>
+      i === arr.length - 1 || arr[i + 1].pct - b.pct >= 8
+    )
   }, [gwMatchRows, totalMatches])
 
   // Best / worst GW
@@ -537,7 +539,7 @@ export default function DashboardPage() {
                   className={`absolute text-[9px] font-semibold -translate-x-1/2 ${(currentGW ?? 0) >= gw ? 'text-primary' : 'text-texts/40'}`}
                   style={{ left: `${clamped}%` }}
                 >
-                  GW{gw}
+                  {GW_SHORT[gw] ?? `GW${gw}`}
                 </span>
               )
             })}
@@ -549,13 +551,13 @@ export default function DashboardPage() {
             <div className="text-center">
               <p className="text-[10.5px] font-semibold uppercase tracking-wider text-texts mb-0.5">Best GW</p>
               <p className="text-[24px] font-extrabold font-display text-success leading-none">{bestGW.pts}</p>
-              <p className="text-[11px] text-texts mt-0.5">GW{bestGW.gw}</p>
+              <p className="text-[11px] text-texts mt-0.5">{GW_SHORT[bestGW.gw] ?? `GW${bestGW.gw}`}</p>
             </div>
             <div className="w-px h-10 bg-border" />
             <div className="text-center">
               <p className="text-[10.5px] font-semibold uppercase tracking-wider text-texts mb-0.5">Worst GW</p>
               <p className="text-[24px] font-extrabold font-display text-coral leading-none">{worstGW.pts}</p>
-              <p className="text-[11px] text-texts mt-0.5">GW{worstGW.gw}</p>
+              <p className="text-[11px] text-texts mt-0.5">{GW_SHORT[worstGW.gw] ?? `GW${worstGW.gw}`}</p>
             </div>
           </div>
         )}

@@ -16,7 +16,7 @@ export const GW_NAMES: Record<number, string> = {
 }
 
 export const GW_SHORT: Record<number, string> = {
-  1: 'GS1', 2: 'GS2', 3: 'GS3',
+  1: 'GW1', 2: 'GW2', 3: 'GW3',
   4: 'R32', 5: 'R16', 6: 'QF', 7: 'SF', 8: 'Final',
 }
 
