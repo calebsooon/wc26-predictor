@@ -5,11 +5,11 @@ import { createClient } from '@/lib/supabase-browser'
 import { PageHeader, Card, Skeleton, EmptyState, TrophyIcon, Avatar, LeagueBadge, Pill, ChipRow, BoltIcon } from '@/components/ui'
 import FlagChip from '@/components/FlagChip'
 import { type LBRow } from '@/components/football'
-import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
+import { aggregateLeaderboard, type ProfileLite, type ScoredGroupPred, type ScoredTournamentPred } from '@/lib/leaderboard'
 import { getActiveLeague, getMyLeagues, setActiveLeague, isMoneyLeague, type League, type LeagueLabel } from '@/lib/league'
 import { DEFAULT_WEIGHTS, weightedMatchPoints, type ScoringWeights } from '@/lib/scoring'
 import { GW_NAMES, GW_SHORT, GW_PRIZES, OVERALL_PRIZES, formatPrize, prizeTone } from '@/lib/prizes'
-import { PointsRaceChart, PLAYER_PALETTE, type RaceSeries } from '@/components/charts'
+import { PointsRaceChart, RaceCompareChart, PLAYER_PALETTE, type RaceSeries, type RaceVariant } from '@/components/charts'
 import { getTeam } from '@/lib/teams'
 import { fmtDateTime } from '@/lib/date-format'
 
@@ -91,6 +91,8 @@ const VIEW_TABS = [
 export default function LeaderboardPage() {
   const supabase = createClient()
   const [rows, setRows] = useState<PredRow[]>([])
+  const [groupRows, setGroupRows] = useState<ScoredGroupPred[]>([])
+  const [tournRows, setTournRows] = useState<ScoredTournamentPred[]>([])
   const [members, setMembers] = useState<ProfileLite[]>([])
   const memberIdsRef = useRef<string[]>([])
   const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -105,6 +107,7 @@ export default function LeaderboardPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [tab, setTab] = useState('all')        // GW tab
   const [view, setView] = useState('standings') // standings | picks
+  const [raceVariant, setRaceVariant] = useState<RaceVariant>('absolute') // race chart mode
   const [loading, setLoading] = useState(true)
 
   // Picks tab state
@@ -113,13 +116,15 @@ export default function LeaderboardPage() {
   const [picksLoading, setPicksLoading] = useState(false)
 
   const fetchRows = useCallback(async (ids: string[]) => {
-    if (ids.length === 0) { setRows([]); return }
-    const { data, error } = await supabase
-      .from('predictions')
-      .select(PRED_COLS)
-      .not('points_awarded', 'is', null)
-      .in('user_id', ids)
-    if (!error) setRows((data ?? []) as unknown as PredRow[])
+    if (ids.length === 0) { setRows([]); setGroupRows([]); setTournRows([]); return }
+    const [matchRes, groupRes, tournRes] = await Promise.all([
+      supabase.from('predictions').select(PRED_COLS).not('points_awarded', 'is', null).in('user_id', ids),
+      supabase.from('group_predictions').select('user_id, points_awarded').not('points_awarded', 'is', null).in('user_id', ids),
+      supabase.from('tournament_predictions').select('user_id, pts_champion, pts_runner_up, pts_semi, pts_quarter').in('user_id', ids),
+    ])
+    if (!matchRes.error) setRows((matchRes.data ?? []) as unknown as PredRow[])
+    if (!groupRes.error) setGroupRows((groupRes.data ?? []) as ScoredGroupPred[])
+    if (!tournRes.error) setTournRows((tournRes.data ?? []) as ScoredTournamentPred[])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -242,14 +247,14 @@ export default function LeaderboardPage() {
   const board = useMemo<LBRow[]>(() => {
     const gwNum = tab === 'all' ? null : parseInt(tab)
     const prizes = tab === 'all' ? OVERALL_PRIZES : GW_PRIZES
-    const sorted = aggregateLeaderboard({ scoredPreds: rows, profiles: members, userId, gwNumber: gwNum, weights })
+    const sorted = aggregateLeaderboard({ scoredPreds: rows, profiles: members, userId, gwNumber: gwNum, weights, groupPreds: groupRows, tournamentPreds: tournRows })
     return sorted.map((r, currentIdx) => {
       const prevRank = prevRanks.get(r.id)
       const move = prevRank != null ? prevRank - (currentIdx + 1) : undefined
       const prize = isMoney ? prizes[Math.min(currentIdx, 6)] : undefined
       return { ...r, move, prize }
     })
-  }, [rows, tab, userId, prevRanks, members, weights, isMoney])
+  }, [rows, groupRows, tournRows, tab, userId, prevRanks, members, weights, isMoney])
 
   const podium = board.slice(0, 3)
   const hasSnapshots = prevRanks.size > 0
@@ -566,17 +571,18 @@ export default function LeaderboardPage() {
                         {/* Delta */}
                         {hasSnapshots && (
                           <span style={{
-                            width: 10,
+                            minWidth: 18,
                             fontSize: 13,
                             fontWeight: 700,
                             flexShrink: 0,
+                            fontVariantNumeric: 'tabular-nums',
                             color:
                               (p.move ?? 0) > 0 ? 'rgb(var(--success))' :
                               (p.move ?? 0) < 0 ? 'rgb(var(--error))' :
                               'rgb(var(--faint))',
                             animation: p.move ? 'lb-pop 0.45s' : undefined,
                           }}>
-                            {p.move == null || p.move === 0 ? '–' : p.move > 0 ? `▲` : `▼`}
+                            {p.move == null || p.move === 0 ? '–' : p.move > 0 ? `▲${p.move}` : `▼${Math.abs(p.move)}`}
                           </span>
                         )}
 
@@ -664,15 +670,57 @@ export default function LeaderboardPage() {
                   border: '1px solid rgb(var(--border))',
                   borderRadius: 16,
                 }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: 'rgb(var(--textp))', marginBottom: 14 }}>
-                    {tab === 'all' ? 'Season Points Race' : parseInt(tab) <= 3 ? `${gwLabel} — Points Race` : `${gwLabel} Points`}
-                  </p>
-                  <PointsRaceChart
-                    series={raceSeries}
-                    labels={raceLabels}
-                    youId={userId}
-                    mode={tab === 'all' || parseInt(tab) <= 3 ? 'line' : 'bar'}
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: 'rgb(var(--textp))' }}>
+                      {tab === 'all' ? 'Season Points Race' : parseInt(tab) <= 3 ? `${gwLabel} — Points Race` : `${gwLabel} Points`}
+                    </p>
+                    {/* Race chart mode toggle — only for line charts (Overall + group GWs) */}
+                    {(tab === 'all' || parseInt(tab) <= 3) && (
+                      <div style={{ display: 'flex', gap: 2, padding: 2, background: 'rgb(var(--surface))', borderRadius: 9, border: '1px solid rgb(var(--border))' }}>
+                        {([
+                          ['absolute', 'Points'],
+                          ['gapLeader', 'vs Leader'],
+                          ['gapAvg', 'vs Avg'],
+                          ['rank', 'Rank'],
+                        ] as [RaceVariant, string][]).map(([v, label]) => {
+                          const active = raceVariant === v
+                          return (
+                            <button
+                              key={v}
+                              onClick={() => setRaceVariant(v)}
+                              style={{
+                                padding: '4px 9px',
+                                borderRadius: 7,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                border: 'none',
+                                background: active ? 'rgb(var(--card))' : 'transparent',
+                                color: active ? 'rgb(var(--textp))' : 'rgb(var(--texts))',
+                                boxShadow: active ? '0 1px 2px rgba(0,0,0,0.12)' : undefined,
+                                transition: 'all 0.15s',
+                              }}
+                            >
+                              {label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  {(tab === 'all' || parseInt(tab) <= 3) && (
+                    <p style={{ fontSize: 11, color: 'rgb(var(--texts))', marginTop: -6, marginBottom: 12 }}>
+                      {raceVariant === 'absolute' ? 'Total points accumulated over time.'
+                        : raceVariant === 'gapLeader' ? 'Points behind the leader — the leader sits flat along the top.'
+                          : raceVariant === 'gapAvg' ? 'Points above or below the field average (the dashed 0 line).'
+                            : 'Finishing position over time — 1st place at the top, lines cross on overtakes.'}
+                    </p>
+                  )}
+                  {tab === 'all' || parseInt(tab) <= 3 ? (
+                    <RaceCompareChart series={raceSeries} labels={raceLabels} youId={userId} variant={raceVariant} />
+                  ) : (
+                    <PointsRaceChart series={raceSeries} labels={raceLabels} youId={userId} mode="bar" />
+                  )}
                 </div>
               )}
 

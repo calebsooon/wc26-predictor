@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { aggregateLeaderboard, compareLeaderboard, type ScoredPred, type ProfileLite, type AggRow } from './leaderboard'
+import { DEFAULT_WEIGHTS } from './scoring'
 
 const prof = (id: string, username: string): ProfileLite => ({ id, username, avatar_url: null })
 
@@ -80,5 +81,52 @@ describe('aggregateLeaderboard', () => {
     ]
     const board = aggregateLeaderboard({ scoredPreds: preds, profiles: [prof('a', 'Ann')], userId: 'a', gwNumber: 1 })
     expect(board[0].pts).toBe(3)
+  })
+
+  it('folds group-order points into the overall total (default weights)', () => {
+    const board = aggregateLeaderboard({
+      scoredPreds: [{ user_id: 'a', points_awarded: 3, pts_outcome: 3 }],
+      profiles: [prof('a', 'Ann')],
+      userId: 'a',
+      groupPreds: [{ user_id: 'a', points_awarded: 6 }], // 3 correct positions × 2
+    })
+    expect(board[0].pts).toBe(9) // 3 match + 6 group
+  })
+
+  it('counts only the best tournament phase (no pre/r32 double-count)', () => {
+    const board = aggregateLeaderboard({
+      scoredPreds: [],
+      profiles: [prof('a', 'Ann')],
+      userId: 'a',
+      tournamentPreds: [
+        { user_id: 'a', pts_champion: 15 },            // pre phase
+        { user_id: 'a', pts_champion: 15, pts_semi: 8 }, // r32 phase (better)
+      ],
+    })
+    expect(board[0].pts).toBe(15 + 8) // best phase only, champion 15 + 2 semis × 4
+  })
+
+  it('group and tournament points are excluded from per-gameweek tabs', () => {
+    const board = aggregateLeaderboard({
+      scoredPreds: [{ user_id: 'a', points_awarded: 3, pts_outcome: 3, matches: { gw_number: 1 } }],
+      profiles: [prof('a', 'Ann')],
+      userId: 'a',
+      gwNumber: 1,
+      groupPreds: [{ user_id: 'a', points_awarded: 6 }],
+      tournamentPreds: [{ user_id: 'a', pts_champion: 15 }],
+    })
+    expect(board[0].pts).toBe(3) // only the GW1 match point
+  })
+
+  it('group/tournament weights of 0 contribute nothing', () => {
+    const board = aggregateLeaderboard({
+      scoredPreds: [],
+      profiles: [prof('a', 'Ann')],
+      userId: 'a',
+      weights: { ...DEFAULT_WEIGHTS, groupPosition: 0, champion: 0, runnerUp: 0, semi: 0, quarter: 0 },
+      groupPreds: [{ user_id: 'a', points_awarded: 6 }],
+      tournamentPreds: [{ user_id: 'a', pts_champion: 15, pts_semi: 8 }],
+    })
+    expect(board[0].pts).toBe(0)
   })
 })

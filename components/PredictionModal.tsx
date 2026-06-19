@@ -98,6 +98,7 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [players, setPlayers] = useState<PlayerRow[]>([])
   const [others, setOthers] = useState<OtherPred[]>([])
+  const [revealPredictions, setRevealPredictions] = useState(false)
   const [loading, setLoading] = useState(true)
 
   // Prediction state
@@ -177,6 +178,7 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
 
       setAllowGdManual(leagueResult.allowGdManual)
       setWeights(leagueResult.weights)
+      setRevealPredictions(leagueResult.league?.reveal_predictions === true)
 
       // Load others' predictions
       const { memberIds } = leagueResult
@@ -243,6 +245,9 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
 
   /* ─── Derived display values ─────────────────────── */
   const locked = !match ? false : (!!match.real_home_score || match.real_home_score === 0) ? true : match.is_locked || secsLeft <= 0
+  // League admins can reveal everyone's picks before kickoff. When that's on and the
+  // match is still open, show the League predictions panel alongside the editable form.
+  const revealPre = !locked && revealPredictions
   const scored = match != null && match.real_home_score !== null && match.real_away_score !== null
   const home = match ? getTeam(match.home_team) : null
   const away = match ? getTeam(match.away_team) : null
@@ -1055,14 +1060,36 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
               </div>
             )}
 
-            {/* ── LOCKED / SETTLED STATE ─────────── */}
-            {locked && (
+            {/* ── LOCKED / SETTLED STATE — also shown pre-game when reveal is on ── */}
+            {(locked || revealPre) && (
               <div style={{
                 padding: '18px 22px',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 12,
               }}>
+                {/* Pre-game reveal notice */}
+                {revealPre && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    color: 'rgb(var(--texts))',
+                    background: 'rgb(var(--surface2))',
+                    border: '1px solid rgb(var(--border))',
+                    borderRadius: 10,
+                    padding: '8px 11px',
+                  }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    This league reveals picks before kickoff — everyone&apos;s predictions are visible now.
+                  </div>
+                )}
+
                 {/* Summary pills row */}
                 {others.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>

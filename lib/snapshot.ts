@@ -4,18 +4,25 @@
    ============================================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { resolveWeights, weightedMatchPoints, type MatchBreakdown } from '@/lib/scoring'
+import {
+  resolveWeights, weightedMatchPoints, weightedGroupPoints, weightedTournamentPoints,
+  type MatchBreakdown,
+} from '@/lib/scoring'
 
 const PRED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer'
 
 interface SnapshotResult { written: number; overtakes: { userId: string; newRank: number; leagueId: string }[] }
 
+type TournRow = { user_id: string; pts_champion?: number | null; pts_runner_up?: number | null; pts_semi?: number | null; pts_quarter?: number | null }
+
 /** Snapshot every league's current ranking (league-weighted). */
 export async function snapshotLeagueRanks(supabase: SupabaseClient): Promise<SnapshotResult> {
-  const [{ data: preds }, { data: leagues }, { data: members }] = await Promise.all([
+  const [{ data: preds }, { data: leagues }, { data: members }, { data: groupPreds }, { data: tournPreds }] = await Promise.all([
     supabase.from('predictions').select(PRED_COLS).not('points_awarded', 'is', null),
     supabase.from('leagues').select('id, scoring'),
     supabase.from('league_members').select('league_id, user_id'),
+    supabase.from('group_predictions').select('user_id, points_awarded').not('points_awarded', 'is', null),
+    supabase.from('tournament_predictions').select('user_id, pts_champion, pts_runner_up, pts_semi, pts_quarter'),
   ])
 
   const leagueMembers = new Map<string, string[]>()
@@ -26,6 +33,8 @@ export async function snapshotLeagueRanks(supabase: SupabaseClient): Promise<Sna
   }
 
   const rows = (preds ?? []) as (MatchBreakdown & { user_id: string })[]
+  const gRows = (groupPreds ?? []) as { user_id: string; points_awarded: number | null }[]
+  const tRows = (tournPreds ?? []) as TournRow[]
   const now = new Date().toISOString()
   const snapshots: { user_id: string; league_id: string; rank: number; points: number; snapshot_at: string }[] = []
 
@@ -40,6 +49,21 @@ export async function snapshotLeagueRanks(supabase: SupabaseClient): Promise<Sna
     for (const r of rows) {
       if (!ids.has(r.user_id)) continue
       agg.set(r.user_id, (agg.get(r.user_id) ?? 0) + weightedMatchPoints(r, weights))
+    }
+    // Season-long group-order points
+    for (const g of gRows) {
+      if (!ids.has(g.user_id)) continue
+      agg.set(g.user_id, (agg.get(g.user_id) ?? 0) + weightedGroupPoints(g.points_awarded, weights))
+    }
+    // Tournament bracket — best-scoring phase per user (avoid pre/r32 double-count)
+    const bestTourn = new Map<string, number>()
+    for (const t of tRows) {
+      if (!ids.has(t.user_id)) continue
+      const pts = weightedTournamentPoints(t, weights)
+      if (pts > (bestTourn.get(t.user_id) ?? 0)) bestTourn.set(t.user_id, pts)
+    }
+    for (const [uid, pts] of Array.from(bestTourn.entries())) {
+      agg.set(uid, (agg.get(uid) ?? 0) + pts)
     }
 
     Array.from(agg.entries())

@@ -14,7 +14,7 @@ import RulesModal from '@/components/RulesModal'
 import FlagChip from '@/components/FlagChip'
 import { BarChart, RankLine, DonutChart } from '@/components/charts'
 import PredictionModal from '@/components/PredictionModal'
-import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
+import { aggregateLeaderboard, type ProfileLite, type ScoredGroupPred, type ScoredTournamentPred } from '@/lib/leaderboard'
 import { getActiveLeague, isMoneyLeague } from '@/lib/league'
 import { isKnockout, type DBMatch, type MyPred } from '@/lib/match-ui'
 import { getTeam } from '@/lib/teams'
@@ -74,6 +74,8 @@ export default function DashboardPage() {
   const memberIdsRef = useRef<string[]>([])
   const memberProfilesRef = useRef<ProfileLite[]>([])
   const userIdRef = useRef<string | null>(null)
+  const groupRowsRef = useRef<ScoredGroupPred[]>([])
+  const tournRowsRef = useRef<ScoredTournamentPred[]>([])
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -117,19 +119,24 @@ export default function DashboardPage() {
         memberProfilesRef.current = memberProfiles as ProfileLite[]
         userIdRef.current = user.id
 
-        const [{ data: scored }, { data: gwMatches }, { data: tp }, snapResult, bannerResult] = await Promise.all([
+        const [{ data: scored }, { data: gwMatches }, { data: groupP }, { data: tournP }, snapResult, bannerResult] = await Promise.all([
           supabase.from('predictions').select(SCORED_COLS).not('points_awarded', 'is', null).in('user_id', ids),
           supabase.from('matches').select('gw_number, real_home_score').not('gw_number', 'is', null),
-          supabase.from('tournament_predictions').select('user_id').eq('user_id', user.id).limit(1),
+          supabase.from('group_predictions').select('user_id, points_awarded').not('points_awarded', 'is', null).in('user_id', ids),
+          supabase.from('tournament_predictions').select('user_id, pts_champion, pts_runner_up, pts_semi, pts_quarter').in('user_id', ids),
           league ? supabase.from('rank_snapshots').select('rank, snapshot_at, gw_number').eq('user_id', user.id).eq('league_id', league.id).order('snapshot_at', { ascending: true }) : Promise.resolve({ data: [] }),
           league?.banners_enabled ? supabase.from('league_banners').select('id, image_url, display_order').eq('league_id', league.id).order('display_order') : Promise.resolve({ data: [] }),
         ])
 
         const allScored = (scored ?? []) as unknown as ScoredPredRow[]
+        const groupRows = (groupP ?? []) as ScoredGroupPred[]
+        const tournRows = (tournP ?? []) as ScoredTournamentPred[]
+        groupRowsRef.current = groupRows
+        tournRowsRef.current = tournRows
         setScoredPreds(allScored)
-        setLb(aggregateLeaderboard({ scoredPreds: allScored, profiles: memberProfiles as ProfileLite[], userId: user.id, weights: w }))
+        setLb(aggregateLeaderboard({ scoredPreds: allScored, profiles: memberProfiles as ProfileLite[], userId: user.id, weights: w, groupPreds: groupRows, tournamentPreds: tournRows }))
         setGwMatchRows((gwMatches ?? []) as unknown as MatchGWRow[])
-        setHasTournamentPick(!!(tp && tp.length))
+        setHasTournamentPick(tournRows.some((r) => r.user_id === user.id))
         const snaps = (snapResult.data ?? []) as RankSnapshot[]
         setRankSnapshots(snaps)
         setPrevRank(snaps.length >= 2 ? snaps[snaps.length - 2].rank : null)
@@ -155,7 +162,7 @@ export default function DashboardPage() {
       ])
       const allScored = (scored ?? []) as unknown as ScoredPredRow[]
       setScoredPreds(allScored)
-      setLb(aggregateLeaderboard({ scoredPreds: allScored, profiles: memberProfilesRef.current, userId: uid, weights: weights }))
+      setLb(aggregateLeaderboard({ scoredPreds: allScored, profiles: memberProfilesRef.current, userId: uid, weights: weights, groupPreds: groupRowsRef.current, tournamentPreds: tournRowsRef.current }))
       setGwMatchRows((gwMatches ?? []) as unknown as MatchGWRow[])
     }
 
