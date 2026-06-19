@@ -8,8 +8,11 @@
  *   DRY_RUN=1 LIMIT=15 SUPABASE_URL=<url> SUPABASE_SERVICE_KEY=<key> \
  *     npx tsx --env-file=.env.local scripts/fetch-wikidata-players.ts
  *
- *   # full run (writes to DB):
+ *   # full run — refreshes ALL players (writes to DB):
  *   npx tsx --env-file=.env.local scripts/fetch-wikidata-players.ts
+ *
+ *   # gap-fill — only players still missing a photo/club/dob (faster refresh):
+ *   ONLY_MISSING=1 npx tsx --env-file=.env.local scripts/fetch-wikidata-players.ts
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -18,6 +21,8 @@ const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABAS
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 const DRY_RUN = process.env.DRY_RUN === '1'
 const LIMIT = process.env.LIMIT ? Number(process.env.LIMIT) : Infinity
+// ONLY_MISSING=1 → only players still missing a photo/club/dob (fast gap-fill refresh).
+const ONLY_MISSING = process.env.ONLY_MISSING === '1'
 
 if (!SUPABASE_URL) { console.error('Missing SUPABASE_URL'); process.exit(1) }
 if (!SUPABASE_SERVICE_KEY) { console.error('Missing SUPABASE_SERVICE_KEY'); process.exit(1) }
@@ -65,16 +70,22 @@ function pickCurrentTeamQid(claims: Record<string, Claim[]>): string | null {
 async function main() {
   // Supabase caps each read at 1000 rows — paginate to get the whole roster.
   const PAGE = 1000
-  const allPlayers: { id: number; name: string; nationality: string | null; team_name: string }[] = []
+  type Row = { id: number; name: string; nationality: string | null; team_name: string; photo_url: string | null; club: string | null; dob: string | null }
+  const allPlayers: Row[] = []
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
-      .from('players').select('id, name, nationality, team_name').order('id').range(from, from + PAGE - 1)
+      .from('players').select('id, name, nationality, team_name, photo_url, club, dob').order('id').range(from, from + PAGE - 1)
     if (error) throw error
     if (!data || data.length === 0) break
-    allPlayers.push(...(data as typeof allPlayers))
+    allPlayers.push(...(data as Row[]))
     if (data.length < PAGE) break
   }
-  const roster = allPlayers.slice(0, LIMIT)
+  // Gap-fill mode skips players who already have all three fields.
+  const candidates = ONLY_MISSING
+    ? allPlayers.filter((p) => !p.photo_url || !p.club || !p.dob)
+    : allPlayers
+  const roster = candidates.slice(0, LIMIT)
+  if (ONLY_MISSING) console.log(`Gap-fill: ${candidates.length} of ${allPlayers.length} players are missing photo/club/dob.`)
   console.log(`${DRY_RUN ? '[DRY RUN] ' : ''}Resolving ${roster.length} players against Wikidata…\n`)
 
   // Phase 1 — name → QID
