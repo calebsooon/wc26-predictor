@@ -266,18 +266,23 @@ export default function LeaderboardPage() {
     }
     const gwNum = parseInt(tab)
     if (gwNum <= 3) {
-      // Line mode within this GW: X axis = unique sorted match dates
-      const dates = Array.from(
+      // Line mode within this GW: X axis = unique calendar days (YYYY-MM-DD)
+      const days = Array.from(
         new Set(
           rows
             .filter((r) => r.matches?.gw_number === gwNum && r.matches?.match_date)
-            .map((r) => r.matches!.match_date as string)
+            .map((r) => (r.matches!.match_date as string).slice(0, 10))
         )
       ).sort()
-      return dates.map((d) => {
-        const dt = new Date(d)
-        return dt.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })
-      })
+      // Cap at 12 labels max — sample evenly if more
+      const step = days.length > 12 ? Math.ceil(days.length / 12) : 1
+      return days
+        .filter((_, i) => i % step === 0 || i === days.length - 1)
+        .map((d) => {
+          const [, m, day] = d.split('-')
+          const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+          return `${parseInt(day)} ${months[parseInt(m) - 1]}`
+        })
     }
     // GW4+: bar mode — no X labels needed (names shown below bars)
     return []
@@ -300,21 +305,26 @@ export default function LeaderboardPage() {
       }
       const gwNum = parseInt(tab)
       if (gwNum <= 3) {
-        // Cumulative within this GW by date
-        const dates = Array.from(
+        // Cumulative within this GW by calendar day (truncate to YYYY-MM-DD)
+        const days = Array.from(
           new Set(
             rows
               .filter((r) => r.matches?.gw_number === gwNum && r.matches?.match_date)
-              .map((r) => r.matches!.match_date as string)
+              .map((r) => (r.matches!.match_date as string).slice(0, 10))
           )
         ).sort()
+        const step = days.length > 12 ? Math.ceil(days.length / 12) : 1
+        const sampledDays = days.filter((_, i) => i % step === 0 || i === days.length - 1)
         let cum = 0
-        const data = dates.map((d) => {
+        // accumulate all days including skipped ones, but only emit sampled points
+        let dayIdx = 0
+        const data: number[] = []
+        for (const d of days) {
           cum += userRows
-            .filter((r) => r.matches?.gw_number === gwNum && r.matches?.match_date === d)
+            .filter((r) => r.matches?.gw_number === gwNum && (r.matches!.match_date as string).slice(0, 10) === d)
             .reduce((s, r) => s + weightedMatchPoints(r, weights), 0)
-          return cum
-        })
+          if (sampledDays[dayIdx] === d) { data.push(cum); dayIdx++ }
+        }
         return { id: p.id, name: p.name, color, data }
       }
       // GW4+ knockout: single total
@@ -666,15 +676,38 @@ export default function LeaderboardPage() {
                 </div>
               )}
 
-              <div className="px-1">
-                <p className="text-[11px] text-texts font-medium">
-                  {isMoney
-                    ? tab === 'all'
-                      ? 'Overall prize pool: 1st +$40 · 2nd +$20 · 3rd +$10 · 4th $0 · 5th -$10 · 6th -$20 · 7th -$40.'
-                      : 'Per-GW prize pool: 1st +$15 · 2nd +$10 · 3rd +$5 · 4th $0 · 5th -$5 · 6th -$10 · 7th -$15.'
-                    : 'Points-only league — no prize pool.'}
-                  {' '}Tiebreaker: total points → predictions submitted → outcomes → exact scores → goal diff → total goals → BTTS → first-goal team → first scorer → shared rank.
-                </p>
+              <div style={{ padding: '4px 4px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {isMoney && (
+                  <div style={{ padding: '10px 14px', background: 'rgb(var(--surface2))', borderRadius: 12, border: '1px solid rgb(var(--border))' }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: 'rgb(var(--texts))', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
+                      {tab === 'all' ? 'Overall prize pool' : 'Per-round prize pool'}
+                    </p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px' }}>
+                      {(tab === 'all' ? OVERALL_PRIZES : GW_PRIZES).map((amt, i) => {
+                        const tone = prizeTone(amt)
+                        const col = tone === 'green' ? 'rgb(var(--success))' : tone === 'red' ? 'rgb(var(--error))' : 'rgb(var(--texts))'
+                        const suffixes = ['st','nd','rd','th','th','th','th']
+                        return (
+                          <span key={i} style={{ fontSize: 12, fontWeight: 600, color: 'rgb(var(--textp))' }}>
+                            {i + 1}<span style={{ fontSize: 10, verticalAlign: 'super', color: 'rgb(var(--texts))' }}>{suffixes[i]}</span>{' '}
+                            <span style={{ color: col, fontWeight: 700 }}>{formatPrize(amt)}</span>
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+                <div style={{ padding: '10px 14px', background: 'rgb(var(--surface2))', borderRadius: 12, border: '1px solid rgb(var(--border))' }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: 'rgb(var(--texts))', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Tiebreaker order</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 6px', alignItems: 'center' }}>
+                    {['Total points','Predictions in','Outcomes','Exact scores','Goal diff','Total goals','BTTS','First-goal team','First scorer','Shared rank'].map((label, i, arr) => (
+                      <React.Fragment key={label}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: i === 0 ? 'rgb(var(--textp))' : i === arr.length - 1 ? 'rgb(var(--faint))' : 'rgb(var(--texts))', padding: '2px 8px', background: i === 0 ? 'rgb(var(--primary) / 0.12)' : 'rgb(var(--surface3))', borderRadius: 20 }}>{label}</span>
+                        {i < arr.length - 1 && <span style={{ fontSize: 10, color: 'rgb(var(--faint))' }}>›</span>}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
               </div>
             </>
           )}

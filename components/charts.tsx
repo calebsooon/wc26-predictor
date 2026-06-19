@@ -383,26 +383,36 @@ export function PointsRaceChart({
   }
 
   // Line mode — multi-series cumulative chart
+  const LH = 240  // taller canvas for more vertical spread
+  const padR2 = 70 // extra right padding for end-of-line labels
   const n = labels.length
   if (n === 0) return null
   const allVals = series.flatMap((s) => s.data.slice(0, n))
-  const maxVal = Math.max(...allVals, 1)
-  const niceMax = Math.max(10, Math.ceil(maxVal / 10) * 10)
-  const xPos = (i: number) => padL + (n === 1 ? (W - padL - padR) / 2 : (i / (n - 1)) * (W - padL - padR))
-  const yPos = (v: number) => padT + (H - padT - padB) * (1 - v / niceMax)
-  const gridVals = [0, Math.round(niceMax * 0.25), Math.round(niceMax * 0.5), Math.round(niceMax * 0.75), niceMax]
+  const rawMax = Math.max(...allVals, 1)
+  const rawMin = Math.min(...allVals.filter((v) => v > 0), 0)
+  // Zoom in: bottom of Y is just below the lowest non-zero value
+  const yFloor = Math.max(0, Math.floor(rawMin / 10) * 10)
+  const niceMax = Math.max(yFloor + 10, Math.ceil(rawMax / 10) * 10)
+  const yRange = niceMax - yFloor
+  const xPos = (i: number) => padL + (n === 1 ? (W - padL - padR2) / 2 : (i / (n - 1)) * (W - padL - padR2))
+  const yPos = (v: number) => padT + (LH - padT - padB) * (1 - (v - yFloor) / yRange)
+  // 6 grid lines for more granularity
+  const gridVals = Array.from({ length: 7 }, (_, i) => yFloor + Math.round((yRange / 6) * i))
+
+  // Sort series by final value descending for right-edge label placement
+  const sorted = [...series].sort((a, b) => (b.data[n - 1] ?? 0) - (a.data[n - 1] ?? 0))
 
   return (
     <div className="w-full">
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 180, display: 'block' }}>
+      <svg viewBox={`0 0 ${W} ${LH}`} style={{ width: '100%', height: 240, display: 'block' }}>
         {gridVals.map((v, i) => (
           <g key={i}>
-            <line x1={padL} x2={W - padR} y1={yPos(v)} y2={yPos(v)} stroke="rgb(var(--border))" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            <line x1={padL} x2={W - padR2} y1={yPos(v)} y2={yPos(v)} stroke="rgb(var(--border))" strokeWidth={1} vectorEffect="non-scaling-stroke" />
             <text x={padL - 4} y={yPos(v) + 3.5} textAnchor="end" fontSize={9} fill="rgb(var(--faint))" fontFamily="system-ui,sans-serif">{v}</text>
           </g>
         ))}
         {labels.map((lbl, i) => (
-          <text key={i} x={xPos(i)} y={H - 4} textAnchor="middle" fontSize={9} fill="rgb(var(--faint))" fontFamily="system-ui,sans-serif">{lbl}</text>
+          <text key={i} x={xPos(i)} y={LH - 4} textAnchor="middle" fontSize={9} fill="rgb(var(--faint))" fontFamily="system-ui,sans-serif">{lbl}</text>
         ))}
         {series.map((s) => {
           const isYou = s.id === youId
@@ -410,13 +420,31 @@ export function PointsRaceChart({
           const path = smooth(pts)
           return (
             <g key={s.id}>
-              <path d={path} fill="none" stroke={s.color} strokeWidth={isYou ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" opacity={isYou ? 1 : 0.72} />
+              <path d={path} fill="none" stroke={s.color} strokeWidth={isYou ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" opacity={isYou ? 1 : 0.75} />
               {pts.map((p, i) => (
-                <circle key={i} cx={p.x} cy={p.y} r={isYou ? 3.2 : 2.5} fill={s.color} opacity={isYou ? 1 : 0.8} />
+                <circle key={i} cx={p.x} cy={p.y} r={isYou ? 3 : 2.2} fill={s.color} opacity={isYou ? 1 : 0.8} />
               ))}
             </g>
           )
         })}
+        {/* Right-edge labels: sorted by final value, nudge y so they don't overlap */}
+        {(() => {
+          const minGap = 13
+          const placed: { y: number; s: RaceSeries }[] = []
+          for (const s of sorted) {
+            const rawY = yPos(s.data[Math.min(n - 1, s.data.length - 1)] ?? 0)
+            let y = rawY
+            for (const p of placed) {
+              if (Math.abs(p.y - y) < minGap) y = p.y + minGap
+            }
+            placed.push({ y, s })
+          }
+          return placed.map(({ y, s }) => (
+            <text key={s.id} x={W - padR2 + 6} y={y + 3.5} fontSize={9} fontWeight={s.id === youId ? 700 : 500} fill={s.color} fontFamily="system-ui,sans-serif">
+              {s.name.length > 8 ? s.name.slice(0, 8) : s.name}
+            </text>
+          ))
+        })()}
       </svg>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginTop: 8, paddingLeft: padL }}>
         {series.map((s) => (

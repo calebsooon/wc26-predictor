@@ -528,16 +528,18 @@ export default function GroupsPage() {
         gap: 12,
       }}>
         <div>
-          <p style={{
-            fontSize: '10.5px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.13em',
-            fontWeight: 600,
-            color: 'rgb(var(--primary))',
-            marginBottom: 4,
-          }}>
-            +2 per correct position · up to 8 / group
-          </p>
+          {(weights.groupPosition ?? 0) > 0 && (
+            <p style={{
+              fontSize: '10.5px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.13em',
+              fontWeight: 600,
+              color: 'rgb(var(--primary))',
+              marginBottom: 4,
+            }}>
+              +{weights.groupPosition} per correct position · up to {weights.groupPosition * 4} / group
+            </p>
+          )}
           <h1 style={{
             fontSize: 21,
             fontWeight: 700,
