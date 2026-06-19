@@ -1,0 +1,38 @@
+name: Live data sync
+
+# Pings the deployed cron endpoints on a schedule. NOTHING is committed — these
+# are just authenticated HTTP calls; the data lands in Supabase. Requires two
+# repo secrets: APP_URL (e.g. https://matchday.app) and CRON_SECRET (same value
+# as the app's CRON_SECRET env var).
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # every 15 min (GitHub may delay during peak load)
+  workflow_dispatch: {}        # allow manual "Run workflow" from the Actions tab
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch lineups for imminent matches
+        run: |
+          curl -fsS -X GET "$APP_URL/api/fetch-lineup" \
+            -H "Authorization: Bearer $CRON_SECRET" || echo "lineup sync failed (non-fatal)"
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+      - name: Sync finished results + first scorer
+        run: |
+          curl -fsS -X GET "$APP_URL/api/sync-results" \
+            -H "Authorization: Bearer $CRON_SECRET" || echo "results sync failed (non-fatal)"
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+      - name: Refresh injuries
+        run: |
+          curl -fsS -X GET "$APP_URL/api/sync-injuries" \
+            -H "Authorization: Bearer $CRON_SECRET" || echo "injuries sync failed (non-fatal)"
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
