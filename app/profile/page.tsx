@@ -12,6 +12,7 @@ import { BarChart, DonutChart, RankLine } from '@/components/charts'
 import { getTeam } from '@/lib/teams'
 import { weightedMatchPoints, weightedGroupPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { subscribeToPush, unsubscribeFromPush, getPushState } from '@/lib/push'
+import { useColorblind, setColorblind } from '@/lib/prefs'
 import { getActiveLeague, isMoneyLeague } from '@/lib/league'
 import { computePrizeSnapshot, formatPrize, prizeTone, GW_SHORT } from '@/lib/prizes'
 
@@ -130,6 +131,41 @@ function PushToggle({ userId }: { userId: string }) {
           <Button size="sm" onClick={enable}>Enable</Button>
         </div>
       )}
+    </div>
+  )
+}
+
+/* ─── ColorblindToggle ────────────────────────────────────────────────────────── */
+function ColorblindToggle({ userId }: { userId: string }) {
+  const on = useColorblind()
+  const supabase = createClient()
+  function toggle() {
+    const next = !on
+    setColorblind(next) // local cache + live update
+    supabase.from('profiles').update({ colorblind: next }).eq('id', userId).then(() => {}) // cross-device source of truth
+  }
+  return (
+    <div style={{ borderTop: '1px solid rgb(var(--border))', paddingTop: 16 }}>
+      <p style={{ ...eyebrow, marginBottom: 6 }}>Colour-blind mode</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <p style={{ fontSize: 12, color: 'rgb(var(--texts))' }}>Use a high-contrast, colour-blind-safe palette for the leaderboard graph.</p>
+        <button
+          role="switch"
+          aria-checked={on}
+          aria-label="Toggle colour-blind mode"
+          onClick={toggle}
+          style={{
+            flexShrink: 0, width: 44, height: 26, borderRadius: 999, border: 'none', cursor: 'pointer',
+            background: on ? 'rgb(var(--primary))' : 'rgb(var(--surface2))',
+            position: 'relative', transition: 'background 0.15s',
+          }}
+        >
+          <span style={{
+            position: 'absolute', top: 3, left: on ? 21 : 3, width: 20, height: 20, borderRadius: 999,
+            background: '#fff', transition: 'left 0.15s', boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
+          }} />
+        </button>
+      </div>
     </div>
   )
 }
@@ -1140,6 +1176,9 @@ export default function ProfilePage() {
 
           {/* Push notifications */}
           <PushToggle userId={profile.id} />
+
+          {/* Accessibility */}
+          <ColorblindToggle userId={profile.id} />
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <Button variant="outline" size="sm" onClick={() => setEditOpen(false)}>Cancel</Button>

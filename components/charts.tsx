@@ -320,6 +320,17 @@ export const PLAYER_PALETTE = [
   '#3b82f6', '#eab308', '#a855f7', '#14b8a6',
 ]
 
+// Colour-blind-safe palette (Okabe–Ito), ordered for max separation on a dark
+// background. Used when the user enables colour-blind mode in profile.
+export const PLAYER_PALETTE_CB = [
+  '#E69F00', '#56B4E9', '#009E73', '#F0E442',
+  '#0072B2', '#D55E00', '#CC79A7', '#999999',
+]
+
+export function playerPalette(colorblind: boolean): string[] {
+  return colorblind ? PLAYER_PALETTE_CB : PLAYER_PALETTE
+}
+
 // Dash patterns cycling across players so overlapping lines stay distinguishable
 const DASH_PATTERNS = ['none', '8,4', '3,4', '10,3,2,3', '5,3', '12,4', '2,3', 'none']
 

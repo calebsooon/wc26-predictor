@@ -8,6 +8,7 @@ import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import { createClient } from '@/lib/supabase-browser'
 import { getMyLeagues, setActiveLeague, isMoneyLeague, type League } from '@/lib/league'
 import { ActiveLeagueProvider } from '@/lib/active-league'
+import { syncColorblindFromDb } from '@/lib/prefs'
 import ThemeToggle from '@/components/ThemeToggle'
 import CommandPalette from '@/components/CommandPalette'
 import {
@@ -69,18 +70,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) { setProfile(null); setLeaguesReady(false); return }
         const [{ data }, leagues] = await Promise.all([
-          supabase.from('profiles').select('username, avatar_url, is_admin, theme').eq('id', user.id).single(),
+          supabase.from('profiles').select('username, avatar_url, is_admin, theme, colorblind').eq('id', user.id).single(),
           getMyLeagues(supabase, user.id),
         ])
         if (data) {
           setProfile(data as Profile)
           // Sync theme preference from profile if no local override
-          const p = data as Profile & { theme?: string | null }
+          const p = data as Profile & { theme?: string | null; colorblind?: boolean | null }
           if (p.theme) {
             const isDark = p.theme === 'dark'
             document.documentElement.classList.toggle('dark', isDark)
             try { localStorage.setItem('theme', p.theme) } catch {}
           }
+          // Hydrate colour-blind preference (cross-device source of truth)
+          syncColorblindFromDb(p.colorblind === true)
         }
         setMyLeagues(leagues)
         try {
