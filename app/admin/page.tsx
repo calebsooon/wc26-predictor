@@ -489,6 +489,7 @@ function AdminActions() {
   }
 
   const actions = [
+    { key: 'sync', label: 'Sync results + scorers', sub: 'Pull finished scores AND first goalscorer from Kickoffapi, then auto-score', url: '/api/sync-results' },
     { key: 'fetch', label: 'Auto-fetch results', sub: 'Pull finished scores from football-data.org and auto-score predictions', url: '/api/fetch-results' },
     { key: 'snapshot', label: 'Snapshot leaderboard', sub: 'Records current rank positions for movement arrows', url: '/api/snapshot-ranks' },
     { key: 'groups', label: 'Score group predictions', sub: 'Awards points for correct group order picks (all complete groups)', url: '/api/score-groups' },
