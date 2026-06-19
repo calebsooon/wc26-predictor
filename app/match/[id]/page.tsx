@@ -17,6 +17,7 @@ import { getActiveLeague } from '@/lib/league'
 import { PlayerCardPicker, type PlayerForPicker } from '@/components/PlayerCardPicker'
 import { fmtDateTime } from '@/lib/date-format'
 import { AddMatchToCalendar } from '@/components/AddMatchToCalendar'
+import { FormationPitch } from '@/components/FormationPitch'
 import { SquadPanel } from '@/components/MatchModal'
 
 interface OtherPred extends MatchBreakdown {
@@ -245,6 +246,15 @@ export default function MatchDetailPage() {
           </div>
         )}
       </Card>
+
+      {/* Confirmed lineups — renders only once a lineup has been fetched */}
+      <FormationPitch
+        matchId={match.id}
+        homeCode={match.home_team}
+        awayCode={match.away_team}
+        homeFormation={(match as { home_formation?: string | null }).home_formation ?? null}
+        awayFormation={(match as { away_formation?: string | null }).away_formation ?? null}
+      />
 
       {/* consensus bar — visible once match kicks off */}
       {locked && others.length > 0 && (

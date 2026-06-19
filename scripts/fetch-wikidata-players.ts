@@ -120,7 +120,7 @@ async function main() {
     if (qid) clubQids.add(qid)
   }
   const clubLabels: Record<string, string> = {}
-  const clubList = [...clubQids]
+  const clubList = Array.from(clubQids)
   for (let i = 0; i < clubList.length; i += 40) {
     const ids = clubList.slice(i, i + 40).join('|')
     if (!ids) break
