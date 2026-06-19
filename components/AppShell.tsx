@@ -39,6 +39,7 @@ const SIDEBAR: NavItem[] = [
   { href: '/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
   { href: '/h2h',         label: 'Compare',     icon: ChartIcon },
   { href: '/squads',      label: 'Squads',      icon: UsersIcon },
+  { href: '/golden-boot', label: 'Golden Boot', icon: TrophyIcon },
   { href: '/profile',     label: 'Profile',     icon: UserIcon },
   { href: '/admin',       label: 'Admin',       icon: ShieldIcon, admin: true },
   { href: '/rules',       label: 'Rules',       icon: HelpIcon },
