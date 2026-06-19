@@ -98,23 +98,23 @@ function ArrowBtn({ onClick, disabled, dir }: { onClick: () => void; disabled: b
   )
 }
 
-interface StandingRow { code: string; pts: number; gd: number; gf: number }
+interface StandingRow { code: string; pts: number; gd: number; gf: number; ga: number; w: number; d: number; l: number; mp: number }
 
 function computeStandings(matches: Match[], group: string): StandingRow[] {
   const map = new Map<string, StandingRow>()
   const ensure = (t: string) => {
-    if (!map.has(t)) map.set(t, { code: t, pts: 0, gd: 0, gf: 0 })
+    if (!map.has(t)) map.set(t, { code: t, pts: 0, gd: 0, gf: 0, ga: 0, w: 0, d: 0, l: 0, mp: 0 })
     return map.get(t)!
   }
   for (const m of matches) {
     if (m.group_name !== group || m.real_home_score == null || m.real_away_score == null) continue
     const home = ensure(m.home_team), away = ensure(m.away_team)
     const hs = m.real_home_score, as_ = m.real_away_score
-    home.gf += hs; home.gd += hs - as_
-    away.gf += as_; away.gd += as_ - hs
-    if (hs > as_) { home.pts += 3 }
-    else if (hs === as_) { home.pts++; away.pts++ }
-    else { away.pts += 3 }
+    home.gf += hs; home.ga += as_; home.gd += hs - as_; home.mp++
+    away.gf += as_; away.ga += hs; away.gd += as_ - hs; away.mp++
+    if (hs > as_) { home.pts += 3; home.w++; away.l++ }
+    else if (hs === as_) { home.pts++; away.pts++; home.d++; away.d++ }
+    else { away.pts += 3; away.w++; home.l++ }
   }
   return Array.from(map.values()).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf)
 }
@@ -146,7 +146,7 @@ function GroupCard({ groupName, matches, pred, userId, weights, activeTab, onSav
   const hasStandings = standingsRows.length > 0
   const displayStandingsRows = useMemo(() => {
     if (hasStandings) return standingsRows
-    return defaultOrder.map((code) => ({ code, pts: 0, gd: 0, gf: 0 }))
+    return defaultOrder.map((code) => ({ code, pts: 0, gd: 0, gf: 0, ga: 0, w: 0, d: 0, l: 0, mp: 0 }))
   }, [defaultOrder, hasStandings, standingsRows])
 
   // Only reset order when the actual team IDs change, not on every reference update
@@ -256,6 +256,19 @@ function GroupCard({ groupName, matches, pred, userId, weights, activeTab, onSav
                 No results yet
               </div>
             )}
+            {hasStandings && (
+              <div style={{ padding: '4px 4px 2px', fontSize: 9.5, fontWeight: 700, color: 'rgb(var(--faint))', display: 'grid', gridTemplateColumns: '18px 30px 1fr 22px 22px 22px 22px 20px 24px', gap: '0 4px', alignItems: 'center', paddingLeft: 10, paddingRight: 10 }}>
+                <span />
+                <span />
+                <span />
+                <span style={{ textAlign: 'center' }}>MP</span>
+                <span style={{ textAlign: 'center' }}>W</span>
+                <span style={{ textAlign: 'center' }}>D</span>
+                <span style={{ textAlign: 'center' }}>L</span>
+                <span style={{ textAlign: 'center' }}>GD</span>
+                <span style={{ textAlign: 'right' }}>Pts</span>
+              </div>
+            )}
             {displayStandingsRows.map((row, i) => {
               const t = getTeam(row.code)
               const qualifying = i < 2
@@ -264,79 +277,36 @@ function GroupCard({ groupName, matches, pred, userId, weights, activeTab, onSav
                   key={row.code}
                   style={{
                     position: 'relative',
-                    display: 'flex',
+                    display: 'grid',
+                    gridTemplateColumns: '18px 30px 1fr 22px 22px 22px 22px 20px 24px',
+                    gap: '0 4px',
                     alignItems: 'center',
-                    gap: 12,
-                    padding: '9px 10px',
+                    padding: '8px 10px',
                     borderRadius: 11,
                     background: qualifying ? 'rgba(var(--primary),0.05)' : 'transparent',
                   }}
                 >
                   {qualifying && (
-                    <div style={{
-                      position: 'absolute',
-                      left: 0,
-                      top: 6,
-                      bottom: 6,
-                      width: 3,
-                      borderRadius: '0 999px 999px 0',
-                      background: 'rgb(var(--primary))',
-                    }} />
+                    <div style={{ position: 'absolute', left: 0, top: 6, bottom: 6, width: 3, borderRadius: '0 999px 999px 0', background: 'rgb(var(--primary))' }} />
                   )}
-                  {/* Position */}
-                  <span style={{
-                    width: 18,
-                    textAlign: 'center',
-                    fontSize: 14,
-                    fontWeight: 800,
-                    fontFamily: 'var(--font-display, inherit)',
-                    color: qualifying ? 'rgb(var(--primary))' : 'rgb(var(--texts))',
-                    flexShrink: 0,
-                  }}>
-                    {i + 1}
-                  </span>
-
-                  <FlagChip code={t.code} w={30} h={20} r={5} />
-
-                  <span style={{
-                    flex: 1,
-                    fontSize: 14,
-                    fontWeight: 700,
-                    fontFamily: 'var(--font-display, inherit)',
-                    color: 'rgb(var(--textp))',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {t.name}
-                  </span>
-
-                  {/* Goal diff */}
-                  <span style={{
-                    fontSize: 11,
-                    color: 'rgb(var(--texts))',
-                    minWidth: 28,
-                    textAlign: 'right',
-                    flexShrink: 0,
-                  }}>
-                    {row.gd > 0 ? '+' : ''}{row.gd}
-                  </span>
-
-                  {/* Points badge */}
-                  <span style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    minWidth: 24,
-                    textAlign: 'right',
-                    flexShrink: 0,
-                    fontFamily: 'var(--font-display, inherit)',
-                    color: 'rgb(var(--textp))',
-                  }}>
-                    {row.pts}
-                  </span>
+                  <span style={{ textAlign: 'center', fontSize: 13, fontWeight: 800, color: qualifying ? 'rgb(var(--primary))' : 'rgb(var(--texts))' }}>{i + 1}</span>
+                  <FlagChip code={t.code} w={26} h={17} r={4} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'rgb(var(--textp))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
+                  <span style={{ fontSize: 11, color: 'rgb(var(--texts))', textAlign: 'center' }}>{row.mp}</span>
+                  <span style={{ fontSize: 11, color: 'rgb(var(--success))', textAlign: 'center', fontWeight: 700 }}>{row.w}</span>
+                  <span style={{ fontSize: 11, color: 'rgb(var(--texts))', textAlign: 'center' }}>{row.d}</span>
+                  <span style={{ fontSize: 11, color: 'rgb(var(--coral))', textAlign: 'center', fontWeight: 700 }}>{row.l}</span>
+                  <span style={{ fontSize: 11, color: 'rgb(var(--texts))', textAlign: 'right', fontWeight: 600 }}>{row.gd > 0 ? '+' : ''}{row.gd}</span>
+                  <span style={{ fontSize: 13, fontWeight: 800, textAlign: 'right', color: 'rgb(var(--textp))' }}>{row.pts}</span>
                 </div>
               )
             })}
+            {hasStandings && (
+              <div style={{ padding: '4px 10px 6px', fontSize: 10, fontWeight: 600, color: 'rgb(var(--faint))', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span>Pts → GD → GF → A–Z</span>
+                <span style={{ color: 'rgb(var(--primary))', fontWeight: 700 }}>Top 2 qualify ↑</span>
+              </div>
+            )}
           </>
         ) : (
           /* ── Prediction tab ── */
