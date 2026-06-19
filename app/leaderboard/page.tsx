@@ -673,7 +673,7 @@ export default function LeaderboardPage() {
                       ? 'Overall prize pool: 1st +$40 · 2nd +$20 · 3rd +$10 · 4th $0 · 5th -$10 · 6th -$20 · 7th -$40.'
                       : 'Per-GW prize pool: 1st +$15 · 2nd +$10 · 3rd +$5 · 4th $0 · 5th -$5 · 6th -$10 · 7th -$15.'
                     : 'Points-only league — no prize pool.'}
-                  {' '}Tiebreaker: most correct outcomes → most exact scorelines → shared rank.
+                  {' '}Tiebreaker: total points → predictions submitted → outcomes → exact scores → goal diff → total goals → BTTS → first-goal team → first scorer → shared rank.
                 </p>
               </div>
             </>

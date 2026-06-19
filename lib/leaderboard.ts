@@ -27,21 +27,31 @@ export type AggRow = LBRow & {
   correct: number
   outcomeWins: number
   exactWins: number
+  goalDiffWins: number
+  totalGoalsWins: number
+  bttsWins: number
+  firstTeamWins: number
+  firstScorerWins: number
   streak: number
 }
 
 /**
  * Canonical leaderboard sort (matches the Rules page):
- *   1. most points
- *   2. most correct outcomes
- *   3. most exact scorelines
- *   4. shared/tied rank (no further tiebreak)
+ *   1. total points  2. predictions submitted  3. correct outcomes
+ *   4. exact scorelines  5. goal differences  6. total goals
+ *   7. BTTS  8. first-goal team  9. first scorer  10. shared rank
  */
 export function compareLeaderboard(a: AggRow, b: AggRow): number {
   return (
-    b.pts - a.pts ||
-    b.outcomeWins - a.outcomeWins ||
-    b.exactWins - a.exactWins
+    b.pts            - a.pts            ||
+    b.scored         - a.scored         ||
+    b.outcomeWins    - a.outcomeWins    ||
+    b.exactWins      - a.exactWins      ||
+    b.goalDiffWins   - a.goalDiffWins   ||
+    b.totalGoalsWins - a.totalGoalsWins ||
+    b.bttsWins       - a.bttsWins       ||
+    b.firstTeamWins  - a.firstTeamWins  ||
+    b.firstScorerWins - a.firstScorerWins
   )
 }
 
@@ -72,7 +82,10 @@ export function aggregateLeaderboard({
 
   const seed = (id: string, name: string | null, avatar: string | null | undefined): AggRow => ({
     id, name: name ?? '?', avatar: avatar ?? null,
-    pts: 0, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 0, exactWins: 0, streak: 0, you: id === userId,
+    pts: 0, exact: 0, acc: 0, scored: 0, correct: 0,
+    outcomeWins: 0, exactWins: 0, goalDiffWins: 0, totalGoalsWins: 0,
+    bttsWins: 0, firstTeamWins: 0, firstScorerWins: 0,
+    streak: 0, you: id === userId,
   })
 
   for (const p of profiles) agg.set(p.id, seed(p.id, p.username, p.avatar_url))
@@ -81,15 +94,13 @@ export function aggregateLeaderboard({
     const cur = agg.get(r.user_id) ?? seed(r.user_id, r.profiles?.username ?? null, r.profiles?.avatar_url)
     cur.pts += weightedMatchPoints(r, weights)   // league-weighted total
     cur.scored += 1
-    if ((r.pts_outcome ?? 0) > 0) {
-      cur.correct += 1
-      // Only count as a tiebreaker win when outcome is actually worth points in this league
-      if ((weights.outcome ?? 0) > 0) cur.outcomeWins += 1
-    }
-    if ((r.pts_exact ?? 0) > 0) {
-      cur.exact = (cur.exact ?? 0) + 1
-      if ((weights.exact ?? 0) > 0) cur.exactWins += 1
-    }
+    if ((r.pts_outcome ?? 0) > 0) { cur.correct += 1; cur.outcomeWins += 1 }
+    if ((r.pts_exact ?? 0) > 0) { cur.exact = (cur.exact ?? 0) + 1; cur.exactWins += 1 }
+    if ((r.pts_goal_diff ?? 0) > 0) cur.goalDiffWins += 1
+    if ((r.pts_total_goals ?? 0) > 0) cur.totalGoalsWins += 1
+    if ((r.pts_btts ?? 0) > 0) cur.bttsWins += 1
+    if ((r.pts_first_team ?? 0) > 0) cur.firstTeamWins += 1
+    if ((r.pts_first_scorer ?? 0) > 0) cur.firstScorerWins += 1
     agg.set(r.user_id, cur)
   }
 
