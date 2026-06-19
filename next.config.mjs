@@ -48,6 +48,12 @@ const nextConfig = {
         hostname: 'upload.wikimedia.org',
         pathname: '/**',
       },
+      {
+        // Golden Boot headshots come straight from the Kickoffapi CDN.
+        protocol: 'https',
+        hostname: 'cdn.kickoffapi.com',
+        pathname: '/**',
+      },
     ],
   },
 }
