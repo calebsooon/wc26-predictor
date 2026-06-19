@@ -676,38 +676,32 @@ export default function LeaderboardPage() {
                 </div>
               )}
 
-              <div style={{ padding: '4px 4px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ padding: '2px 4px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {isMoney && (
-                  <div style={{ padding: '10px 14px', background: 'rgb(var(--surface2))', borderRadius: 12, border: '1px solid rgb(var(--border))' }}>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: 'rgb(var(--texts))', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
-                      {tab === 'all' ? 'Overall prize pool' : 'Per-round prize pool'}
-                    </p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px' }}>
-                      {(tab === 'all' ? OVERALL_PRIZES : GW_PRIZES).map((amt, i) => {
-                        const tone = prizeTone(amt)
-                        const col = tone === 'green' ? 'rgb(var(--success))' : tone === 'red' ? 'rgb(var(--error))' : 'rgb(var(--texts))'
-                        const suffixes = ['st','nd','rd','th','th','th','th']
-                        return (
-                          <span key={i} style={{ fontSize: 12, fontWeight: 600, color: 'rgb(var(--textp))' }}>
-                            {i + 1}<span style={{ fontSize: 10, verticalAlign: 'super', color: 'rgb(var(--texts))' }}>{suffixes[i]}</span>{' '}
-                            <span style={{ color: col, fontWeight: 700 }}>{formatPrize(amt)}</span>
-                          </span>
-                        )
-                      })}
-                    </div>
-                  </div>
+                  <p className="text-[11px] font-medium text-texts leading-relaxed">
+                    <span className="font-semibold text-textp">{tab === 'all' ? 'Overall prize pool' : 'Per-round prize pool'}:</span>{' '}
+                    {(tab === 'all' ? OVERALL_PRIZES : GW_PRIZES).map((amt, i) => {
+                      const tone = prizeTone(amt)
+                      const col = tone === 'green' ? 'rgb(var(--success))' : tone === 'red' ? 'rgb(var(--error))' : 'rgb(var(--texts))'
+                      const sfx = ['st','nd','rd','th','th','th','th'][i]
+                      return (
+                        <React.Fragment key={i}>
+                          <span>{i + 1}<span style={{ fontSize: 9, verticalAlign: 'super' }}>{sfx}</span> <span style={{ color: col, fontWeight: 700 }}>{formatPrize(amt)}</span></span>
+                          {i < 6 && <span className="text-faint mx-1">·</span>}
+                        </React.Fragment>
+                      )
+                    })}
+                  </p>
                 )}
-                <div style={{ padding: '10px 14px', background: 'rgb(var(--surface2))', borderRadius: 12, border: '1px solid rgb(var(--border))' }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: 'rgb(var(--texts))', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Tiebreaker order</p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 6px', alignItems: 'center' }}>
-                    {['Total points','Predictions in','Outcomes','Exact scores','Goal diff','Total goals','BTTS','First-goal team','First scorer','Shared rank'].map((label, i, arr) => (
-                      <React.Fragment key={label}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: i === 0 ? 'rgb(var(--textp))' : i === arr.length - 1 ? 'rgb(var(--faint))' : 'rgb(var(--texts))', padding: '2px 8px', background: i === 0 ? 'rgb(var(--primary) / 0.12)' : 'rgb(var(--surface3))', borderRadius: 20 }}>{label}</span>
-                        {i < arr.length - 1 && <span style={{ fontSize: 10, color: 'rgb(var(--faint))' }}>›</span>}
-                      </React.Fragment>
-                    ))}
-                  </div>
-                </div>
+                <p className="text-[11px] font-medium text-texts leading-relaxed">
+                  <span className="font-semibold text-textp">Tiebreaker:</span>{' '}
+                  {['Total points','Predictions in','Outcomes','Exact scores','Goal diff','Total goals','BTTS','First-goal team','First scorer','Shared rank'].map((label, i, arr) => (
+                    <React.Fragment key={label}>
+                      <span className={i === 0 ? 'font-semibold text-textp' : i === arr.length - 1 ? 'text-faint' : ''}>{label}</span>
+                      {i < arr.length - 1 && <span className="text-faint mx-1">·</span>}
+                    </React.Fragment>
+                  ))}
+                </p>
               </div>
             </>
           )}

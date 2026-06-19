@@ -320,6 +320,9 @@ export const PLAYER_PALETTE = [
   '#3b82f6', '#eab308', '#a855f7', '#14b8a6',
 ]
 
+// Dash patterns cycling across players so overlapping lines stay distinguishable
+const DASH_PATTERNS = ['none', '8,4', '3,4', '10,3,2,3', '5,3', '12,4', '2,3', 'none']
+
 export interface RaceSeries {
   id: string
   name: string
@@ -414,15 +417,16 @@ export function PointsRaceChart({
         {labels.map((lbl, i) => (
           <text key={i} x={xPos(i)} y={LH - 4} textAnchor="middle" fontSize={9} fill="rgb(var(--faint))" fontFamily="system-ui,sans-serif">{lbl}</text>
         ))}
-        {series.map((s) => {
+        {series.map((s, si) => {
           const isYou = s.id === youId
+          const dash = isYou ? 'none' : (DASH_PATTERNS[si % DASH_PATTERNS.length] ?? 'none')
           const pts = s.data.slice(0, n).map((v, i) => ({ x: xPos(i), y: yPos(v) }))
           const path = smooth(pts)
           return (
             <g key={s.id}>
-              <path d={path} fill="none" stroke={s.color} strokeWidth={isYou ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" opacity={isYou ? 1 : 0.75} />
+              <path d={path} fill="none" stroke={s.color} strokeWidth={isYou ? 3 : 2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} vectorEffect="non-scaling-stroke" opacity={isYou ? 1 : 0.85} />
               {pts.map((p, i) => (
-                <circle key={i} cx={p.x} cy={p.y} r={isYou ? 3 : 2.2} fill={s.color} opacity={isYou ? 1 : 0.8} />
+                <circle key={i} cx={p.x} cy={p.y} r={isYou ? 3.5 : 2.5} fill={s.color} stroke={isYou ? 'rgb(var(--card))' : 'none'} strokeWidth={isYou ? 1.5 : 0} opacity={isYou ? 1 : 0.85} />
               ))}
             </g>
           )
@@ -447,12 +451,18 @@ export function PointsRaceChart({
         })()}
       </svg>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginTop: 8, paddingLeft: padL }}>
-        {series.map((s) => (
-          <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 10, height: 10, borderRadius: 2, background: s.color, flexShrink: 0 }} />
-            <span style={{ fontSize: 11, fontWeight: s.id === youId ? 700 : 500, color: s.id === youId ? 'rgb(var(--textp))' : 'rgb(var(--texts))' }}>{s.name}</span>
-          </div>
-        ))}
+        {series.map((s, si) => {
+          const isYou = s.id === youId
+          const dash = isYou ? 'none' : (DASH_PATTERNS[si % DASH_PATTERNS.length] ?? 'none')
+          return (
+            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <svg width={18} height={10} style={{ flexShrink: 0 }}>
+                <line x1={0} y1={5} x2={18} y2={5} stroke={s.color} strokeWidth={isYou ? 2.5 : 2} strokeDasharray={dash} strokeLinecap="round" />
+              </svg>
+              <span style={{ fontSize: 11, fontWeight: isYou ? 700 : 500, color: isYou ? 'rgb(var(--textp))' : 'rgb(var(--texts))' }}>{s.name}</span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
