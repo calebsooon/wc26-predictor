@@ -11,7 +11,7 @@ const PRED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_dif
 interface SnapshotResult { written: number; overtakes: { userId: string; newRank: number; leagueId: string }[] }
 
 /** Snapshot every league's current ranking (league-weighted). */
-export async function snapshotLeagueRanks(supabase: SupabaseClient, gwNumber?: number): Promise<SnapshotResult> {
+export async function snapshotLeagueRanks(supabase: SupabaseClient): Promise<SnapshotResult> {
   const [{ data: preds }, { data: leagues }, { data: members }] = await Promise.all([
     supabase.from('predictions').select(PRED_COLS).not('points_awarded', 'is', null),
     supabase.from('leagues').select('id, scoring'),
@@ -45,7 +45,7 @@ export async function snapshotLeagueRanks(supabase: SupabaseClient, gwNumber?: n
     Array.from(agg.entries())
       .sort((a, b) => b[1] - a[1])
       .forEach(([user_id, points], idx) => {
-        snapshots.push({ user_id, league_id: league.id, rank: idx + 1, points, snapshot_at: now, ...(gwNumber != null ? { gw_number: gwNumber } : {}) })
+        snapshots.push({ user_id, league_id: league.id, rank: idx + 1, points, snapshot_at: now })
       })
   }
 

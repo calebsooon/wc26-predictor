@@ -26,20 +26,22 @@ export type AggRow = LBRow & {
   scored: number
   correct: number
   outcomeWins: number
+  exactWins: number
   streak: number
 }
 
 /**
- * Canonical leaderboard sort:
+ * Canonical leaderboard sort (matches the Rules page):
  *   1. most points
- *   2. most correct outcomes (tiebreaker)
- *   3. alphabetical by name (final, deterministic fallback)
+ *   2. most correct outcomes
+ *   3. most exact scorelines
+ *   4. shared/tied rank (no further tiebreak)
  */
 export function compareLeaderboard(a: AggRow, b: AggRow): number {
   return (
     b.pts - a.pts ||
     b.outcomeWins - a.outcomeWins ||
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    b.exactWins - a.exactWins
   )
 }
 
@@ -70,7 +72,7 @@ export function aggregateLeaderboard({
 
   const seed = (id: string, name: string | null, avatar: string | null | undefined): AggRow => ({
     id, name: name ?? '?', avatar: avatar ?? null,
-    pts: 0, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 0, streak: 0, you: id === userId,
+    pts: 0, exact: 0, acc: 0, scored: 0, correct: 0, outcomeWins: 0, exactWins: 0, streak: 0, you: id === userId,
   })
 
   for (const p of profiles) agg.set(p.id, seed(p.id, p.username, p.avatar_url))
@@ -79,8 +81,15 @@ export function aggregateLeaderboard({
     const cur = agg.get(r.user_id) ?? seed(r.user_id, r.profiles?.username ?? null, r.profiles?.avatar_url)
     cur.pts += weightedMatchPoints(r, weights)   // league-weighted total
     cur.scored += 1
-    if ((r.pts_outcome ?? 0) > 0) { cur.correct += 1; cur.outcomeWins += 1 }
-    if ((r.pts_exact ?? 0) > 0) cur.exact = (cur.exact ?? 0) + 1
+    if ((r.pts_outcome ?? 0) > 0) {
+      cur.correct += 1
+      // Only count as a tiebreaker win when outcome is actually worth points in this league
+      if ((weights.outcome ?? 0) > 0) cur.outcomeWins += 1
+    }
+    if ((r.pts_exact ?? 0) > 0) {
+      cur.exact = (cur.exact ?? 0) + 1
+      if ((weights.exact ?? 0) > 0) cur.exactWins += 1
+    }
     agg.set(r.user_id, cur)
   }
 

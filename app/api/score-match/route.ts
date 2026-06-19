@@ -102,7 +102,7 @@ export async function POST(request: Request) {
       .is('real_home_score', null)
     if (count === 0) {
       try {
-        const snap = await snapshotLeagueRanks(serviceSupabase, m.gw_number)
+        const snap = await snapshotLeagueRanks(serviceSupabase)
         if (snap.overtakes.length > 0 && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
           const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? ''
           for (const o of snap.overtakes) {
