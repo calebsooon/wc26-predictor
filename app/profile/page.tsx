@@ -12,7 +12,7 @@ import { BarChart, DonutChart, RankLine } from '@/components/charts'
 import { getTeam } from '@/lib/teams'
 import { weightedMatchPoints, weightedGroupPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { subscribeToPush, unsubscribeFromPush, getPushState } from '@/lib/push'
-import { useColorblind, setColorblind } from '@/lib/prefs'
+import { useColorblind, setColorblind, useColorblindScope, setColorblindScope, type ColorblindScope } from '@/lib/prefs'
 import { getActiveLeague, isMoneyLeague } from '@/lib/league'
 import { computePrizeSnapshot, formatPrize, prizeTone, GW_SHORT } from '@/lib/prizes'
 
@@ -136,19 +136,32 @@ function PushToggle({ userId }: { userId: string }) {
 }
 
 /* ─── ColorblindToggle ────────────────────────────────────────────────────────── */
+const CB_SCOPES: { key: ColorblindScope; label: string; desc: string }[] = [
+  { key: 'graph', label: 'Leaderboard graph only', desc: 'Only the rank-race chart uses the colour-blind-safe palette.' },
+  { key: 'all', label: 'Across the whole app', desc: 'Also remaps the green / amber / red points colours everywhere.' },
+]
+
 function ColorblindToggle({ userId }: { userId: string }) {
   const on = useColorblind()
+  const scope = useColorblindScope()
   const supabase = createClient()
+
   function toggle() {
     const next = !on
     setColorblind(next) // local cache + live update
     supabase.from('profiles').update({ colorblind: next }).eq('id', userId).then(() => {}) // cross-device source of truth
   }
+  function chooseScope(next: ColorblindScope) {
+    if (next === scope) return
+    setColorblindScope(next)
+    supabase.from('profiles').update({ colorblind_scope: next }).eq('id', userId).then(() => {})
+  }
+
   return (
     <div style={{ borderTop: '1px solid rgb(var(--border))', paddingTop: 16 }}>
       <p style={{ ...eyebrow, marginBottom: 6 }}>Colour-blind mode</p>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <p style={{ fontSize: 12, color: 'rgb(var(--texts))' }}>Use a high-contrast, colour-blind-safe palette for the leaderboard graph.</p>
+        <p style={{ fontSize: 12, color: 'rgb(var(--texts))' }}>Use a high-contrast, colour-blind-safe palette so results stay easy to tell apart.</p>
         <button
           role="switch"
           aria-checked={on}
@@ -166,6 +179,44 @@ function ColorblindToggle({ userId }: { userId: string }) {
           }} />
         </button>
       </div>
+
+      {on && (
+        <div style={{ marginTop: 14 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: 'rgb(var(--texts))', marginBottom: 8 }}>Apply to</p>
+          <div role="radiogroup" aria-label="Colour-blind mode scope" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {CB_SCOPES.map((s) => {
+              const active = scope === s.key
+              return (
+                <button
+                  key={s.key}
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => chooseScope(s.key)}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10, textAlign: 'left', cursor: 'pointer',
+                    padding: '10px 12px', borderRadius: 12,
+                    border: `1px solid ${active ? 'rgb(var(--primary))' : 'rgb(var(--border))'}`,
+                    background: active ? 'rgba(var(--primary),0.08)' : 'rgb(var(--surface2))',
+                    transition: 'border-color 0.15s, background 0.15s',
+                  }}
+                >
+                  <span style={{
+                    flexShrink: 0, marginTop: 2, width: 16, height: 16, borderRadius: 999,
+                    border: `2px solid ${active ? 'rgb(var(--primary))' : 'rgb(var(--texts))'}`,
+                    display: 'grid', placeItems: 'center',
+                  }}>
+                    {active && <span style={{ width: 8, height: 8, borderRadius: 999, background: 'rgb(var(--primary))' }} />}
+                  </span>
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'rgb(var(--textp))' }}>{s.label}</span>
+                    <span style={{ fontSize: 11.5, color: 'rgb(var(--texts))', lineHeight: 1.4 }}>{s.desc}</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

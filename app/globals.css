@@ -87,6 +87,33 @@
   --card-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 26px -12px rgba(0,0,0,0.6);
 }
 
+/* ============================================================
+ * Colour-blind "everywhere" scope (.cb-all on <html>).
+ * Remaps the semantic good/ok/bad tokens to the Okabe–Ito CVD-safe
+ * set so they stay distinguishable on the red–green axis. The
+ * leaderboard chart palette is handled separately in charts.tsx.
+ * ============================================================ */
+.cb-all {
+  --success:  0 158 115;   /* #009E73 bluish green */
+  --amber:  230 159   0;   /* #E69F00 orange      */
+  --coral:  213  94   0;   /* #D55E00 vermillion  */
+  --error:  213  94   0;
+  /* Brand green is used as a "positive" signal app-wide (buttons, prize +,
+     "submitted", hero) — unify every green to the CVD-safe one. */
+  --primary:  0 158 115;
+  --heroFrom: 0 158 115;
+  --heroTo:   0 120  88;
+}
+.dark.cb-all {
+  --success:  0 190 137;   /* brighter on near-black */
+  --amber:  240 173  30;
+  --coral:  235 110  35;
+  --error:  235 110  35;
+  --primary:  0 190 137;
+  --heroFrom: 0 168 122;
+  --heroTo:   0 112  82;
+}
+
 html {
   -webkit-text-size-adjust: 100%;
 }
