@@ -97,7 +97,6 @@ export default function RulesContent({
       <Section title="Tiebreakers">
         <ol className="text-[13px] text-texts font-medium space-y-1.5 list-decimal list-inside">
           <li>Total points.</li>
-          <li>Predictions submitted.</li>
           <li>Correct outcomes.</li>
           <li>Exact scorelines.</li>
           <li>Correct goal differences.</li>
@@ -105,6 +104,7 @@ export default function RulesContent({
           <li>Correct BTTS calls.</li>
           <li>Correct first-goal team calls.</li>
           <li>Correct first scorer calls.</li>
+          <li>Predictions submitted.</li>
           <li>Shared/tied rank if still equal.</li>
         </ol>
       </Section>

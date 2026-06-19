@@ -44,16 +44,16 @@ describe('aggregateLeaderboard', () => {
     expect(board.map((r) => r.pts)).toEqual([3, 3, 3])
   })
 
-  it('more predictions submitted breaks points tie', () => {
+  it('predictions submitted is the final decider — only after every accuracy tie', () => {
     const a = row({ id: 'a', pts: 5, scored: 3 })
     const z = row({ id: 'z', pts: 5, scored: 5 })
     expect([a, z].sort(compareLeaderboard)[0].id).toBe('z')
   })
 
-  it('more correct outcomes breaks tie after submissions', () => {
-    const a = row({ id: 'a', pts: 5, scored: 3, outcomeWins: 1 })
-    const z = row({ id: 'z', pts: 5, scored: 3, outcomeWins: 2 })
-    expect([a, z].sort(compareLeaderboard)[0].id).toBe('z')
+  it('accuracy beats volume: more correct outcomes outranks more submissions', () => {
+    const a = row({ id: 'a', pts: 5, scored: 3, outcomeWins: 2 }) // fewer submitted, more correct
+    const z = row({ id: 'z', pts: 5, scored: 9, outcomeWins: 1 }) // more submitted, fewer correct
+    expect([z, a].sort(compareLeaderboard)[0].id).toBe('a')
   })
 
   it('more exact scorelines breaks tie after outcomes', () => {

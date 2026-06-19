@@ -54,22 +54,24 @@ export type AggRow = LBRow & {
 }
 
 /**
- * Canonical leaderboard sort (matches the Rules page):
- *   1. total points  2. predictions submitted  3. correct outcomes
- *   4. exact scorelines  5. goal differences  6. total goals
- *   7. BTTS  8. first-goal team  9. first scorer  10. shared rank
+ * Canonical leaderboard sort (matches the Rules page). Prediction accuracy decides
+ * everything first; "predictions submitted" is the very last decider (so submitting
+ * more games only helps once every accuracy category is tied), after which rank is shared:
+ *   1. total points  2. correct outcomes  3. exact scorelines  4. goal differences
+ *   5. total goals  6. BTTS  7. first-goal team  8. first scorer
+ *   9. predictions submitted  10. shared rank
  */
 export function compareLeaderboard(a: AggRow, b: AggRow): number {
   return (
     b.pts            - a.pts            ||
-    b.scored         - a.scored         ||
     b.outcomeWins    - a.outcomeWins    ||
     b.exactWins      - a.exactWins      ||
     b.goalDiffWins   - a.goalDiffWins   ||
     b.totalGoalsWins - a.totalGoalsWins ||
     b.bttsWins       - a.bttsWins       ||
     b.firstTeamWins  - a.firstTeamWins  ||
-    b.firstScorerWins - a.firstScorerWins
+    b.firstScorerWins - a.firstScorerWins ||
+    b.scored         - a.scored
   )
 }
 

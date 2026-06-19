@@ -674,9 +674,10 @@ export default function LeaderboardPage() {
                     <p style={{ fontSize: 13, fontWeight: 700, color: 'rgb(var(--textp))' }}>
                       {tab === 'all' ? 'Season Points Race' : parseInt(tab) <= 3 ? `${gwLabel} — Points Race` : `${gwLabel} Points`}
                     </p>
-                    {/* Race chart mode toggle — only for line charts (Overall + group GWs) */}
+                    {/* Race chart mode toggle — only for line charts (Overall + group GWs).
+                        Matches the segmented pill toggle used on profile/dashboard. */}
                     {(tab === 'all' || parseInt(tab) <= 3) && (
-                      <div style={{ display: 'flex', gap: 2, padding: 2, background: 'rgb(var(--surface))', borderRadius: 9, border: '1px solid rgb(var(--border))' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: 4, borderRadius: 999, background: 'rgb(var(--surface2))', border: '1px solid rgb(var(--border))', flexWrap: 'wrap' }}>
                         {([
                           ['absolute', 'Points'],
                           ['gapLeader', 'vs Leader'],
@@ -689,16 +690,10 @@ export default function LeaderboardPage() {
                               key={v}
                               onClick={() => setRaceVariant(v)}
                               style={{
-                                padding: '4px 9px',
-                                borderRadius: 7,
-                                fontSize: 11,
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                border: 'none',
-                                background: active ? 'rgb(var(--card))' : 'transparent',
-                                color: active ? 'rgb(var(--textp))' : 'rgb(var(--texts))',
-                                boxShadow: active ? '0 1px 2px rgba(0,0,0,0.12)' : undefined,
-                                transition: 'all 0.15s',
+                                height: 28, padding: '0 11px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                                background: active ? 'rgb(var(--textp))' : 'transparent',
+                                color: active ? 'rgb(var(--bg))' : 'rgb(var(--texts))',
+                                fontSize: 11.5, fontWeight: 700, transition: 'all 0.15s',
                               }}
                             >
                               {label}
