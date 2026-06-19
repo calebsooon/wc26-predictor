@@ -11,6 +11,7 @@ interface Player {
   nationality: string | null; team_name: string
   photo_url: string | null; dob: string | null; club: string | null
   goals: number | null; assists: number | null
+  injured: boolean | null; injury_type: string | null
 }
 
 function ageFromDob(dob: string | null): number | null {
@@ -54,6 +55,9 @@ function PlayerRow({ p, last, picked }: { p: Player; last: boolean; picked: bool
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-textp truncate">{p.name}</span>
           {picked && <ScorerStar />}
+          {p.injured && (
+            <span title={p.injury_type ?? 'Out'} className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-coral/15 border border-coral/30 text-coral text-[10px] font-bold shrink-0">OUT</span>
+          )}
         </div>
         {meta && <span className="text-[11px] text-texts truncate block">{meta}</span>}
       </div>
@@ -122,7 +126,7 @@ export default function SquadsPage() {
         while (true) {
           const { data, error: e } = await supabase
             .from('players')
-            .select('id, name, position, jersey_number, nationality, team_name, photo_url, dob, club, goals, assists')
+            .select('id, name, position, jersey_number, nationality, team_name, photo_url, dob, club, goals, assists, injured, injury_type')
             .range(from, from + PAGE - 1)
           if (e) throw e
           if (!data || data.length === 0) break
