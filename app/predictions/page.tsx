@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { EmptyState, Skeleton, CalIcon } from '@/components/ui'
 import { toUIMatch, matchStatus, type DBMatch, type MyPred } from '@/lib/match-ui'
@@ -56,28 +57,33 @@ export default function FixturesPage() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) { router.replace('/login'); return }
 
-        const { data: roundData, error: roundErr } = await supabase
-          .from('rounds')
-          .select('id, name, "order", matches (id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, gameweek)')
-          .order('"order"')
-          .order('match_date', { referencedTable: 'matches' })
+        const [
+          { data: roundData, error: roundErr },
+          { data: myData, error: predErr },
+          { weights: w },
+        ] = await Promise.all([
+          supabase.from('rounds')
+            .select('id, name, "order", matches (id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, gameweek)')
+            .order('"order"')
+            .order('match_date', { referencedTable: 'matches' }),
+          supabase.from('predictions')
+            .select('match_id, pred_home, pred_away, pred_total_goals, pred_goal_diff, pred_btts, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
+            .eq('user_id', user.id),
+          getActiveLeague(supabase, user.id),
+        ])
+
         if (roundErr) throw roundErr
+        if (predErr) throw predErr
+
         const flat: DBMatch[] = []
         for (const r of (roundData ?? []) as unknown as RoundRow[]) {
           for (const m of r.matches ?? []) flat.push({ ...m, round_name: r.name })
         }
         setMatches(flat)
 
-        const { data: myData, error: predErr } = await supabase
-          .from('predictions')
-          .select('match_id, pred_home, pred_away, pred_total_goals, pred_goal_diff, pred_btts, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
-          .eq('user_id', user.id)
-        if (predErr) throw predErr
         const map: Record<string, MyPred> = {}
         for (const p of myData ?? []) map[(p as { match_id: string }).match_id] = p as unknown as MyPred
         setPreds(map)
-
-        const { weights: w } = await getActiveLeague(supabase, user.id)
         setWeights(w)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load fixtures')
@@ -86,6 +92,34 @@ export default function FixturesPage() {
       }
     }
     load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Realtime: update match scores without requiring a page refresh
+  useEffect(() => {
+    const channel = supabase
+      .channel('fixtures-match-scores')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'matches' },
+        (payload) => {
+          const updated = payload.new as Partial<DBMatch> & { id: string }
+          setMatches((prev) => prev.map((m) => {
+            if (m.id !== updated.id) return m
+            const scoreChanged =
+              updated.real_home_score !== m.real_home_score ||
+              updated.real_away_score !== m.real_away_score
+            if (scoreChanged && updated.real_home_score != null && updated.real_away_score != null) {
+              const home = getTeam(m.home_team)
+              const away = getTeam(m.away_team)
+              toast.info(`${home.name} ${updated.real_home_score}–${updated.real_away_score} ${away.name}`, { duration: 4000 })
+            }
+            return { ...m, ...updated }
+          }))
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

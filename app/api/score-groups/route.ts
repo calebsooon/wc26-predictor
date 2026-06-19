@@ -102,7 +102,7 @@ export async function POST(req: Request) {
 
   // Auto-snapshot ranks after scoring all groups (end of group stage = GW3)
   if (!group_name) {
-    try { await snapshotLeagueRanks(serviceSupabase, 3) } catch {}
+    try { await snapshotLeagueRanks(serviceSupabase) } catch {}
   }
 
   return NextResponse.json({ groups: results, predictions_updated: predictionsUpdated })

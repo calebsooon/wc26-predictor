@@ -13,6 +13,7 @@ import { getTeam } from '@/lib/teams'
 import { weightedMatchPoints, weightedGroupPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { subscribeToPush, unsubscribeFromPush, getPushState } from '@/lib/push'
 import { getActiveLeague, isMoneyLeague } from '@/lib/league'
+import { computePrizeSnapshot, formatPrize, prizeTone, GW_SHORT } from '@/lib/prizes'
 
 /* ─── Types ────────────────────────────────────────────────────────────────── */
 interface Profile { id: string; username: string; avatar_url: string | null; is_admin: boolean }
@@ -261,21 +262,44 @@ export default function ProfilePage() {
         setIsMoney(isMoneyLeague(league))
 
         const ids = memberIds.length ? memberIds : [user.id]
-        const { data: all, error: allErr } = await supabase
-          .from('predictions')
-          .select('user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
-          .not('points_awarded', 'is', null)
-          .in('user_id', ids)
+        const [{ data: all, error: allErr }, { data: gwMatches }] = await Promise.all([
+          supabase
+            .from('predictions')
+            .select('user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, matches(gw_number)')
+            .not('points_awarded', 'is', null)
+            .in('user_id', ids),
+          supabase.from('matches').select('gw_number, real_home_score').not('gw_number', 'is', null),
+        ])
         setTotalPlayers(ids.length)
         let myRank: number | null = null
         if (!allErr) {
           const agg = new Map<string, number>()
-          for (const r of (all ?? []) as (ScoredPred & { user_id: string })[]) {
+          type AllRow = ScoredPred & { user_id: string; matches: { gw_number: number | null }[] | null }
+          const allRows = (all ?? []) as unknown as AllRow[]
+          for (const r of allRows) {
             agg.set(r.user_id, (agg.get(r.user_id) ?? 0) + weightedMatchPoints(r, w))
           }
           const sorted = Array.from(agg.entries()).sort((a, b) => b[1] - a[1])
           const idx = sorted.findIndex(([uid]) => uid === user.id)
           myRank = idx >= 0 ? idx + 1 : null
+
+          if (isMoneyLeague(league) && myRank != null) {
+            const gwMatchStatus = new Map<number, { total: number; scored: number }>()
+            for (const m of (gwMatches ?? []) as { gw_number: number | null; real_home_score: number | null }[]) {
+              if (!m.gw_number) continue
+              const cur = gwMatchStatus.get(m.gw_number) ?? { total: 0, scored: 0 }
+              cur.total++; if (m.real_home_score !== null) cur.scored++
+              gwMatchStatus.set(m.gw_number, cur)
+            }
+            const predsForCalc = allRows.map((r) => ({
+              user_id: r.user_id,
+              points_awarded: weightedMatchPoints(r, w),
+              pts_outcome: r.pts_outcome,
+              gw_number: (r.matches?.[0]?.gw_number) ?? null,
+            }))
+            const snap = computePrizeSnapshot({ userId: user.id, allScoredPreds: predsForCalc, gwMatchStatus, overallRank: myRank })
+            setNetPool(snap.settledNet)
+          }
         }
         setRank(myRank)
 
@@ -299,8 +323,6 @@ export default function ProfilePage() {
           setRankSeries([myRank])
         }
 
-        // Net pool placeholder (not in DB for now)
-        setNetPool(null)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load profile')
       } finally {
@@ -347,7 +369,7 @@ export default function ProfilePage() {
     return Array.from({ length: 8 }, (_, i) => map.get(i + 1) ?? 0)
   }, [preds, weights])
 
-  const gwLabels = ['GW1','GW2','GW3','GW4','GW5','GW6','GW7','GW8']
+  const gwLabels = [1,2,3,4,5,6,7,8].map((gw) => GW_SHORT[gw] ?? `GW${gw}`)
 
   const badges = useMemo(() => {
     const c = (key: keyof ScoredPred) => preds.filter((p) => ((p[key] as number) ?? 0) > 0).length
@@ -358,8 +380,10 @@ export default function ProfilePage() {
       { id: 'merchant', name: 'Upset Merchant', desc: '60% over 20 picks', earned: stats.scored >= 20 && stats.acc >= 60 },
       { id: 'prophet', name: 'First Blood Prophet', desc: '10 first-goal calls', earned: c('pts_first_team') >= 10 },
       { id: 'fraud', name: 'Fraud Watch', desc: 'Sub-30% accuracy', earned: stats.scored >= 10 && stats.acc < 30 },
+      { id: 'hothand', name: 'Hot Hand', desc: '5+ correct outcomes in a row', earned: stats.streak >= 5 },
+      { id: 'highroller', name: 'High Roller', desc: '12+ pts in a single match', earned: preds.some((p) => weightedMatchPoints(p, weights) >= 12) },
     ]
-  }, [preds, stats])
+  }, [preds, stats, weights])
 
   const unlockedCount = badges.filter((b) => b.earned).length
 
@@ -410,7 +434,7 @@ export default function ProfilePage() {
     }
     const gws = Array.from(byGW.keys()).sort((a, b) => a - b)
     return {
-      labels: gws.map((g) => `GW${g}`),
+      labels: gws.map((g) => GW_SHORT[g] ?? `GW${g}`),
       series: gws.map((g) => { const d = byGW.get(g)!; return d.scored > 0 ? Math.round((d.correct / d.scored) * 100) : 0 }),
     }
   }, [preds])
@@ -596,9 +620,9 @@ export default function ProfilePage() {
           {isMoney && <div style={{ width: 1, height: 36, background: 'rgb(var(--border))' }} />}
           {isMoney && (
             <div style={{ padding: '0 18px', textAlign: 'center' }}>
-              <p style={eyebrow}>Net pool</p>
-              <p style={{ fontSize: 22, fontWeight: 800, margin: 0, marginTop: 2, color: netPool != null && netPool >= 0 ? 'rgb(var(--success))' : 'rgb(var(--coral))', lineHeight: 1 }}>
-                {netPool != null ? (netPool >= 0 ? `+$${netPool}` : `-$${Math.abs(netPool)}`) : '–'}
+              <p style={eyebrow}>Settled</p>
+              <p style={{ fontSize: 22, fontWeight: 800, margin: 0, marginTop: 2, lineHeight: 1, color: netPool == null ? 'rgb(var(--texts))' : prizeTone(netPool) === 'green' ? 'rgb(var(--success))' : prizeTone(netPool) === 'red' ? 'rgb(var(--error))' : 'rgb(var(--textp))' }}>
+                {netPool != null ? formatPrize(netPool) : '–'}
               </p>
             </div>
           )}
@@ -731,7 +755,7 @@ export default function ProfilePage() {
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
               <div>
                 <p style={{ fontSize: 14, fontWeight: 700, margin: 0, color: 'rgb(var(--textp))' }}>
-                  {rankChartMode === 'season' ? 'Rank movement' : rankChartMode === 'byGW' ? 'Points by gameweek' : `GW${selectedRankGw} breakdown`}
+                  {rankChartMode === 'season' ? 'Rank movement' : rankChartMode === 'byGW' ? 'Points by round' : `${GW_SHORT[selectedRankGw] ?? `GW${selectedRankGw}`} breakdown`}
                 </p>
                 <p style={{ fontSize: 12, color: 'rgb(var(--texts))', margin: 0, marginTop: 2 }}>
                   {rankChartMode === 'season'
@@ -769,7 +793,7 @@ export default function ProfilePage() {
                   onChange={(e) => setSelectedRankGw(Number(e.target.value))}
                   style={{ height: 30, borderRadius: 8, border: '1px solid rgb(var(--border))', background: 'rgb(var(--surface))', color: 'rgb(var(--textp))', fontSize: 12, padding: '0 8px', cursor: 'pointer' }}
                 >
-                  {allGws.map((gw) => <option key={gw} value={gw}>{`GW${gw}`}</option>)}
+                  {allGws.map((gw) => <option key={gw} value={gw}>{GW_SHORT[gw] ?? `GW${gw}`}</option>)}
                 </select>
               )}
             </div>
@@ -782,16 +806,16 @@ export default function ProfilePage() {
             />
           ) : rankChartMode === 'byGW' ? (
             allGws.length > 0
-              ? <BarChart series={gwPointsSeries} labels={allGws.map((g) => `GW${g}`)} showVals />
+              ? <BarChart series={gwPointsSeries} labels={allGws.map((g) => GW_SHORT[g] ?? `GW${g}`)} showVals />
               : <p style={{ fontSize: 13, color: 'rgb(var(--texts))', textAlign: 'center', paddingTop: 40 }}>No scored gameweeks yet</p>
           ) : (
             specificGwMatches.length > 0
               ? <BarChart
                   series={specificGwMatches.map((p) => weightedMatchPoints(p, weights))}
-                  labels={specificGwMatches.map((p) => `${p.matches?.home_team ?? '?'} v ${p.matches?.away_team ?? '?'}`)}
+                  labels={specificGwMatches.map((p) => `${p.matches?.home_team ?? '?'}-${p.matches?.away_team ?? '?'}`)}
                   showVals
                 />
-              : <p style={{ fontSize: 13, color: 'rgb(var(--texts))', textAlign: 'center', paddingTop: 40 }}>No predictions for GW{selectedRankGw}</p>
+              : <p style={{ fontSize: 13, color: 'rgb(var(--texts))', textAlign: 'center', paddingTop: 40 }}>No predictions for {GW_SHORT[selectedRankGw] ?? `GW${selectedRankGw}`}</p>
           )}
         </div>
 

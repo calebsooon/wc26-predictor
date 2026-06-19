@@ -14,12 +14,12 @@ import RulesModal from '@/components/RulesModal'
 import FlagChip from '@/components/FlagChip'
 import { BarChart, RankLine, DonutChart } from '@/components/charts'
 import PredictionModal from '@/components/PredictionModal'
-import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
+import { aggregateLeaderboard, type ProfileLite, type ScoredGroupPred, type ScoredTournamentPred } from '@/lib/leaderboard'
 import { getActiveLeague, isMoneyLeague } from '@/lib/league'
 import { isKnockout, type DBMatch, type MyPred } from '@/lib/match-ui'
 import { getTeam } from '@/lib/teams'
 import { SCORING_RULES, weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
-import { computePrizeSnapshot, formatPrize, prizeTone, GW_NAMES, GW_PRIZES, OVERALL_PRIZES } from '@/lib/prizes'
+import { computePrizeSnapshot, formatPrize, prizeTone, GW_NAMES, GW_SHORT, GW_PRIZES, OVERALL_PRIZES } from '@/lib/prizes'
 import { useAppBadge } from '@/lib/pwa'
 import { fmtDateOnlyKey, fmtTime, getUserTimeZone } from '@/lib/date-format'
 
@@ -70,6 +70,14 @@ export default function DashboardPage() {
   const [trajMode, setTrajMode] = useState<'points' | 'rank'>('points')
   const [timeZone, setTimeZone] = useState('Asia/Singapore')
 
+  // Refs so Realtime callbacks can refetch without stale closures
+  const memberIdsRef = useRef<string[]>([])
+  const memberProfilesRef = useRef<ProfileLite[]>([])
+  const userIdRef = useRef<string | null>(null)
+  const groupRowsRef = useRef<ScoredGroupPred[]>([])
+  const tournRowsRef = useRef<ScoredTournamentPred[]>([])
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   useEffect(() => {
     setTimeZone(getUserTimeZone())
   }, [])
@@ -107,19 +115,28 @@ export default function DashboardPage() {
         setBannersEnabled(league?.banners_enabled === true)
 
         const ids = memberIds.length ? memberIds : [user.id]
-        const [{ data: scored }, { data: gwMatches }, { data: tp }, snapResult, bannerResult] = await Promise.all([
+        memberIdsRef.current = ids
+        memberProfilesRef.current = memberProfiles as ProfileLite[]
+        userIdRef.current = user.id
+
+        const [{ data: scored }, { data: gwMatches }, { data: groupP }, { data: tournP }, snapResult, bannerResult] = await Promise.all([
           supabase.from('predictions').select(SCORED_COLS).not('points_awarded', 'is', null).in('user_id', ids),
           supabase.from('matches').select('gw_number, real_home_score').not('gw_number', 'is', null),
-          supabase.from('tournament_predictions').select('user_id').eq('user_id', user.id).limit(1),
+          supabase.from('group_predictions').select('user_id, points_awarded').not('points_awarded', 'is', null).in('user_id', ids),
+          supabase.from('tournament_predictions').select('user_id, pts_champion, pts_runner_up, pts_semi, pts_quarter').in('user_id', ids),
           league ? supabase.from('rank_snapshots').select('rank, snapshot_at, gw_number').eq('user_id', user.id).eq('league_id', league.id).order('snapshot_at', { ascending: true }) : Promise.resolve({ data: [] }),
           league?.banners_enabled ? supabase.from('league_banners').select('id, image_url, display_order').eq('league_id', league.id).order('display_order') : Promise.resolve({ data: [] }),
         ])
 
         const allScored = (scored ?? []) as unknown as ScoredPredRow[]
+        const groupRows = (groupP ?? []) as ScoredGroupPred[]
+        const tournRows = (tournP ?? []) as ScoredTournamentPred[]
+        groupRowsRef.current = groupRows
+        tournRowsRef.current = tournRows
         setScoredPreds(allScored)
-        setLb(aggregateLeaderboard({ scoredPreds: allScored, profiles: memberProfiles as ProfileLite[], userId: user.id, weights: w }))
+        setLb(aggregateLeaderboard({ scoredPreds: allScored, profiles: memberProfiles as ProfileLite[], userId: user.id, weights: w, groupPreds: groupRows, tournamentPreds: tournRows }))
         setGwMatchRows((gwMatches ?? []) as unknown as MatchGWRow[])
-        setHasTournamentPick(!!(tp && tp.length))
+        setHasTournamentPick(tournRows.some((r) => r.user_id === user.id))
         const snaps = (snapResult.data ?? []) as RankSnapshot[]
         setRankSnapshots(snaps)
         setPrevRank(snaps.length >= 2 ? snaps[snaps.length - 2].rank : null)
@@ -132,6 +149,44 @@ export default function DashboardPage() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Realtime: re-fetch scored predictions + GW match status when scores are saved
+  useEffect(() => {
+    async function refreshScored() {
+      const ids = memberIdsRef.current
+      const uid = userIdRef.current
+      if (!ids.length || !uid) return
+      const [{ data: scored }, { data: gwMatches }] = await Promise.all([
+        supabase.from('predictions').select(SCORED_COLS).not('points_awarded', 'is', null).in('user_id', ids),
+        supabase.from('matches').select('gw_number, real_home_score').not('gw_number', 'is', null),
+      ])
+      const allScored = (scored ?? []) as unknown as ScoredPredRow[]
+      setScoredPreds(allScored)
+      setLb(aggregateLeaderboard({ scoredPreds: allScored, profiles: memberProfilesRef.current, userId: uid, weights: weights, groupPreds: groupRowsRef.current, tournamentPreds: tournRowsRef.current }))
+      setGwMatchRows((gwMatches ?? []) as unknown as MatchGWRow[])
+    }
+
+    function scheduleRefresh() {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+      refreshTimerRef.current = setTimeout(refreshScored, 800)
+    }
+
+    const channel = supabase
+      .channel('dashboard-scored-updates')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'predictions', filter: 'points_awarded=not.is.null' }, scheduleRefresh)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, (payload) => {
+        const updated = payload.new as Partial<DBMatch> & { id: string }
+        setMatches((prev) => prev.map((m) => m.id === updated.id ? { ...m, ...updated } : m))
+        scheduleRefresh()
+      })
+      .subscribe()
+
+    return () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+      supabase.removeChannel(channel)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weights])
 
   const myRank = useMemo(() => {
     const i = lb.findIndex((r) => r.id === userId)
@@ -195,11 +250,14 @@ export default function DashboardPage() {
 
   const gwNumbers = Object.keys(scoredByGW).map(Number).sort((a, b) => a - b)
   const gwSeries = gwNumbers.map((gw) => scoredByGW[gw])
-  const gwLabels = gwNumbers.map((gw) => `GW${gw}`)
+  const gwLabels = gwNumbers.map((gw) => GW_SHORT[gw] ?? `GW${gw}`)
 
   // Rank trajectory from real snapshots
   const rankSeries = rankSnapshots.map((s) => s.rank)
-  const rankLabels = rankSnapshots.map((s, i) => s.gw_number != null ? `GW${s.gw_number}` : `S${i + 1}`)
+  const rankLabels = rankSnapshots.map((s) => {
+    const d = new Date(s.snapshot_at)
+    return d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })
+  })
 
   // Current GW pts: pts from the most recent GW that has scored predictions
   const currentGWPts = useMemo(() => {
@@ -216,6 +274,30 @@ export default function DashboardPage() {
     return gwsWithScored.length > 0 ? Math.max(...gwsWithScored) : null
   }, [gwMatchRows])
   const progressPct = Math.round((playedMatches / totalMatches) * 100)
+
+  const gwBoundaries = useMemo(() => {
+    const countByGW = new Map<number, number>()
+    for (const m of gwMatchRows) {
+      if (m.gw_number) countByGW.set(m.gw_number, (countByGW.get(m.gw_number) ?? 0) + 1)
+    }
+    let cum = 0
+    const all = [1,2,3,4,5,6,7,8].map((gw) => {
+      cum += countByGW.get(gw) ?? 0
+      return { gw, pct: totalMatches > 0 ? (cum / totalMatches) * 100 : (gw / 8) * 100 }
+    })
+    // Show labels at least 12% apart; always include GW1 and the last GW (Final).
+    // Second pass removes any label too close to its successor (handles forced-last overlap).
+    const visible: typeof all = []
+    for (const b of all) {
+      const prev = visible[visible.length - 1]
+      if (b.gw === 1 || b.gw === 8 || !prev || b.pct - prev.pct >= 12) {
+        visible.push(b)
+      }
+    }
+    return visible.filter((b, i, arr) =>
+      i === arr.length - 1 || arr[i + 1].pct - b.pct >= 8
+    )
+  }, [gwMatchRows, totalMatches])
 
   // Best / worst GW
   const { bestGW, worstGW } = useMemo(() => {
@@ -445,7 +527,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-2">
             <div>
               <p className="text-[13px] font-bold text-textp">
-                {playedMatches === 0 ? 'Tournament not started' : playedMatches === totalMatches ? 'Tournament complete' : currentGW ? `GW${currentGW} underway` : 'Group stage'}
+                {playedMatches === 0 ? 'Tournament not started' : playedMatches === totalMatches ? 'Tournament complete' : currentGW ? `${GW_SHORT[currentGW] ?? `GW${currentGW}`} underway` : 'Group stage'}
               </p>
               <p className="text-[11.5px] text-texts mt-0.5">{playedMatches} of {totalMatches} matches played</p>
             </div>
@@ -454,10 +536,20 @@ export default function DashboardPage() {
           <div className="h-2 rounded-full bg-surface2 overflow-hidden">
             <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${progressPct}%` }} />
           </div>
-          <div className="flex justify-between mt-1.5">
-            {[1,2,3,4,5,6,7,8].map((gw) => (
-              <span key={gw} className={`text-[10px] font-semibold ${(currentGW ?? 0) >= gw ? 'text-primary' : 'text-texts/40'}`}>GW{gw}</span>
-            ))}
+          <div className="relative mt-1.5 overflow-hidden" style={{ height: 14 }}>
+            {gwBoundaries.map(({ gw, pct }) => {
+              // Clamp so first label doesn't overflow left, last doesn't overflow right
+              const clamped = gw === 1 ? Math.max(pct, 2) : gw === 8 ? Math.min(pct, 98) : pct
+              return (
+                <span
+                  key={gw}
+                  className={`absolute text-[9px] font-semibold -translate-x-1/2 ${(currentGW ?? 0) >= gw ? 'text-primary' : 'text-texts/40'}`}
+                  style={{ left: `${clamped}%` }}
+                >
+                  {GW_SHORT[gw] ?? `GW${gw}`}
+                </span>
+              )
+            })}
           </div>
         </div>
         {/* Best / Worst GW */}
@@ -466,13 +558,13 @@ export default function DashboardPage() {
             <div className="text-center">
               <p className="text-[10.5px] font-semibold uppercase tracking-wider text-texts mb-0.5">Best GW</p>
               <p className="text-[24px] font-extrabold font-display text-success leading-none">{bestGW.pts}</p>
-              <p className="text-[11px] text-texts mt-0.5">GW{bestGW.gw}</p>
+              <p className="text-[11px] text-texts mt-0.5">{GW_SHORT[bestGW.gw] ?? `GW${bestGW.gw}`}</p>
             </div>
             <div className="w-px h-10 bg-border" />
             <div className="text-center">
               <p className="text-[10.5px] font-semibold uppercase tracking-wider text-texts mb-0.5">Worst GW</p>
               <p className="text-[24px] font-extrabold font-display text-coral leading-none">{worstGW.pts}</p>
-              <p className="text-[11px] text-texts mt-0.5">GW{worstGW.gw}</p>
+              <p className="text-[11px] text-texts mt-0.5">{GW_SHORT[worstGW.gw] ?? `GW${worstGW.gw}`}</p>
             </div>
           </div>
         )}
@@ -578,7 +670,7 @@ export default function DashboardPage() {
                 return (
                   <div key={row.id} className="flex items-center gap-[11px] px-[11px] py-[9px] rounded-[11px]" style={{ background: isYou ? 'rgba(var(--primary),0.10)' : 'transparent' }}>
                     <span className="w-4 text-center text-[13px] font-bold tabular-nums" style={{ color: posColor }}>{i + 1}</span>
-                    <Avatar name={row.name} src={null} size={30} />
+                    <Avatar name={row.name} src={row.avatar ?? null} size={30} />
                     <div className="flex-1 min-w-0">
                       <span className="text-[13px] font-semibold flex items-center gap-1.5">
                         {row.name}
@@ -766,9 +858,9 @@ function PrizeSection({ prize }: { prize: ReturnType<typeof computePrizeSnapshot
         </div>
         <div className="bg-surface2 border border-border rounded-[13px] px-[15px] py-[13px]">
           <div className="text-[23px] font-extrabold tabular-nums font-display">
-            <span className="text-error">{rangeMin > 0 ? `+$${rangeMin}` : rangeMin < 0 ? `-$${Math.abs(rangeMin)}` : '$0'}</span>
+            <span className={prizeTone(rangeMin) === 'green' ? 'text-success' : prizeTone(rangeMin) === 'red' ? 'text-error' : 'text-textp'}>{formatPrize(rangeMin)}</span>
             <span className="text-faint font-semibold text-[15px] mx-1">→</span>
-            <span className="text-success">{rangeMax > 0 ? `+$${rangeMax}` : `$${rangeMax}`}</span>
+            <span className={prizeTone(rangeMax) === 'green' ? 'text-success' : prizeTone(rangeMax) === 'red' ? 'text-error' : 'text-textp'}>{formatPrize(rangeMax)}</span>
           </div>
           <div className="eyebrow mt-0.5">Range</div>
           <div className="text-[11px] text-texts mt-0.5">worst → best case</div>

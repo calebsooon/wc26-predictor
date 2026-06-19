@@ -231,7 +231,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="px-4 sm:px-6 py-5 sm:py-7 pb-28 lg:pb-10 max-w-6xl mx-auto overflow-x-hidden">
+        <main className="px-4 sm:px-6 py-5 sm:py-7 lg:pb-10 max-w-6xl mx-auto overflow-x-hidden">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={pathname}
@@ -244,6 +244,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               {children}
             </motion.div>
           </AnimatePresence>
+          {/* Safe-area-aware spacer for mobile bottom nav — hidden on desktop */}
+          <div className="lg:hidden" style={{ height: 'calc(5rem + env(safe-area-inset-bottom, 0px))' }} aria-hidden="true" />
         </main>
       </div>
 
@@ -284,7 +286,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
-              transition={{ type: 'spring', stiffness: 420, damping: 36 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+            style={{ willChange: 'transform' }}
             >
               <div className="p-4 border-b border-border">
                 <div className="flex items-center justify-between gap-3">
@@ -341,6 +344,9 @@ function LeagueSwitcher({
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-label={`League: ${active.name}`}
         className={`flex items-center gap-2 rounded-xl border border-border bg-card hover:border-texts/40 transition-colors ${compact ? 'h-9 px-2.5 max-w-[150px]' : 'w-full h-11 px-3'}`}
       >
         <TrophyIcon size={15} className={isMoneyLeague(active) ? 'text-gold' : 'text-primary'} />

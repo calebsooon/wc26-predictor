@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/s
 import { requireAdmin } from '@/lib/require-admin'
 import { TOURNAMENT_POINTS } from '@/lib/scoring'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { snapshotLeagueRanks } from '@/lib/snapshot'
 
 const ROUND_IDS = {
   QF: '00000000-0000-0000-0000-000000000004',
@@ -95,6 +96,9 @@ export async function POST() {
     pts_distributed: null,
     scored_count: updates.length,
   }).then(() => {})
+
+  // Snapshot ranks so movement arrows reflect new tournament points
+  try { await snapshotLeagueRanks(serviceSupabase) } catch {}
 
   return NextResponse.json({
     updated: updates.length, champion, runner_up,

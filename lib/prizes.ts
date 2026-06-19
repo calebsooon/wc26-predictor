@@ -5,19 +5,19 @@ export const GW_PRIZES = [15, 10, 5, 0, -5, -10, -15] as const
 export const OVERALL_PRIZES = [40, 20, 10, 0, -10, -20, -40] as const
 
 export const GW_NAMES: Record<number, string> = {
-  1: 'GW1 — Group Stage Day 1',
-  2: 'GW2 — Group Stage Day 2',
-  3: 'GW3 — Group Stage Day 3',
-  4: 'GW4 — Round of 32',
-  5: 'GW5 — Round of 16',
-  6: 'GW6 — Quarter-Finals',
-  7: 'GW7 — Semi-Finals',
-  8: 'GW8 — Final & 3rd Place',
+  1: 'Group Stage — Day 1',
+  2: 'Group Stage — Day 2',
+  3: 'Group Stage — Day 3',
+  4: 'Round of 32',
+  5: 'Round of 16',
+  6: 'Quarter-Finals',
+  7: 'Semi-Finals',
+  8: 'Final & 3rd Place',
 }
 
 export const GW_SHORT: Record<number, string> = {
-  1: 'GW1', 2: 'GW2', 3: 'GW3', 4: 'GW4',
-  5: 'GW5', 6: 'GW6', 7: 'GW7', 8: 'GW8',
+  1: 'GW1', 2: 'GW2', 3: 'GW3',
+  4: 'R32', 5: 'R16', 6: 'QF', 7: 'SF', 8: 'Final',
 }
 
 export function gwPrize(rank: number): number {

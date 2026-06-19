@@ -1,6 +1,7 @@
 {
-  "name": "03_wc_predictor",
-  "version": "0.1.0",
+  "name": "matchday",
+  "description": "Private World Cup 2026 prediction league with live scoring, leaderboard and prize pool",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

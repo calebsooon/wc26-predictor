@@ -267,9 +267,9 @@ export default function InstallPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <PageHeader
-        eyebrow="Get the app"
+        eyebrow="Get the app (optional)"
         title="Install MatchDay"
-        sub="Add MatchDay to your home screen for a native app experience."
+        sub="Totally optional — MatchDay works perfectly in your browser. Installing just adds it to your home screen so it opens like a normal app."
       />
 
       {installed ? (

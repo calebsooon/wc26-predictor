@@ -84,9 +84,9 @@ export function BarChart({
             </span>
           ) : null)}
         </div>
-        <div className="flex justify-between mt-2">
+        <div className="flex justify-between mt-2 overflow-hidden">
           {bars.map((b, i) => (
-            <span key={i} className="flex-1 text-center text-[10px] font-semibold tabular-nums" style={{ color: b.labelColor }}>{b.label}</span>
+            <span key={i} className="flex-1 text-center text-[10px] font-semibold tabular-nums min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" style={{ color: b.labelColor }}>{b.label}</span>
           ))}
         </div>
       </div>
@@ -310,6 +310,313 @@ export function RankLine({ ranks, total, labels, accent = 'rgb(var(--primary))' 
           {l.label}
         </span>
       ))}
+    </div>
+  )
+}
+
+// ─── PointsRaceChart ─────────────────────────────────────────────────────────
+export const PLAYER_PALETTE = [
+  '#6366f1', '#f97316', '#10b981', '#f43f5e',
+  '#3b82f6', '#eab308', '#a855f7', '#14b8a6',
+]
+
+// Dash patterns cycling across players so overlapping lines stay distinguishable
+const DASH_PATTERNS = ['none', '8,4', '3,4', '10,3,2,3', '5,3', '12,4', '2,3', 'none']
+
+export interface RaceSeries {
+  id: string
+  name: string
+  color: string
+  data: number[]
+}
+
+export function PointsRaceChart({
+  series,
+  labels,
+  youId,
+  mode = 'line',
+}: {
+  series: RaceSeries[]
+  labels: string[]
+  youId?: string | null
+  mode?: 'line' | 'bar'
+}) {
+  const W = 600, H = 200
+  const padL = 30, padR = 8, padT = 12, padB = 28
+
+  if (series.length === 0) return null
+
+  if (mode === 'bar') {
+    const n = series.length
+    const maxVal = Math.max(...series.map((s) => s.data[0] ?? 0), 1)
+    const niceMax = Math.max(10, Math.ceil(maxVal / 5) * 5)
+    const gap = (W / n) * 0.35
+    const bw = W / n - gap
+    const yT = (v: number) => padT + (H - padT - padB) * (1 - v / niceMax)
+    const gridVals = [0, Math.round(niceMax * 0.5), niceMax]
+    return (
+      <div className="w-full">
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 160, display: 'block' }}>
+          {gridVals.map((v, i) => (
+            <g key={i}>
+              <line x1={padL} x2={W - padR} y1={yT(v)} y2={yT(v)} stroke="rgb(var(--border))" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+              <text x={padL - 4} y={yT(v) + 3.5} textAnchor="end" fontSize={9} fill="rgb(var(--faint))" fontFamily="system-ui,sans-serif">{v}</text>
+            </g>
+          ))}
+          {series.map((s, i) => {
+            const v = s.data[0] ?? 0
+            const x = (W / n) * i + gap / 2
+            const y = yT(v)
+            const bh = Math.max(H - padB - y, 2)
+            return (
+              <path key={s.id} d={topRound(+x.toFixed(1), +y.toFixed(1), +bw.toFixed(1), +bh.toFixed(1), 5)} fill={s.color} opacity={s.id === youId ? 1 : 0.75} />
+            )
+          })}
+        </svg>
+        <div style={{ display: 'flex', paddingLeft: padL }}>
+          {series.map((s) => (
+            <div key={s.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 0 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.data[0] ?? 0}</span>
+              <span style={{ fontSize: 10, fontWeight: s.id === youId ? 700 : 500, color: s.id === youId ? 'rgb(var(--textp))' : 'rgb(var(--texts))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', padding: '0 2px' }}>{s.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Line mode — multi-series cumulative chart
+  const LH = 240  // taller canvas for more vertical spread
+  const padR2 = 70 // extra right padding for end-of-line labels
+  const n = labels.length
+  if (n === 0) return null
+  const allVals = series.flatMap((s) => s.data.slice(0, n))
+  const rawMax = Math.max(...allVals, 1)
+  const positives = allVals.filter((v) => v > 0)
+  const rawMin = positives.length ? Math.min(...positives) : 0
+  // Zoom the Y-axis tightly around the data band so closely-packed lines
+  // spread across the full canvas instead of bunching together.
+  const span = Math.max(rawMax - rawMin, 1)
+  const padV = span * 0.12
+  const paddedSpan = span * 1.24
+  // Pick a "nice" round step targeting ~6 gridlines for the visible band.
+  const step = [5, 10, 15, 20, 25, 30, 40, 50, 75, 100].find((s) => paddedSpan / s <= 6) ?? 100
+  const yFloor = Math.max(0, Math.floor((rawMin - padV) / step) * step)
+  const niceMax = Math.max(yFloor + step, Math.ceil((rawMax + padV) / step) * step)
+  const yRange = niceMax - yFloor
+  const xPos = (i: number) => padL + (n === 1 ? (W - padL - padR2) / 2 : (i / (n - 1)) * (W - padL - padR2))
+  const yPos = (v: number) => padT + (LH - padT - padB) * (1 - (v - yFloor) / yRange)
+  const gridVals: number[] = []
+  for (let v = yFloor; v <= niceMax + 0.5; v += step) gridVals.push(v)
+
+  // Sort series by final value descending for right-edge label placement
+  const sorted = [...series].sort((a, b) => (b.data[n - 1] ?? 0) - (a.data[n - 1] ?? 0))
+
+  return (
+    <div className="w-full">
+      <svg viewBox={`0 0 ${W} ${LH}`} style={{ width: '100%', height: 240, display: 'block' }}>
+        {gridVals.map((v, i) => (
+          <g key={i}>
+            <line x1={padL} x2={W - padR2} y1={yPos(v)} y2={yPos(v)} stroke="rgb(var(--border))" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            <text x={padL - 4} y={yPos(v) + 3.5} textAnchor="end" fontSize={9} fill="rgb(var(--faint))" fontFamily="system-ui,sans-serif">{v}</text>
+          </g>
+        ))}
+        {labels.map((lbl, i) => (
+          <text key={i} x={xPos(i)} y={LH - 4} textAnchor="middle" fontSize={9} fill="rgb(var(--faint))" fontFamily="system-ui,sans-serif">{lbl}</text>
+        ))}
+        {series.map((s, si) => {
+          const isYou = s.id === youId
+          const dash = isYou ? 'none' : (DASH_PATTERNS[si % DASH_PATTERNS.length] ?? 'none')
+          const pts = s.data.slice(0, n).map((v, i) => ({ x: xPos(i), y: yPos(v) }))
+          const path = smooth(pts)
+          return (
+            <g key={s.id}>
+              <path d={path} fill="none" stroke={s.color} strokeWidth={isYou ? 3 : 2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} vectorEffect="non-scaling-stroke" opacity={isYou ? 1 : 0.85} />
+              {pts.map((p, i) => (
+                <circle key={i} cx={p.x} cy={p.y} r={isYou ? 3.5 : 2.5} fill={s.color} stroke={isYou ? 'rgb(var(--card))' : 'none'} strokeWidth={isYou ? 1.5 : 0} opacity={isYou ? 1 : 0.85} />
+              ))}
+            </g>
+          )
+        })}
+        {/* Right-edge labels: sorted by final value, nudge y so they don't overlap */}
+        {(() => {
+          const minGap = 13
+          const placed: { y: number; s: RaceSeries }[] = []
+          for (const s of sorted) {
+            const rawY = yPos(s.data[Math.min(n - 1, s.data.length - 1)] ?? 0)
+            let y = rawY
+            for (const p of placed) {
+              if (Math.abs(p.y - y) < minGap) y = p.y + minGap
+            }
+            placed.push({ y, s })
+          }
+          return placed.map(({ y, s }) => (
+            <text key={s.id} x={W - padR2 + 6} y={y + 3.5} fontSize={9} fontWeight={s.id === youId ? 700 : 500} fill={s.color} fontFamily="system-ui,sans-serif">
+              {s.name.length > 8 ? s.name.slice(0, 8) : s.name}
+            </text>
+          ))
+        })()}
+      </svg>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginTop: 8, paddingLeft: padL }}>
+        {series.map((s, si) => {
+          const isYou = s.id === youId
+          const dash = isYou ? 'none' : (DASH_PATTERNS[si % DASH_PATTERNS.length] ?? 'none')
+          return (
+            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <svg width={18} height={10} style={{ flexShrink: 0 }}>
+                <line x1={0} y1={5} x2={18} y2={5} stroke={s.color} strokeWidth={isYou ? 2.5 : 2} strokeDasharray={dash} strokeLinecap="round" />
+              </svg>
+              <span style={{ fontSize: 11, fontWeight: isYou ? 700 : 500, color: isYou ? 'rgb(var(--textp))' : 'rgb(var(--texts))' }}>{s.name}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── RaceCompareChart ────────────────────────────────────────────────────────
+// Renders the same series under one of four Y-axis treatments (user-selectable
+// via the leaderboard race toggle): absolute points, gap to leader, gap to the
+// field average, or finishing-position (rank) race. Handles negative ranges and
+// the inverted rank axis, which the base PointsRaceChart does not.
+export type RaceVariant = 'absolute' | 'gapLeader' | 'gapAvg' | 'rank'
+
+export function RaceCompareChart({
+  series,
+  labels,
+  youId,
+  variant,
+}: {
+  series: RaceSeries[]
+  labels: string[]
+  youId?: string | null
+  variant: RaceVariant
+}) {
+  const n = labels.length
+  if (series.length === 0 || n === 0) return null
+
+  const W = 600, LH = 240
+  const padL = 30, padT = 12, padB = 28
+  const padR2 = 70
+
+  const N = series.length
+  const dayVals = (i: number) => series.map((s) => s.data[i] ?? 0)
+
+  // Transform each series' data per the chosen variant
+  const trans: RaceSeries[] = series.map((s) => {
+    const data = Array.from({ length: n }, (_, i) => {
+      const v = s.data[i] ?? 0
+      if (variant === 'absolute') return v
+      if (variant === 'gapLeader') return v - Math.max(...dayVals(i))
+      if (variant === 'gapAvg') {
+        const d = dayVals(i)
+        return v - d.reduce((a, b) => a + b, 0) / d.length
+      }
+      // rank: 1 = best (most points) that day
+      const sorted = [...dayVals(i)].sort((a, b) => b - a)
+      return sorted.indexOf(v) + 1
+    })
+    return { ...s, data }
+  })
+
+  const allV = trans.flatMap((s) => s.data)
+  const invert = variant === 'rank'
+  let lo: number, hi: number
+  if (variant === 'rank') {
+    lo = 1; hi = Math.max(N, 2)
+  } else {
+    lo = Math.min(...allV); hi = Math.max(...allV)
+    const span = Math.max(hi - lo, 1)
+    const pad = span * 0.12
+    lo = lo - pad
+    hi = hi + pad
+    // Absolute points can't go negative — clamp the floor so the band stays honest.
+    if (variant === 'absolute') lo = Math.max(0, lo)
+  }
+  const range = (hi - lo) || 1
+
+  const xPos = (i: number) => padL + (n === 1 ? (W - padL - padR2) / 2 : (i / (n - 1)) * (W - padL - padR2))
+  const yPos = (v: number) =>
+    invert
+      ? padT + (LH - padT - padB) * ((v - lo) / range)
+      : padT + (LH - padT - padB) * (1 - (v - lo) / range)
+
+  // Gridlines
+  let gridVals: number[]
+  if (variant === 'rank') {
+    gridVals = Array.from({ length: N }, (_, i) => i + 1)
+  } else {
+    const step = [1, 2, 5, 10, 15, 20, 25, 50, 100].find((s) => range / s <= 6) ?? 100
+    gridVals = []
+    for (let v = Math.ceil(lo / step) * step; v <= hi + 0.001; v += step) gridVals.push(v)
+  }
+
+  const fmt = (v: number) =>
+    variant === 'rank' ? ordinal(v)
+      : variant === 'gapLeader' || variant === 'gapAvg' ? (v > 0 ? `+${Math.round(v)}` : `${Math.round(v)}`)
+        : `${Math.round(v)}`
+
+  const showZero = variant === 'gapLeader' || variant === 'gapAvg'
+
+  // Right-edge labels, nudged so they don't overlap
+  const sorted = [...trans].sort((a, b) => yPos(a.data[n - 1] ?? 0) - yPos(b.data[n - 1] ?? 0))
+  const minGap = 13
+  const placed: { y: number; s: RaceSeries }[] = []
+  for (const s of sorted) {
+    let y = yPos(s.data[n - 1] ?? 0)
+    for (const p of placed) if (Math.abs(p.y - y) < minGap) y = p.y + minGap
+    placed.push({ y, s })
+  }
+
+  return (
+    <div className="w-full">
+      <svg viewBox={`0 0 ${W} ${LH}`} style={{ width: '100%', height: 240, display: 'block' }}>
+        {gridVals.map((v, i) => (
+          <g key={i}>
+            <line x1={padL} x2={W - padR2} y1={yPos(v)} y2={yPos(v)} stroke="rgb(var(--border))" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            <text x={padL - 4} y={yPos(v) + 3.5} textAnchor="end" fontSize={9} fill="rgb(var(--faint))" fontFamily="system-ui,sans-serif">{fmt(v)}</text>
+          </g>
+        ))}
+        {showZero && (
+          <line x1={padL} x2={W - padR2} y1={yPos(0)} y2={yPos(0)} stroke="rgb(var(--texts))" strokeWidth={1.4} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" opacity={0.7} />
+        )}
+        {labels.map((lbl, i) => (
+          <text key={i} x={xPos(i)} y={LH - 4} textAnchor="middle" fontSize={9} fill="rgb(var(--faint))" fontFamily="system-ui,sans-serif">{lbl}</text>
+        ))}
+        {trans.map((s, si) => {
+          const isYou = s.id === youId
+          const dash = isYou ? 'none' : (DASH_PATTERNS[si % DASH_PATTERNS.length] ?? 'none')
+          const pts = s.data.map((v, i) => ({ x: xPos(i), y: yPos(v) }))
+          return (
+            <g key={s.id}>
+              <path d={smooth(pts)} fill="none" stroke={s.color} strokeWidth={isYou ? 3 : 2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} vectorEffect="non-scaling-stroke" opacity={isYou ? 1 : 0.85} />
+              {pts.map((p, i) => (
+                <circle key={i} cx={p.x} cy={p.y} r={isYou ? 3.5 : 2.5} fill={s.color} stroke={isYou ? 'rgb(var(--card))' : 'none'} strokeWidth={isYou ? 1.5 : 0} opacity={isYou ? 1 : 0.85} />
+              ))}
+            </g>
+          )
+        })}
+        {placed.map(({ y, s }) => (
+          <text key={s.id} x={W - padR2 + 6} y={y + 3.5} fontSize={9} fontWeight={s.id === youId ? 700 : 500} fill={s.color} fontFamily="system-ui,sans-serif">
+            {s.name.length > 8 ? s.name.slice(0, 8) : s.name}
+          </text>
+        ))}
+      </svg>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginTop: 8, paddingLeft: padL }}>
+        {series.map((s, si) => {
+          const isYou = s.id === youId
+          const dash = isYou ? 'none' : (DASH_PATTERNS[si % DASH_PATTERNS.length] ?? 'none')
+          return (
+            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <svg width={18} height={10} style={{ flexShrink: 0 }}>
+                <line x1={0} y1={5} x2={18} y2={5} stroke={s.color} strokeWidth={isYou ? 2.5 : 2} strokeDasharray={dash} strokeLinecap="round" />
+              </svg>
+              <span style={{ fontSize: 11, fontWeight: isYou ? 700 : 500, color: isYou ? 'rgb(var(--textp))' : 'rgb(var(--texts))' }}>{s.name}</span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

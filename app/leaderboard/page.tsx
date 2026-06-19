@@ -5,10 +5,11 @@ import { createClient } from '@/lib/supabase-browser'
 import { PageHeader, Card, Skeleton, EmptyState, TrophyIcon, Avatar, LeagueBadge, Pill, ChipRow, BoltIcon } from '@/components/ui'
 import FlagChip from '@/components/FlagChip'
 import { type LBRow } from '@/components/football'
-import { aggregateLeaderboard, type ProfileLite } from '@/lib/leaderboard'
+import { aggregateLeaderboard, type ProfileLite, type ScoredGroupPred, type ScoredTournamentPred } from '@/lib/leaderboard'
 import { getActiveLeague, getMyLeagues, setActiveLeague, isMoneyLeague, type League, type LeagueLabel } from '@/lib/league'
 import { DEFAULT_WEIGHTS, weightedMatchPoints, type ScoringWeights } from '@/lib/scoring'
 import { GW_NAMES, GW_SHORT, GW_PRIZES, OVERALL_PRIZES, formatPrize, prizeTone } from '@/lib/prizes'
+import { PointsRaceChart, RaceCompareChart, PLAYER_PALETTE, type RaceSeries, type RaceVariant } from '@/components/charts'
 import { getTeam } from '@/lib/teams'
 import { fmtDateTime } from '@/lib/date-format'
 
@@ -90,8 +91,11 @@ const VIEW_TABS = [
 export default function LeaderboardPage() {
   const supabase = createClient()
   const [rows, setRows] = useState<PredRow[]>([])
+  const [groupRows, setGroupRows] = useState<ScoredGroupPred[]>([])
+  const [tournRows, setTournRows] = useState<ScoredTournamentPred[]>([])
   const [members, setMembers] = useState<ProfileLite[]>([])
   const memberIdsRef = useRef<string[]>([])
+  const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [leagueName, setLeagueName] = useState<string>('')
   const [leagueLabel, setLeagueLabel] = useState<LeagueLabel | null>(null)
@@ -103,6 +107,7 @@ export default function LeaderboardPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [tab, setTab] = useState('all')        // GW tab
   const [view, setView] = useState('standings') // standings | picks
+  const [raceVariant, setRaceVariant] = useState<RaceVariant>('absolute') // race chart mode
   const [loading, setLoading] = useState(true)
 
   // Picks tab state
@@ -111,13 +116,15 @@ export default function LeaderboardPage() {
   const [picksLoading, setPicksLoading] = useState(false)
 
   const fetchRows = useCallback(async (ids: string[]) => {
-    if (ids.length === 0) { setRows([]); return }
-    const { data, error } = await supabase
-      .from('predictions')
-      .select(PRED_COLS)
-      .not('points_awarded', 'is', null)
-      .in('user_id', ids)
-    if (!error) setRows((data ?? []) as unknown as PredRow[])
+    if (ids.length === 0) { setRows([]); setGroupRows([]); setTournRows([]); return }
+    const [matchRes, groupRes, tournRes] = await Promise.all([
+      supabase.from('predictions').select(PRED_COLS).not('points_awarded', 'is', null).in('user_id', ids),
+      supabase.from('group_predictions').select('user_id, points_awarded').not('points_awarded', 'is', null).in('user_id', ids),
+      supabase.from('tournament_predictions').select('user_id, pts_champion, pts_runner_up, pts_semi, pts_quarter').in('user_id', ids),
+    ])
+    if (!matchRes.error) setRows((matchRes.data ?? []) as unknown as PredRow[])
+    if (!groupRes.error) setGroupRows((groupRes.data ?? []) as ScoredGroupPred[])
+    if (!tournRes.error) setTournRows((tournRes.data ?? []) as ScoredTournamentPred[])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -163,21 +170,23 @@ export default function LeaderboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Realtime subscription scoped to active league — re-fetch when any prediction is scored
+  // Realtime subscription — debounced re-fetch when predictions are scored (fires once per batch, not per row)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!activeLeagueId) return
+    const debouncedFetch = () => {
+      if (!memberIdsRef.current.length) return
+      if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current)
+      fetchTimeoutRef.current = setTimeout(() => fetchRows(memberIdsRef.current), 1500)
+    }
     const channel = supabase
       .channel(`lb-realtime-${activeLeagueId}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'predictions' },
-        () => {
-          if (memberIdsRef.current.length) fetchRows(memberIdsRef.current)
-        }
-      )
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'predictions' }, debouncedFetch)
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      supabase.removeChannel(channel)
+      if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLeagueId, fetchRows])
 
@@ -238,18 +247,98 @@ export default function LeaderboardPage() {
   const board = useMemo<LBRow[]>(() => {
     const gwNum = tab === 'all' ? null : parseInt(tab)
     const prizes = tab === 'all' ? OVERALL_PRIZES : GW_PRIZES
-    const sorted = aggregateLeaderboard({ scoredPreds: rows, profiles: members, userId, gwNumber: gwNum, weights })
+    const sorted = aggregateLeaderboard({ scoredPreds: rows, profiles: members, userId, gwNumber: gwNum, weights, groupPreds: groupRows, tournamentPreds: tournRows })
     return sorted.map((r, currentIdx) => {
       const prevRank = prevRanks.get(r.id)
       const move = prevRank != null ? prevRank - (currentIdx + 1) : undefined
       const prize = isMoney ? prizes[Math.min(currentIdx, 6)] : undefined
       return { ...r, move, prize }
     })
-  }, [rows, tab, userId, prevRanks, members, weights, isMoney])
+  }, [rows, groupRows, tournRows, tab, userId, prevRanks, members, weights, isMoney])
 
   const podium = board.slice(0, 3)
   const hasSnapshots = prevRanks.size > 0
   const gwLabel = tab === 'all' ? 'Overall' : (GW_NAMES[parseInt(tab)] ?? tab)
+
+  const raceLabels = useMemo(() => {
+    if (tab === 'all') {
+      const gwNums = [1, 2, 3, 4, 5, 6, 7, 8]
+      const gwHasData = gwNums.map((gw) => rows.some((r) => r.matches?.gw_number === gw))
+      let last = -1
+      for (let i = 0; i < gwNums.length; i++) { if (gwHasData[i]) last = i }
+      if (last < 0) return [GW_SHORT[1] ?? 'GW1']
+      return gwNums.slice(0, last + 1).map((gw) => GW_SHORT[gw] ?? `GW${gw}`)
+    }
+    const gwNum = parseInt(tab)
+    if (gwNum <= 3) {
+      // Line mode within this GW: X axis = unique calendar days (YYYY-MM-DD)
+      const days = Array.from(
+        new Set(
+          rows
+            .filter((r) => r.matches?.gw_number === gwNum && r.matches?.match_date)
+            .map((r) => (r.matches!.match_date as string).slice(0, 10))
+        )
+      ).sort()
+      // Cap at 12 labels max — sample evenly if more
+      const step = days.length > 12 ? Math.ceil(days.length / 12) : 1
+      return days
+        .filter((_, i) => i % step === 0 || i === days.length - 1)
+        .map((d) => {
+          const [, m, day] = d.split('-')
+          const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+          return `${parseInt(day)} ${months[parseInt(m) - 1]}`
+        })
+    }
+    // GW4+: bar mode — no X labels needed (names shown below bars)
+    return []
+  }, [rows, tab])
+
+  const raceSeries = useMemo<RaceSeries[]>(() => {
+    return board.map((p, idx) => {
+      const userRows = rows.filter((r) => r.user_id === p.id)
+      const color = PLAYER_PALETTE[idx % PLAYER_PALETTE.length]
+      if (tab === 'all') {
+        const gwCount = raceLabels.length
+        let cum = 0
+        const data = [1, 2, 3, 4, 5, 6, 7, 8].slice(0, gwCount).map((gw) => {
+          cum += userRows
+            .filter((r) => r.matches?.gw_number === gw)
+            .reduce((s, r) => s + weightedMatchPoints(r, weights), 0)
+          return cum
+        })
+        return { id: p.id, name: p.name, color, data }
+      }
+      const gwNum = parseInt(tab)
+      if (gwNum <= 3) {
+        // Cumulative within this GW by calendar day (truncate to YYYY-MM-DD)
+        const days = Array.from(
+          new Set(
+            rows
+              .filter((r) => r.matches?.gw_number === gwNum && r.matches?.match_date)
+              .map((r) => (r.matches!.match_date as string).slice(0, 10))
+          )
+        ).sort()
+        const step = days.length > 12 ? Math.ceil(days.length / 12) : 1
+        const sampledDays = days.filter((_, i) => i % step === 0 || i === days.length - 1)
+        let cum = 0
+        // accumulate all days including skipped ones, but only emit sampled points
+        let dayIdx = 0
+        const data: number[] = []
+        for (const d of days) {
+          cum += userRows
+            .filter((r) => r.matches?.gw_number === gwNum && (r.matches!.match_date as string).slice(0, 10) === d)
+            .reduce((s, r) => s + weightedMatchPoints(r, weights), 0)
+          if (sampledDays[dayIdx] === d) { data.push(cum); dayIdx++ }
+        }
+        return { id: p.id, name: p.name, color, data }
+      }
+      // GW4+ knockout: single total
+      const pts = userRows
+        .filter((r) => r.matches?.gw_number === gwNum)
+        .reduce((s, r) => s + weightedMatchPoints(r, weights), 0)
+      return { id: p.id, name: p.name, color, data: [pts] }
+    })
+  }, [rows, board, tab, raceLabels, weights])
   const myIdx = board.findIndex((r) => r.you)
   const srStatus = myIdx >= 0 ? `You are ranked ${myIdx + 1} of ${board.length}${leagueName ? ` in ${leagueName}` : ''} with ${board[myIdx].pts} points.` : ''
 
@@ -482,17 +571,18 @@ export default function LeaderboardPage() {
                         {/* Delta */}
                         {hasSnapshots && (
                           <span style={{
-                            width: 10,
+                            minWidth: 18,
                             fontSize: 13,
                             fontWeight: 700,
                             flexShrink: 0,
+                            fontVariantNumeric: 'tabular-nums',
                             color:
                               (p.move ?? 0) > 0 ? 'rgb(var(--success))' :
                               (p.move ?? 0) < 0 ? 'rgb(var(--error))' :
                               'rgb(var(--faint))',
                             animation: p.move ? 'lb-pop 0.45s' : undefined,
                           }}>
-                            {p.move == null || p.move === 0 ? '–' : p.move > 0 ? `▲` : `▼`}
+                            {p.move == null || p.move === 0 ? '–' : p.move > 0 ? `▲${p.move}` : `▼${Math.abs(p.move)}`}
                           </span>
                         )}
 
@@ -571,9 +661,94 @@ export default function LeaderboardPage() {
                 </div>
               </div>
 
-              <div className="px-1">
-                <p className="text-[11px] text-texts font-medium">
-                  Tiebreaker: most correct outcomes, then alphabetical.{isMoney ? ' Prize pool per GW: 1st +$15 · 2nd +$10 · 3rd +$5 · 4th $0 · 5th -$5 · 6th -$10 · 7th -$15. Overall: 1st +$40 · 7th -$40.' : ' This is a points-only league — no prize pool.'}
+              {/* Points race chart */}
+              {raceSeries.length > 0 && (
+                <div style={{
+                  marginTop: 20,
+                  padding: '20px 16px 16px',
+                  background: 'rgb(var(--card))',
+                  border: '1px solid rgb(var(--border))',
+                  borderRadius: 16,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: 'rgb(var(--textp))' }}>
+                      {tab === 'all' ? 'Season Points Race' : parseInt(tab) <= 3 ? `${gwLabel} — Points Race` : `${gwLabel} Points`}
+                    </p>
+                    {/* Race chart mode toggle — only for line charts (Overall + group GWs) */}
+                    {(tab === 'all' || parseInt(tab) <= 3) && (
+                      <div style={{ display: 'flex', gap: 2, padding: 2, background: 'rgb(var(--surface))', borderRadius: 9, border: '1px solid rgb(var(--border))' }}>
+                        {([
+                          ['absolute', 'Points'],
+                          ['gapLeader', 'vs Leader'],
+                          ['gapAvg', 'vs Avg'],
+                          ['rank', 'Rank'],
+                        ] as [RaceVariant, string][]).map(([v, label]) => {
+                          const active = raceVariant === v
+                          return (
+                            <button
+                              key={v}
+                              onClick={() => setRaceVariant(v)}
+                              style={{
+                                padding: '4px 9px',
+                                borderRadius: 7,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                border: 'none',
+                                background: active ? 'rgb(var(--card))' : 'transparent',
+                                color: active ? 'rgb(var(--textp))' : 'rgb(var(--texts))',
+                                boxShadow: active ? '0 1px 2px rgba(0,0,0,0.12)' : undefined,
+                                transition: 'all 0.15s',
+                              }}
+                            >
+                              {label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  {(tab === 'all' || parseInt(tab) <= 3) && (
+                    <p style={{ fontSize: 11, color: 'rgb(var(--texts))', marginTop: -6, marginBottom: 12 }}>
+                      {raceVariant === 'absolute' ? 'Total points accumulated over time.'
+                        : raceVariant === 'gapLeader' ? 'Points behind the leader — the leader sits flat along the top.'
+                          : raceVariant === 'gapAvg' ? 'Points above or below the field average (the dashed 0 line).'
+                            : 'Finishing position over time — 1st place at the top, lines cross on overtakes.'}
+                    </p>
+                  )}
+                  {tab === 'all' || parseInt(tab) <= 3 ? (
+                    <RaceCompareChart series={raceSeries} labels={raceLabels} youId={userId} variant={raceVariant} />
+                  ) : (
+                    <PointsRaceChart series={raceSeries} labels={raceLabels} youId={userId} mode="bar" />
+                  )}
+                </div>
+              )}
+
+              <div style={{ padding: '2px 4px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {isMoney && (
+                  <p className="text-[11px] font-medium text-texts leading-relaxed">
+                    <span className="font-semibold text-textp">{tab === 'all' ? 'Overall prize pool' : 'Per-round prize pool'}:</span>{' '}
+                    {(tab === 'all' ? OVERALL_PRIZES : GW_PRIZES).map((amt, i) => {
+                      const tone = prizeTone(amt)
+                      const col = tone === 'green' ? 'rgb(var(--success))' : tone === 'red' ? 'rgb(var(--error))' : 'rgb(var(--texts))'
+                      const sfx = ['st','nd','rd','th','th','th','th'][i]
+                      return (
+                        <React.Fragment key={i}>
+                          <span>{i + 1}<span style={{ fontSize: 9, verticalAlign: 'super' }}>{sfx}</span> <span style={{ color: col, fontWeight: 700 }}>{formatPrize(amt)}</span></span>
+                          {i < 6 && <span className="text-faint mx-1">·</span>}
+                        </React.Fragment>
+                      )
+                    })}
+                  </p>
+                )}
+                <p className="text-[11px] font-medium text-texts leading-relaxed">
+                  <span className="font-semibold text-textp">Tiebreaker:</span>{' '}
+                  {['Total points','Predictions in','Outcomes','Exact scores','Goal diff','Total goals','BTTS','First-goal team','First scorer','Shared rank'].map((label, i, arr) => (
+                    <React.Fragment key={label}>
+                      <span className={i === 0 ? 'font-semibold text-textp' : i === arr.length - 1 ? 'text-faint' : ''}>{label}</span>
+                      {i < arr.length - 1 && <span className="text-faint mx-1">·</span>}
+                    </React.Fragment>
+                  ))}
                 </p>
               </div>
             </>
