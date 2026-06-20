@@ -307,9 +307,9 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 <br/>
 
-| Leaderboard | Points race chart |
-|---|---|
-| ![Leaderboard](docs/screenshots/Leaderboard.png) | ![Points race](docs/screenshots/Leaderboard1.png) |
+![Leaderboard](docs/screenshots/Leaderboard.png)
+
+![Points race chart](docs/screenshots/Leaderboard1.png)
 
 | Tournament bracket | Group predictor |
 |---|---|
@@ -333,13 +333,13 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 <br/>
 
-| Profile | Golden Boot |
+| Profile | Head-to-head comparison |
 |---|---|
-| ![Profile](docs/screenshots/Profile.png) | ![Golden Boot](docs/screenshots/GoldenBoot.png) |
+| ![Profile](docs/screenshots/Profile.png) | ![Comparison](docs/screenshots/Comparison.png) |
 
-| Squad browser | Head-to-head comparison |
+| Squad browser | Golden Boot |
 |---|---|
-| ![Squads](docs/screenshots/Squads.png) | ![Comparison](docs/screenshots/Comparison.png) |
+| ![Squads](docs/screenshots/Squads.png) | ![Golden Boot](docs/screenshots/GoldenBoot.png) |
 
 | Calendar export | Profile settings &amp; colour-blind mode |
 |---|---|
@@ -380,22 +380,34 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 ## Architecture
 
 ```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "fontSize": "18px",
+    "fontFamily": "ui-sans-serif, system-ui, sans-serif"
+  },
+  "flowchart": {
+    "nodeSpacing": 55,
+    "rankSpacing": 110,
+    "padding": 24
+  }
+}}%%
 flowchart LR
-  subgraph Client["Client Layer"]
+  subgraph Client["🖥️  Client Layer"]
     direction TB
     subgraph PWA["PWA Boundary"]
       direction TB
-      Browser["Browser — Next.js App Router"]
+      Browser["Browser\nNext.js App Router"]
       Pages["app/* pages"]
       Components["components/*"]
       ClientLib["lib/* client helpers"]
-      SW["Service Worker — Workbox"]
+      SW["⚙️ Service Worker — Workbox"]
       Browser --> Pages --> Components --> ClientLib
-      SW -. wraps .-> Browser
+      SW -. offline shell .-> Browser
     end
   end
 
-  subgraph Server["Server Layer"]
+  subgraph Server["⚡  Server Layer"]
     direction TB
     API["app/api/* route handlers"]
     ScoreMatch["score-match"]
@@ -403,44 +415,46 @@ flowchart LR
     ScoreTournament["score-tournament"]
     SnapshotRanks["snapshot-ranks"]
     RescoreAll["rescore-all"]
-    LiveSync["fetch-lineup · sync-results · sync-injuries"]
+    LiveSync["fetch-lineup\nsync-results\nsync-injuries"]
     GoldenBoot["golden-boot"]
-    Calendar["calendar (iCal feed)"]
+    Calendar["calendar\niCal feed"]
     API --> ScoreMatch & ScoreGroups & ScoreTournament & SnapshotRanks & RescoreAll & LiveSync & GoldenBoot & Calendar
   end
 
-  subgraph External["External APIs"]
+  subgraph External["🌐  External APIs"]
     direction TB
-    Kickoff["Kickoffapi — lineups, events, injuries, scorers"]
-    Wikidata["Wikidata — player bios"]
+    Kickoff["Kickoffapi\nlineups · events · scorers · injuries"]
+    Wikidata["Wikidata\nplayer bios · photos"]
   end
 
-  subgraph Scripts["Residential Scripts"]
+  subgraph Scripts["🏠  Residential Scripts"]
     direction TB
-    DataLive["npm run data:live — results, lineups, injuries, Golden Boot"]
+    DataLive["npm run data:live\nresults · lineups · injuries · Golden Boot"]
   end
 
-  subgraph Data["Supabase"]
+  subgraph Data["🗄️  Supabase"]
     direction TB
     Postgres["Postgres + RLS"]
     Auth["Auth"]
     Realtime["Realtime"]
-    Storage["Storage"]
+    Storage["Storage\navatars · player-photos"]
+    LiveCache["live_cache\nKickoffapi snapshot"]
   end
 
-  subgraph Domain["Shared Domain Logic"]
+  subgraph Domain["📐  Shared Domain Logic"]
     direction TB
-    Scoring["lib/scoring.ts"]
-    Prizes["lib/prizes.ts"]
-    Leaderboard["lib/leaderboard.ts"]
+    Scoring["lib/scoring.ts\npoint values"]
+    Prizes["lib/prizes.ts\nprize pool"]
+    Leaderboard["lib/leaderboard.ts\naggregate + sort"]
   end
 
-  Client -->|"supabase-js — RLS-guarded"| Data
+  Client -->|"supabase-js — RLS-guarded reads/writes"| Data
   Client -->|"admin POST"| Server
   Server -->|"validated writes"| Data
-  Scripts -->|"fetch — residential IP"| External
-  Scripts -->|"service role writes"| Data
-  Realtime -. "live push — no reload" .-> Client
+  Scripts -->|"fetch via residential IP"| External
+  Scripts -->|"service role upsert"| LiveCache
+  LiveCache --- Postgres
+  Realtime -. "live push — no page reload" .-> Client
   Domain -. "imported by" .-> Client & Server
 
   classDef layer fill:#ffffff,stroke:#d0d7de,color:#24292f,stroke-width:2px
@@ -457,7 +471,7 @@ flowchart LR
   class SW worker
   class API,ScoreMatch,ScoreGroups,ScoreTournament,SnapshotRanks,RescoreAll,LiveSync,GoldenBoot,Calendar server
   class Kickoff,Wikidata,DataLive worker
-  class Postgres,Auth,Realtime,Storage data
+  class Postgres,Auth,Realtime,Storage,LiveCache data
   class Scoring,Prizes,Leaderboard domain
 ```
 
