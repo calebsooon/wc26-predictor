@@ -17,7 +17,6 @@
     "data:players": "tsx --env-file=.env.local scripts/fetch-players.ts",
     "data:enrich": "tsx --env-file=.env.local scripts/fetch-wikidata-players.ts",
     "data:photos": "tsx --env-file=.env.local scripts/cache-player-photos.ts",
-    "data:stats": "tsx --env-file=.env.local scripts/fetch-player-stats.ts",
     "data:fill-photos": "tsx --env-file=.env.local scripts/fill-missing-photos.ts",
     "data:golden-boot": "tsx --env-file=.env.local scripts/sync-golden-boot.ts",
     "data:lineups": "tsx --env-file=.env.local scripts/sync-lineups.ts",

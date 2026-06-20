@@ -10,6 +10,10 @@
 </p>
 
 <p align="center">
+  Built by <a href="https://github.com/aryan12singh">@aryan12singh</a> &nbsp;&amp;&nbsp; <a href="https://github.com/calebsooon">@calebsooon</a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/Next.js-15_App_Router-black?style=flat-square&logo=next.js" alt="Next.js 15" />
   <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Supabase-Postgres_+_Realtime-3ECF8E?style=flat-square&logo=supabase&logoColor=white" alt="Supabase" />
@@ -20,9 +24,37 @@
 
 <br/>
 
-MatchDay is a private, invite-only prediction league for FIFA World Cup 2026. Players predict scorelines, group finishing orders, and the full knockout bracket across 104 matches. An admin enters real results, points settle instantly via server-side scoring, and a zero-sum prize pool updates live — no page refresh needed.
+<p align="center">
+  <a href="https://youtu.be/IPu3W5JPbZQ">
+    <img src="docs/MatchDay-Video-Thumbnail-1280x720.png" alt="Watch the MatchDay demo" width="720" />
+  </a><br/>
+  <sub>▶ &nbsp;Click to watch the 90-second demo</sub>
+</p>
 
 <br/>
+
+<p align="center">
+  A private prediction league for FIFA World Cup 2026.<br/>
+  Predict every scoreline, group order, and knockout bracket across 104 matches.<br/>
+  Points settle instantly. The leaderboard updates live. The prize pool runs itself.
+</p>
+
+---
+
+## Highlights
+
+| | |
+| :-- | :-- |
+| ![](https://img.shields.io/badge/SCOPE-16a34a?style=flat-square) | **104 matches · 8 gameweeks.** Group stage through the final, fully predicted |
+| ![](https://img.shields.io/badge/SCORING-2563eb?style=flat-square) | **Granular scoring.** Outcome · exact score · goal diff · total goals · BTTS · first scorer (+4 pts) |
+| ![](https://img.shields.io/badge/PRIZES-d97706?style=flat-square) | **Zero-sum prize pool.** Per-GW and overall payouts settle automatically from a shared pot |
+| ![](https://img.shields.io/badge/REALTIME-7c3aed?style=flat-square) | **Live leaderboard.** Supabase Realtime pushes updates the moment a result lands |
+| ![](https://img.shields.io/badge/LEAGUES-0891b2?style=flat-square) | **Multi-league.** Private leagues with join codes; isolated standings per group of friends |
+| ![](https://img.shields.io/badge/DATA-ea580c?style=flat-square) | **Live squad data.** 48-nation rosters · headshots · confirmed lineups · Golden Boot · injuries |
+| ![](https://img.shields.io/badge/CALENDAR-0284c7?style=flat-square) | **iCal feed.** Auto-updating per user; works in Google, Apple, Outlook, and Notion |
+| ![](https://img.shields.io/badge/PWA-4f46e5?style=flat-square) | **Installable.** iOS, Android, and desktop; offline shell with Workbox |
+| ![](https://img.shields.io/badge/A11Y-db2777?style=flat-square) | **Colour-blind mode.** Okabe–Ito CVD-safe palette, scoped to chart or whole app; DB-synced |
+| ![](https://img.shields.io/badge/SECURITY-475569?style=flat-square) | **RLS-hardened.** Predictions gated by kickoff time and league membership at the DB level |
 
 ---
 
@@ -32,6 +64,7 @@ MatchDay is a private, invite-only prediction league for FIFA World Cup 2026. Pl
 - [Scoring](#scoring)
 - [Prize pool](#prize-pool)
 - [Features](#features)
+- [Screenshots](#screenshots)
 - [Tech stack](#tech-stack)
 - [Architecture](#architecture)
 - [Local development](#local-development)
@@ -41,9 +74,13 @@ MatchDay is a private, invite-only prediction league for FIFA World Cup 2026. Pl
 
 ## How it works
 
-**1. Join your league** &nbsp;—&nbsp; Sign up with email, enter your invite code, and you're in. Leagues are private and admin-created; each group of friends gets its own isolated standings and prize pool. Multiple leagues are supported.
+![](https://img.shields.io/badge/01-16a34a?style=flat-square) **Join your league**
 
-**2. Submit predictions before kickoff** &nbsp;—&nbsp; Head to **Fixtures** and enter your scoreline for each match. On top of the score, you can predict:
+Sign up with email, enter your invite code, and you're in. Leagues are private and admin-created; each group of friends gets its own isolated standings and prize pool. Multiple leagues are supported.
+
+![](https://img.shields.io/badge/02-16a34a?style=flat-square) **Submit predictions before kickoff**
+
+Head to **Fixtures** and enter your scoreline for each match. On top of the score, you can predict:
 
 - **First-goal team** — which side opens the scoring
 - **First scorer** — the specific player (highest reward, +4 pts)
@@ -52,17 +89,23 @@ MatchDay is a private, invite-only prediction league for FIFA World Cup 2026. Pl
 
 Predictions lock at kickoff. The admin enters the result and every prediction is scored automatically across all per-category columns.
 
-**3. Compete across 8 gameweeks** &nbsp;—&nbsp; Points accumulate through the group stage and all knockout rounds. Supabase Realtime pushes leaderboard updates the moment results land — no refresh needed.
+![](https://img.shields.io/badge/03-16a34a?style=flat-square) **Compete across 8 gameweeks**
 
-**4. Predict the structure** &nbsp;—&nbsp; Beyond individual matches, predict group finishing orders (+2 per correct placement) and the full knockout bracket — champion, runner-up, semi-finalists, and quarter-finalists (up to +47 pts total).
+Points accumulate through the group stage and all knockout rounds. Supabase Realtime pushes leaderboard updates the moment results land, no refresh needed.
 
-**5. The prize pool settles itself** &nbsp;—&nbsp; Each gameweek and the overall standings pay out and claw back based on finishing position. The dashboard shows your current rank, settled net, projected total, and best/worst prize range at all times.
+![](https://img.shields.io/badge/04-16a34a?style=flat-square) **Predict the structure**
+
+Beyond individual matches, predict group finishing orders (+2 per correct placement) and the full knockout bracket — champion, runner-up, semi-finalists, and quarter-finalists (up to +47 pts total).
+
+![](https://img.shields.io/badge/05-16a34a?style=flat-square) **The prize pool settles itself**
+
+Each gameweek and the overall standings pay out and claw back based on finishing position. The dashboard shows your current rank, settled net, projected total, and best/worst prize range at all times.
 
 ---
 
 ## Scoring
 
-### Match predictions &nbsp;—&nbsp; max 14 pts
+### Match predictions &nbsp;&nbsp; ![](https://img.shields.io/badge/max_14_pts-16a34a?style=flat-square)
 
 | Category | Pts | Notes |
 | :--- | :---: | :--- |
@@ -76,11 +119,11 @@ Predictions lock at kickoff. The admin enters the result and every prediction is
 
 > Total goals and goal difference are entered **separately** from the scoreline, so a well-placed hedge can bank points even when the exact score is wrong.
 
-### Group predictions
+### Group predictions &nbsp;&nbsp; ![](https://img.shields.io/badge/max_8_pts_per_group-16a34a?style=flat-square)
 
-**+2** for each team placed in the correct group finishing position — max 8 pts per group across 12 groups.
+**+2** for each team placed in the correct group finishing position across 12 groups.
 
-### Tournament bracket &nbsp;—&nbsp; max 47 pts
+### Tournament bracket &nbsp;&nbsp; ![](https://img.shields.io/badge/max_47_pts-16a34a?style=flat-square)
 
 | Pick | Pts |
 | :--- | :---: |
@@ -97,13 +140,13 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 | Position | Per gameweek | Overall |
 | :---: | :---: | :---: |
-| 1st | +$15 | +$40 |
-| 2nd | +$10 | +$20 |
-| 3rd | +$5 | +$10 |
-| 4th | $0 | $0 |
-| 5th | −$5 | −$10 |
-| 6th | −$10 | −$20 |
-| 7th | −$15 | −$40 |
+| 1st | ![](https://img.shields.io/badge/+%2415-16a34a?style=flat-square) | ![](https://img.shields.io/badge/+%2440-16a34a?style=flat-square) |
+| 2nd | ![](https://img.shields.io/badge/+%2410-16a34a?style=flat-square) | ![](https://img.shields.io/badge/+%2420-16a34a?style=flat-square) |
+| 3rd | ![](https://img.shields.io/badge/+%245-16a34a?style=flat-square) | ![](https://img.shields.io/badge/+%2410-16a34a?style=flat-square) |
+| 4th | ![](https://img.shields.io/badge/%240-6b7280?style=flat-square) | ![](https://img.shields.io/badge/%240-6b7280?style=flat-square) |
+| 5th | ![](https://img.shields.io/badge/-%245-dc2626?style=flat-square) | ![](https://img.shields.io/badge/-%2410-dc2626?style=flat-square) |
+| 6th | ![](https://img.shields.io/badge/-%2410-dc2626?style=flat-square) | ![](https://img.shields.io/badge/-%2420-dc2626?style=flat-square) |
+| 7th | ![](https://img.shields.io/badge/-%2415-dc2626?style=flat-square) | ![](https://img.shields.io/badge/-%2440-dc2626?style=flat-square) |
 
 **Tiebreakers:** total points → most correct outcomes → most exact scorelines → shared rank.
 
@@ -114,7 +157,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 | Gameweek | Stage |
 | :--- | :--- |
-| GW1 / GW2 / GW3 | Group Stage (Days 1–3) |
+| GW1 / GW2 / GW3 | Group Stage |
 | GW4 | Round of 32 |
 | GW5 | Round of 16 |
 | GW6 | Quarter-finals |
@@ -156,24 +199,24 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | Stage filter | All · Group Stage · Knockout — second filter row |
 | Consensus reveal | After kickoff, every member's full prediction for that match is revealed |
 | Prediction wall | See the whole league's pick distribution per match |
-| Calendar export | Subscribe to or download fixtures as an iCalendar feed — auto-updating, timezone-aware, with a configurable reminder; works in Google, Apple, Outlook, and Notion calendars |
+| Calendar export | Subscribe to or download fixtures as an iCalendar feed — auto-updating, timezone-aware, with a configurable reminder; works in Google, Apple, Outlook, and Notion |
 | Lineups &amp; formation | Confirmed starting XI and manager formation rendered on a positional pitch once published |
 
 </details>
 
 <details>
-<summary><strong>Live data &amp; automation</strong></summary>
+<summary><strong>Live data</strong></summary>
 
 <br/>
 
 | Feature | Detail |
 | :--- | :--- |
-| Live lineups | Confirmed XI, substitutes, shirt numbers, and formation pulled from a live football data provider |
-| Auto results &amp; first scorer | Final scores and the opening goalscorer fetched from match events, then scored automatically |
-| Injury &amp; suspension flags | Out players flagged across the squad views |
-| Golden Boot race | Live tournament top scorers and assists, with headshots and nation flags |
-| Player enrichment | Headshots, clubs, and dates of birth sourced from Wikidata |
-| Scheduled sync | A GitHub Actions workflow polls the authenticated sync endpoints on a schedule — no platform cron required |
+| Live lineups | Confirmed XI, substitutes, shirt numbers, and formation pulled from Kickoffapi |
+| Results &amp; first scorer | Final scores and the opening goalscorer fetched from match events, then scored automatically |
+| Injury flags | Out/suspended players flagged across squad views |
+| Golden Boot | Tournament top scorers and assists, with headshots and nation flags; data cached in Supabase |
+| Player enrichment | Headshots, clubs, and dates of birth sourced from Wikidata; self-hosted in Supabase Storage |
+| Residential sync | Live data is pulled via local `npm run data:*` scripts (Kickoffapi blocks datacenter IPs); the app reads from Supabase |
 
 </details>
 
@@ -204,7 +247,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | Avatar upload | Circular crop tool — drag to reposition, slider to zoom |
 | Settled prize | Shows real GW earnings after each gameweek closes |
 | Light / dark mode | Follows system preference; toggle available in the header |
-| Colour-blind mode | CVD-safe (Okabe–Ito) palette, scoped to the leaderboard chart alone or the whole app; synced across devices |
+| Colour-blind mode | CVD-safe (Okabe–Ito) palette, scoped to the leaderboard chart or the whole app; synced across devices |
 
 </details>
 
@@ -219,10 +262,8 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | Fetch lineup | One-click confirmed lineup and formation import per match |
 | Sync results + scorers | Pull finished scores and the first goalscorer, then auto-score every prediction |
 | Sync injuries | Refresh injury and suspension flags across the squad data |
-| Scoring audit log | Every action recorded in `scoring_events` |
-| Rank snapshots | Captures rank state automatically after scoring for movement arrows |
+| Rank snapshots | Captured automatically after scoring for movement arrows |
 | Rescore all | Full recompute — use after any rule or data correction |
-| Rate limiting | Token-bucket rate limit on all scoring API routes |
 
 </details>
 
@@ -257,8 +298,8 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | `/bracket` | Full knockout bracket and tournament picks |
 | `/leaderboard` | Live standings, per-GW view, rank movement, CSV export |
 | `/h2h` | Head-to-head compare — pick any two members |
-| `/squads` | 48-nation squad browser — headshots, clubs, ages, injury flags, and your first-scorer picks |
-| `/golden-boot` | Live top scorers and assists across the tournament |
+| `/squads` | 48-nation squad browser — headshots, clubs, ages, injury flags, scorer picks |
+| `/golden-boot` | Tournament top scorers and assists |
 | `/profile` | Stats, accuracy, rank chart, badges, bracket and group picks |
 | `/rules` | Scoring rules reference |
 | `/admin` | Result entry and all scoring actions |
@@ -267,60 +308,137 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 ---
 
-## Tech stack
+## Screenshots
 
-<p>
-  <img src="https://img.shields.io/badge/Next.js-15_App_Router-black?style=for-the-badge&logo=next.js" alt="Next.js" />
-  <img src="https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React" />
-  <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/Tailwind_CSS-v3-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" />
-</p>
-<p>
-  <img src="https://img.shields.io/badge/Supabase-Postgres_+_Auth_+_Realtime-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" />
-  <img src="https://img.shields.io/badge/Vercel-deploy-black?style=for-the-badge&logo=vercel" alt="Vercel" />
-  <img src="https://img.shields.io/badge/PWA-Workbox-5A0FC8?style=for-the-badge&logo=pwa" alt="PWA" />
-</p>
+### Landing & Dashboard
+
+![Landing page](docs/screenshots/VisitPage.png)
+
+![Dashboard](docs/screenshots/DashBoard.png)
+
+<details>
+<summary><strong>Core gameplay</strong></summary>
 
 <br/>
 
-| Layer | Technology |
-| :--- | :--- |
-| **Framework** | Next.js 15 — App Router, server and client components, API route handlers |
-| **Language** | TypeScript in strict mode throughout |
-| **UI** | React 18, Tailwind CSS with CSS-variable design tokens (light/dark via `.dark` on `<html>`) |
-| **Database** | Supabase Postgres with Row Level Security — private league membership, protected invite codes, and safe profile updates |
-| **Auth** | Supabase Auth — email/password; `middleware.ts` guards every route except `/login` |
-| **Realtime** | Supabase Realtime — leaderboard updates push to all clients the moment a result is scored |
-| **Storage** | Supabase Storage — `avatars` bucket (public-read) for profile photos |
-| **PWA** | `@ducanh2912/next-pwa` with Workbox service worker, offline shell, and app badge |
-| **Hosting** | Vercel — auto-deploys on every push to `main` |
-| **Live data** | Kickoffapi for fixtures, lineups, match events, injuries, and scorers; Wikidata for player bios; football-data.org for squad seeding |
-| **Scheduling** | GitHub Actions scheduled workflow pings authenticated sync endpoints — keeps live data current without a platform cron |
-| **Calendar** | RFC 5545 iCalendar feeds for cross-app fixture subscription (Google, Apple, Outlook, Notion) |
-| **Accessibility** | Colour-blind-safe palette mode (Okabe–Ito), DB-backed and synced across devices |
-| **Design** | Schibsted Grotesk typeface, token-driven colour scheme, custom SVG charts with no chart library |
+| Fixtures (dark) | Fixtures — group filter (light) |
+|---|---|
+| ![Fixtures](docs/screenshots/FixturesPage.png) | ![Fixtures light mode](docs/screenshots/FixturesLightModeGroupFilter.png) |
+
+| Predict a match | Scored match — league predictions revealed |
+|---|---|
+| ![Match prediction](docs/screenshots/MatchCard.png) | ![Completed match card](docs/screenshots/CompletedMatchCard.png) |
+
+![Full match page — lineups, prediction form, league picks](docs/screenshots/FullMatchDetails.png)
+
+</details>
+
+<details>
+<summary><strong>Standings &amp; competition</strong></summary>
+
+<br/>
+
+![Leaderboard](docs/screenshots/Leaderboard.png)
+
+![Points race chart](docs/screenshots/Leaderboard1.png)
+
+| Tournament bracket | Group predictor |
+|---|---|
+| ![Bracket](docs/screenshots/TournamentBracket.png) | ![Groups](docs/screenshots/Groups.png) |
+
+</details>
+
+<details>
+<summary><strong>Mobile (PWA)</strong></summary>
+
+<br/>
+
+| Fixtures | Home &amp; navigation |
+|---|---|
+| ![Mobile fixtures](docs/screenshots/PhoneFixture.png) | ![Mobile home](docs/screenshots/PhoneHome.png) |
+
+</details>
+
+<details>
+<summary><strong>More screenshots</strong></summary>
+
+<br/>
+
+| Profile | Head-to-head comparison |
+|---|---|
+| ![Profile](docs/screenshots/Profile.png) | ![Comparison](docs/screenshots/Comparison.png) |
+
+| Squad browser | Golden Boot |
+|---|---|
+| ![Squads](docs/screenshots/Squads.png) | ![Golden Boot](docs/screenshots/GoldenBoot.png) |
+
+| Calendar export | Profile settings &amp; colour-blind mode |
+|---|---|
+| ![Calendar](docs/screenshots/Calendar.png) | ![Settings](docs/screenshots/Settings.png) |
+
+| Admin — result entry | Admin — console |
+|---|---|
+| ![Score entry](docs/screenshots/ScoreEntry.png) | ![Admin console](docs/screenshots/Admin.png) |
+
+| PWA install guide |  |
+|---|---|
+| ![PWA install](docs/screenshots/PWAInstall.png) | |
+
+</details>
+
+---
+
+## Tech stack
+
+| | Layer | Technology |
+| :---: | :--- | :--- |
+| ![Next.js](https://img.shields.io/badge/-Next.js-000?style=flat-square&logo=next.js) | **Framework** | Next.js 15 — App Router, server and client components, API route handlers |
+| ![TypeScript](https://img.shields.io/badge/-TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white) | **Language** | TypeScript in strict mode throughout |
+| ![React](https://img.shields.io/badge/-React-61DAFB?style=flat-square&logo=react&logoColor=000) ![Tailwind](https://img.shields.io/badge/-Tailwind-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white) | **UI** | React 18, Tailwind CSS with CSS-variable design tokens (light/dark via `.dark` on `<html>`) |
+| ![Supabase](https://img.shields.io/badge/-Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=000) | **Database** | Supabase Postgres with Row Level Security — prediction visibility scoped by kickoff time and league membership |
+| ![Supabase](https://img.shields.io/badge/-Auth-3ECF8E?style=flat-square&logo=supabase&logoColor=000) | **Auth** | Supabase Auth — email/password; `middleware.ts` guards every route except `/login` |
+| ![Supabase](https://img.shields.io/badge/-Realtime-3ECF8E?style=flat-square&logo=supabase&logoColor=000) | **Realtime** | Supabase Realtime — leaderboard updates push to all clients the moment a result is scored |
+| ![Supabase](https://img.shields.io/badge/-Storage-3ECF8E?style=flat-square&logo=supabase&logoColor=000) | **Storage** | Supabase Storage — `avatars` bucket for profile photos; `player-photos` for self-hosted headshots |
+| ![PWA](https://img.shields.io/badge/-PWA-5A0FC8?style=flat-square&logo=pwa) | **PWA** | `@ducanh2912/next-pwa` with Workbox service worker, offline shell, and app badge |
+| ![Vercel](https://img.shields.io/badge/-Vercel-000?style=flat-square&logo=vercel) | **Hosting** | Vercel — auto-deploys on every push to `main` |
+| ![Postgres](https://img.shields.io/badge/-Postgres-4169E1?style=flat-square&logo=postgresql&logoColor=white) | **Live data** | Kickoffapi for fixtures, lineups, events, injuries, scorers; Wikidata for bios and photos |
+| ![Google Calendar](https://img.shields.io/badge/-iCalendar-4285F4?style=flat-square&logo=googlecalendar&logoColor=white) | **Calendar** | RFC 5545 iCalendar feeds — auto-updating, timezone-aware; works in Google, Apple, Outlook, Notion |
+| | **Accessibility** | Colour-blind-safe palette mode (Okabe–Ito), DB-backed and synced across devices |
+| | **Design** | Schibsted Grotesk typeface, token-driven colour scheme, custom SVG charts — no chart library |
 
 ---
 
 ## Architecture
 
 ```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "fontSize": "18px",
+    "fontFamily": "ui-sans-serif, system-ui, sans-serif"
+  },
+  "flowchart": {
+    "nodeSpacing": 55,
+    "rankSpacing": 110,
+    "padding": 24
+  }
+}}%%
 flowchart LR
-  subgraph Client["Client Layer"]
+  subgraph Client["🖥️  Client Layer"]
     direction TB
     subgraph PWA["PWA Boundary"]
       direction TB
-      Browser["Browser — Next.js App Router"]
+      Browser["Browser\nNext.js App Router"]
       Pages["app/* pages"]
       Components["components/*"]
       ClientLib["lib/* client helpers"]
-      SW["Service Worker — Workbox"]
+      SW["⚙️ Service Worker — Workbox"]
       Browser --> Pages --> Components --> ClientLib
-      SW -. wraps .-> Browser
+      SW -. offline shell .-> Browser
     end
   end
 
-  subgraph Server["Server Layer"]
+  subgraph Server["⚡  Server Layer"]
     direction TB
     API["app/api/* route handlers"]
     ScoreMatch["score-match"]
@@ -328,44 +446,46 @@ flowchart LR
     ScoreTournament["score-tournament"]
     SnapshotRanks["snapshot-ranks"]
     RescoreAll["rescore-all"]
-    LiveSync["fetch-lineup · sync-results · sync-injuries"]
+    LiveSync["fetch-lineup\nsync-results\nsync-injuries"]
     GoldenBoot["golden-boot"]
-    Calendar["calendar (iCal feed)"]
+    Calendar["calendar\niCal feed"]
     API --> ScoreMatch & ScoreGroups & ScoreTournament & SnapshotRanks & RescoreAll & LiveSync & GoldenBoot & Calendar
   end
 
-  subgraph External["External APIs"]
+  subgraph External["🌐  External APIs"]
     direction TB
-    Kickoff["Kickoffapi — lineups, events, injuries, scorers"]
-    Wikidata["Wikidata — player bios"]
+    Kickoff["Kickoffapi\nlineups · events · scorers · injuries"]
+    Wikidata["Wikidata\nplayer bios · photos"]
   end
 
-  subgraph Scheduler["Automation"]
+  subgraph Scripts["🏠  Residential Scripts"]
     direction TB
-    GHA["GitHub Actions — scheduled sync"]
+    DataLive["npm run data:live\nresults · lineups · injuries · Golden Boot"]
   end
 
-  subgraph Data["Supabase"]
+  subgraph Data["🗄️  Supabase"]
     direction TB
     Postgres["Postgres + RLS"]
     Auth["Auth"]
     Realtime["Realtime"]
-    Storage["Storage"]
+    Storage["Storage\navatars · player-photos"]
+    LiveCache["live_cache\nKickoffapi snapshot"]
   end
 
-  subgraph Domain["Shared Domain Logic"]
+  subgraph Domain["📐  Shared Domain Logic"]
     direction TB
-    Scoring["lib/scoring.ts"]
-    Prizes["lib/prizes.ts"]
-    Leaderboard["lib/leaderboard.ts"]
+    Scoring["lib/scoring.ts\npoint values"]
+    Prizes["lib/prizes.ts\nprize pool"]
+    Leaderboard["lib/leaderboard.ts\naggregate + sort"]
   end
 
-  Client -->|"supabase-js — RLS-guarded"| Data
+  Client -->|"supabase-js — RLS-guarded reads/writes"| Data
   Client -->|"admin POST"| Server
   Server -->|"validated writes"| Data
-  Server -->|"fetch — server-side keys"| External
-  Scheduler -->|"GET + CRON_SECRET"| Server
-  Realtime -. "live push — no reload" .-> Client
+  Scripts -->|"fetch via residential IP"| External
+  Scripts -->|"service role upsert"| LiveCache
+  LiveCache --- Postgres
+  Realtime -. "live push — no page reload" .-> Client
   Domain -. "imported by" .-> Client & Server
 
   classDef layer fill:#ffffff,stroke:#d0d7de,color:#24292f,stroke-width:2px
@@ -376,23 +496,24 @@ flowchart LR
   classDef domain fill:#eef2ff,stroke:#4f46e5,color:#312e81,stroke-width:2px
   classDef worker fill:#fffbeb,stroke:#d97706,color:#92400e,stroke-width:2px
 
-  class Client,Server,Data,Domain,External,Scheduler layer
+  class Client,Server,Data,Domain,External,Scripts layer
   class Browser,Pages,Components,ClientLib client
   class PWA pwa
   class SW worker
   class API,ScoreMatch,ScoreGroups,ScoreTournament,SnapshotRanks,RescoreAll,LiveSync,GoldenBoot,Calendar server
-  class Kickoff,Wikidata,GHA worker
-  class Postgres,Auth,Realtime,Storage data
+  class Kickoff,Wikidata,DataLive worker
+  class Postgres,Auth,Realtime,Storage,LiveCache data
   class Scoring,Prizes,Leaderboard domain
 ```
 
 **Data flow**
 
-1. User submits a prediction → client writes to `predictions` via supabase-js (RLS enforces own-row-only writes)
+1. User submits a prediction → client writes to `predictions` via supabase-js (RLS enforces own-row-only writes; predictions hidden from other members until kickoff)
 2. Admin enters a result → POST to `/api/score-match` → reads point values from `lib/scoring.ts`, computes per-category breakdown, writes back to each `predictions` row
-3. `lib/leaderboard.ts` aggregates scored predictions client-side — shared between the dashboard mini-table and `/leaderboard`
+3. `lib/leaderboard.ts` aggregates scored predictions — shared between the dashboard mini-table and `/leaderboard`
 4. `lib/prizes.ts` derives the prize snapshot from aggregated standings
 5. Supabase Realtime pushes `predictions` UPDATE events to all connected clients — standings update instantly with no page reload
+6. Live data (lineups, results, injuries, Golden Boot) is fetched from Kickoffapi via residential `npm run data:*` scripts and cached in Supabase; the app reads from Supabase, not from the provider directly
 
 <details>
 <summary>Project structure</summary>
@@ -409,7 +530,7 @@ app/
   leaderboard/              Live standings, per-GW view, rank arrows, CSV export
   h2h/                      Head-to-head compare with stats and points race chart
   squads/                   48-nation browser — photos, clubs, ages, injuries, scorer picks
-  golden-boot/              Live top scorers and assists
+  golden-boot/              Tournament top scorers and assists
   profile/                  Stats, accuracy, rank chart tabs, badges, avatar crop
   rules/                    Scoring rules reference
   admin/                    Result entry and scoring actions (is_admin guard)
@@ -419,11 +540,11 @@ app/
     score-tournament/       Score bracket predictions
     snapshot-ranks/         Capture rank snapshot
     rescore-all/            Full recompute of all scored predictions
-    fetch-lineup/           Import confirmed XI + formation (admin + cron)
-    sync-results/           Pull scores + first scorer, then auto-score (admin + cron)
-    sync-injuries/          Refresh injury / suspension flags (admin + cron)
-    golden-boot/            Live top scorers / assists feed
-    calendar/[token]/       Per-user iCalendar fixture feed (subscribe / download)
+    fetch-lineup/           Import confirmed XI + formation (admin)
+    sync-results/           Pull scores + first scorer, then auto-score (admin)
+    sync-injuries/          Refresh injury / suspension flags (admin)
+    golden-boot/            Serve top scorers / assists from cache
+    calendar/[token]/       Per-user iCalendar fixture feed
 
 components/
   AppShell.tsx              Desktop sidebar, mobile bottom nav, theme toggle
@@ -438,21 +559,29 @@ lib/
   scoring.ts                Single source of truth for all point values
   prizes.ts                 Prize pool constants and computePrizeSnapshot
   leaderboard.ts            aggregateLeaderboard — shared aggregation and canonical sort
-  league.ts                 getActiveLeague, isMoneyLeague, multi-league helpers
+  normalize.ts              Universal ASCII name folding (Turkish, Nordic, Polish, …)
+  league.ts                 getMyLeagues, isMoneyLeague, multi-league helpers
   teams.ts                  48 WC2026 teams with code, name, flag, and playerKey
   kickoff.ts                Kickoffapi client — fixtures, lineups, events
   team-match.ts             External team/player name → our codes and roster matching
   ics.ts                    RFC 5545 iCalendar builder for the fixture feed
-  rate-limit.ts             In-memory token bucket (10 req/min per key)
   supabase-browser.ts       Browser Supabase client (anon key)
   supabase-server.ts        Server Supabase client (service role, RSC)
 
 supabase/migrations/        SQL migrations applied in filename order via supabase db push
 scripts/
-  fetch-players.ts          Pulls WC2026 squads from football-data.org into the players table
+  fetch-players.ts          Pulls WC2026 squads from football-data.org
   fetch-wikidata-players.ts Enriches players with photos, clubs, and DOBs from Wikidata
+  cache-player-photos.ts    Downloads Wikimedia photos and re-hosts in Supabase Storage
+  fill-missing-photos.ts    Gap-fills remaining missing photos from Kickoffapi CDN
+  sync-results.ts           Residential: pull finished scores + scorers, re-score predictions
+  sync-lineups.ts           Residential: pull confirmed XI + formations
+  sync-injuries.ts          Residential: pull injury / suspension flags
+  sync-golden-boot.ts       Residential: pull top scorers / assists into Supabase cache
+  grant-admin.ts            Bootstrap the first organizer account
+  setup-check.ts            Schema, connectivity, and launch-readiness check
 .github/workflows/
-  live-data.yml             Scheduled GitHub Action that pings the sync endpoints
+  live-data.yml             Manual GitHub Action that pings the sync endpoints
 middleware.ts               Redirects unauthenticated users to /login for all routes
 ```
 
@@ -462,7 +591,7 @@ middleware.ts               Redirects unauthenticated users to /login for all ro
 
 ## Local development
 
-### 1. Clone and install
+### ![](https://img.shields.io/badge/01-16a34a?style=flat-square) Clone and install
 
 ```bash
 git clone <your-repository-url>
@@ -470,103 +599,120 @@ cd wc26-predictor
 npm ci
 ```
 
-### 2. Environment variables
+### ![](https://img.shields.io/badge/02-16a34a?style=flat-square) Environment variables
 
 ```bash
 cp .env.example .env.local
 ```
 
-Open `.env.local` and fill in your Supabase project values (found under **Project Settings → API**):
+Open `.env.local` and fill in your values. Required fields are marked below:
 
 ```env
+# Required
 NEXT_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
-SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
+SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>   # server-only — never commit
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
-NEXT_PUBLIC_GITHUB_URL=https://github.com/<owner>/<repo>
 
-# Optional — live data, push, and scheduled sync
-KICKOFF_API_KEY=<kickoffapi-key>          # live lineups, results, injuries, scorers
-CRON_SECRET=<random-string>               # guards the scheduled sync endpoints
-NEXT_PUBLIC_VAPID_PUBLIC_KEY=<public-key> # browser push subscription key
-VAPID_PRIVATE_KEY=<private-key>           # server-only push key
+# Optional — live data sync (run from your local machine; see Live data below)
+KICKOFF_API_KEY=<kickoffapi-key>
+FOOTBALL_API_TOKEN=<football-data.org-key>          # only needed for data:players
+
+# Optional — GitHub Actions manual sync trigger
+CRON_SECRET=<random-string>                         # server-only — never commit
+
+# Optional — browser push notifications
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=<public-key>
+VAPID_PRIVATE_KEY=<private-key>                     # server-only — never commit
 VAPID_EMAIL=mailto:<you@example.com>
+
+# Optional — public footer link
+NEXT_PUBLIC_GITHUB_URL=https://github.com/<owner>/<repo>
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY`, `KICKOFF_API_KEY`, `CRON_SECRET`, and `VAPID_PRIVATE_KEY` are server-only secrets. Do not prefix them with `NEXT_PUBLIC_` and never commit `.env.local`.
-
-### 3. Apply migrations
+### ![](https://img.shields.io/badge/03-16a34a?style=flat-square) Apply migrations
 
 ```bash
 brew install supabase/tap/supabase   # macOS — see supabase.com/docs for other platforms
-supabase login --token <your-access-token>
+supabase login
 supabase link --project-ref <your-project-ref>
 supabase db push
 ```
 
-### 4. Create the first organizer
+### ![](https://img.shields.io/badge/04-16a34a?style=flat-square) Create the first organizer
 
-Sign up once at `http://localhost:3000/login`. The Auth database trigger creates a non-privileged profile automatically. Grant the first organizer role from a trusted local shell, using the service key:
+Sign up once at `http://localhost:3000/login`. The Auth trigger creates a non-privileged profile automatically. Grant the organizer role:
 
 ```bash
 ADMIN_EMAIL=you@example.com npm run bootstrap:admin
 ADMIN_EMAIL=you@example.com npm run setup:check
 ```
 
-This replaces editing `is_admin` in the Supabase Table Editor. The browser role cannot create profiles or set administrator fields.
-
-### 5. Populate data
+### ![](https://img.shields.io/badge/05-16a34a?style=flat-square) Populate squad data
 
 ```bash
-# Required roster import. It reports expected request pacing for the free tier.
-npm run data:players
-
-# Optional enrichments; each can be rerun safely.
-npm run data:enrich
-npm run data:photos
-npm run data:stats
+npm run data:players     # Required — seeds the 48-nation rosters from football-data.org
+npm run data:enrich      # Optional — adds clubs, DOBs, and photos from Wikidata
+npm run data:photos      # Optional — self-hosts Wikimedia photos in Supabase Storage
+npm run data:fill-photos # Optional — gap-fills remaining missing photos via Kickoffapi CDN
 ```
 
-`data:players` uses football-data.org, while Wikidata and API-Football enrich player metadata. Live results, lineups, injuries, and the Golden Boot feed are sourced from Kickoffapi at runtime. The old destructive squad seed script is intentionally not part of the launch path.
+### ![](https://img.shields.io/badge/06-16a34a?style=flat-square) Live data (lineups, results, injuries, Golden Boot)
 
-### 6. Verify and run
+Live match data is fetched from Kickoffapi. Because Kickoffapi sits behind Cloudflare, server-side calls from Vercel or GitHub Actions are blocked by an IP challenge. Live data is refreshed by running scripts **from your local machine**, which then writes to Supabase — the app reads from Supabase:
+
+```bash
+npm run data:live        # run all four: results → lineups → injuries → Golden Boot
+# or individually:
+npm run data:results     # finished scores + first scorer; re-scores predictions
+npm run data:lineups     # confirmed XI + formations (published ~75 min before kickoff)
+npm run data:injuries    # injury / suspension flags
+npm run data:golden-boot # top scorers and assists
+```
+
+Run these after matches finish (or before kickoff for lineups). The admin result-entry form in `/admin` is always available as a manual fallback.
+
+### ![](https://img.shields.io/badge/07-16a34a?style=flat-square) Verify and run
 
 ```bash
 npm run setup:check  # schema, connectivity, and configured launch features
-npm run check        # lint, type-check, unit tests, production build
-npm run dev          # Development server -> http://localhost:3000
+npm run check        # lint, typecheck, unit tests, and production build
+npm run dev          # development server → http://localhost:3000
 ```
 
-> **PWA note:** the service worker is disabled in development to avoid stale-cache issues. To test offline behaviour run `npm run build && npm start`, then open DevTools → Application → Service Workers → tick **Offline**.
+> **PWA note:** the service worker is disabled in development. To test offline behaviour, run `npm run build && npm start` and open DevTools → Application → Service Workers → **Offline**.
+
+---
 
 ## Deployment
 
 | Step | Action |
 | :---: | :--- |
-| 1 | Create a hosted Supabase project, run `supabase db push`, then add both `http://localhost:3000/auth/callback` and `https://<your-domain>/auth/callback` in **Authentication -> URL Configuration**. Set the production site URL too. |
-| 2 | Create the first Auth account, run `ADMIN_EMAIL=<email> npm run bootstrap:admin`, create a private league, and confirm a second account can join only through its invite code. |
-| 3 | Import the repository in [Vercel](https://vercel.com). Add every required value from `.env.example`; production must use the deployed `NEXT_PUBLIC_SITE_URL`. |
-| 4 | In GitHub **Settings -> Secrets and variables -> Actions**, add `APP_URL=https://<your-domain>` and `CRON_SECRET` with the exact same value used in Vercel. The workflow runs lineups/results and prediction reminders every 15 minutes, plus injuries every six hours; use **Run workflow** for a manual smoke test. |
-| 5 | Deploy, then run `ADMIN_EMAIL=<email> npm run setup:check` against the production environment. Check the Admin sync-health cards after the first workflow run. |
+| 1 | Create a hosted Supabase project, run `supabase db push`, and add `http://localhost:3000/auth/callback` + `https://<your-domain>/auth/callback` under **Authentication → URL Configuration**. |
+| 2 | Sign up once, run `ADMIN_EMAIL=<email> npm run bootstrap:admin`, create a private league, and confirm a second account can join only via its invite code. |
+| 3 | Import the repository in [Vercel](https://vercel.com). Add every value from `.env.example`; set `NEXT_PUBLIC_SITE_URL` to your production domain. |
+| 4 | In GitHub **Settings → Secrets → Actions**, add `APP_URL=https://<your-domain>` and `CRON_SECRET`. Use **Run workflow** on the Actions tab to manually trigger a live-data sync. |
+| 5 | Deploy, then run `ADMIN_EMAIL=<email> npm run setup:check` against the production URL. |
 
-### Fresh-project launch gate
+---
 
-- `npm ci`, `supabase db push`, `npm run setup:check`, and `npm run check` complete without undocumented edits.
-- A normal account cannot change `is_admin`, retrieve a join code from a regular league read, add itself to a league directly, or update live match/player data.
-- The first organizer is created only with `npm run bootstrap:admin`; it creates a league, shares its invite code intentionally, and a second account joins through `/join`.
-- Test a locked prediction, Group Predictor team link, mobile `/squads?team=...` deep link, result scoring, calendar token rotation, push status, and the LinkedIn Open Graph preview.
-- Confirm the live provider endpoints with a manual GitHub Action before relying on its schedule. Provider availability and tournament data are external dependencies, so sync status and unmatched players are visible in Admin rather than silently discarded.
+## Launch checklist
+
+- `npm ci`, `supabase db push`, `npm run setup:check`, and `npm run check` all pass cleanly
+- A normal account cannot change `is_admin`, read a league's join code directly, add itself to a league, or update match data
+- The first organizer is created only via `npm run bootstrap:admin`
+- Test a locked prediction, the formation pitch, result scoring, calendar token, and the LinkedIn Open Graph preview
+- Confirm live data by running `npm run data:live` from your local machine after a match finishes
+
+---
 
 ## Launch notes
 
-MatchDay is intentionally a private-league product, not a public demo. It stores email-auth accounts, optional public avatars, browser push subscriptions, and revocable calendar-feed tokens; the in-app [Privacy](/privacy) and [Terms](/terms) pages describe those surfaces. It is an independent fan project and is not affiliated with FIFA.
-
-The repository is designed as a case study as well as an app: the architecture diagram above covers the client, scoring routes, Supabase, live providers, and scheduled automation. The `docs/` directory contains architecture assets for project walkthroughs and LinkedIn posts.
-
----
+MatchDay is a private-league product, not a public demo. It stores email-auth accounts, optional public avatars, browser push subscriptions, and revocable calendar-feed tokens. The in-app [Privacy](/privacy) and [Terms](/terms) pages describe those surfaces. This is an independent fan project and is not affiliated with FIFA.
 
 ---
 
 <p align="center">
-  <sub>Built for WC2026 &nbsp;·&nbsp; Private league &nbsp;·&nbsp; Not affiliated with FIFA</sub>
+  <sub>Built for WC2026 &nbsp;·&nbsp; Private league &nbsp;·&nbsp; Not affiliated with FIFA</sub><br/>
+  <sub>Built by <a href="https://github.com/aryan12singh">@aryan12singh</a> &nbsp;&amp;&nbsp; <a href="https://github.com/calebsooon">@calebsooon</a></sub>
 </p>

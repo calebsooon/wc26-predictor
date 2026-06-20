@@ -183,7 +183,7 @@ export default function MatchDetailPage() {
       user_id: userId, match_id: id,
       pred_home: h, pred_away: a,
       pred_first_goal_team: firstTeam,
-      pred_first_scorer_id: typeof scorerId === 'number' ? scorerId : null,
+      pred_first_scorer_id: typeof scorerId === 'number' && scorerId !== -1 ? scorerId : null,
       pred_no_scorer: scorerId === 'none',
       pred_total_goals: predTotalGoals,
       pred_goal_diff: allowGdManual ? predGoalDiff : null,
