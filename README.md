@@ -74,9 +74,13 @@
 
 ## How it works
 
-![](https://img.shields.io/badge/01-16a34a?style=flat-square) &nbsp;**Join your league** &nbsp;—&nbsp; Sign up with email, enter your invite code, and you're in. Leagues are private and admin-created; each group of friends gets its own isolated standings and prize pool. Multiple leagues are supported.
+![](https://img.shields.io/badge/01-16a34a?style=flat-square) **Join your league**
 
-![](https://img.shields.io/badge/02-16a34a?style=flat-square) &nbsp;**Submit predictions before kickoff** &nbsp;—&nbsp; Head to **Fixtures** and enter your scoreline for each match. On top of the score, you can predict:
+Sign up with email, enter your invite code, and you're in. Leagues are private and admin-created; each group of friends gets its own isolated standings and prize pool. Multiple leagues are supported.
+
+![](https://img.shields.io/badge/02-16a34a?style=flat-square) **Submit predictions before kickoff**
+
+Head to **Fixtures** and enter your scoreline for each match. On top of the score, you can predict:
 
 - **First-goal team** — which side opens the scoring
 - **First scorer** — the specific player (highest reward, +4 pts)
@@ -85,11 +89,17 @@
 
 Predictions lock at kickoff. The admin enters the result and every prediction is scored automatically across all per-category columns.
 
-![](https://img.shields.io/badge/03-16a34a?style=flat-square) &nbsp;**Compete across 8 gameweeks** &nbsp;—&nbsp; Points accumulate through the group stage and all knockout rounds. Supabase Realtime pushes leaderboard updates the moment results land — no refresh needed.
+![](https://img.shields.io/badge/03-16a34a?style=flat-square) **Compete across 8 gameweeks**
 
-![](https://img.shields.io/badge/04-16a34a?style=flat-square) &nbsp;**Predict the structure** &nbsp;—&nbsp; Beyond individual matches, predict group finishing orders (+2 per correct placement) and the full knockout bracket — champion, runner-up, semi-finalists, and quarter-finalists (up to +47 pts total).
+Points accumulate through the group stage and all knockout rounds. Supabase Realtime pushes leaderboard updates the moment results land, no refresh needed.
 
-![](https://img.shields.io/badge/05-16a34a?style=flat-square) &nbsp;**The prize pool settles itself** &nbsp;—&nbsp; Each gameweek and the overall standings pay out and claw back based on finishing position. The dashboard shows your current rank, settled net, projected total, and best/worst prize range at all times.
+![](https://img.shields.io/badge/04-16a34a?style=flat-square) **Predict the structure**
+
+Beyond individual matches, predict group finishing orders (+2 per correct placement) and the full knockout bracket — champion, runner-up, semi-finalists, and quarter-finalists (up to +47 pts total).
+
+![](https://img.shields.io/badge/05-16a34a?style=flat-square) **The prize pool settles itself**
+
+Each gameweek and the overall standings pay out and claw back based on finishing position. The dashboard shows your current rank, settled net, projected total, and best/worst prize range at all times.
 
 ---
 
@@ -161,7 +171,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 ## Features
 
 <details>
-<summary>![](https://img.shields.io/badge/GAMEPLAY-16a34a?style=flat-square) &nbsp;<strong>Predictions &amp; gameplay</strong></summary>
+<summary><strong>◆ &nbsp;Predictions &amp; gameplay</strong></summary>
 
 <br/>
 
@@ -178,7 +188,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary>![](https://img.shields.io/badge/FIXTURES-2563eb?style=flat-square) &nbsp;<strong>Fixtures &amp; results</strong></summary>
+<summary><strong>◆ &nbsp;Fixtures &amp; results</strong></summary>
 
 <br/>
 
@@ -195,7 +205,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary>![](https://img.shields.io/badge/LIVE_DATA-ea580c?style=flat-square) &nbsp;<strong>Live data</strong></summary>
+<summary><strong>◆ &nbsp;Live data</strong></summary>
 
 <br/>
 
@@ -211,7 +221,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary>![](https://img.shields.io/badge/STANDINGS-7c3aed?style=flat-square) &nbsp;<strong>Leaderboard &amp; social</strong></summary>
+<summary><strong>◆ &nbsp;Leaderboard &amp; social</strong></summary>
 
 <br/>
 
@@ -227,7 +237,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary>![](https://img.shields.io/badge/PROFILE-db2777?style=flat-square) &nbsp;<strong>Profile &amp; personalisation</strong></summary>
+<summary><strong>◆ &nbsp;Profile &amp; personalisation</strong></summary>
 
 <br/>
 
@@ -242,7 +252,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary>![](https://img.shields.io/badge/ADMIN-475569?style=flat-square) &nbsp;<strong>Admin</strong></summary>
+<summary><strong>◆ &nbsp;Admin</strong></summary>
 
 <br/>
 
@@ -258,7 +268,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary>![](https://img.shields.io/badge/PLATFORM-0891b2?style=flat-square) &nbsp;<strong>Platform</strong></summary>
+<summary><strong>◆ &nbsp;Platform</strong></summary>
 
 <br/>
 
@@ -273,7 +283,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary>![](https://img.shields.io/badge/ROUTES-0284c7?style=flat-square) &nbsp;<strong>Pages &amp; routes</strong></summary>
+<summary><strong>◆ &nbsp;Pages &amp; routes</strong></summary>
 
 <br/>
 
@@ -581,7 +591,7 @@ middleware.ts               Redirects unauthenticated users to /login for all ro
 
 ## Local development
 
-### ![](https://img.shields.io/badge/01-16a34a?style=flat-square) &nbsp;Clone and install
+### ![](https://img.shields.io/badge/01-16a34a?style=flat-square) Clone and install
 
 ```bash
 git clone <your-repository-url>
@@ -589,7 +599,7 @@ cd wc26-predictor
 npm ci
 ```
 
-### ![](https://img.shields.io/badge/02-16a34a?style=flat-square) &nbsp;Environment variables
+### ![](https://img.shields.io/badge/02-16a34a?style=flat-square) Environment variables
 
 ```bash
 cp .env.example .env.local
@@ -620,7 +630,7 @@ VAPID_EMAIL=mailto:<you@example.com>
 NEXT_PUBLIC_GITHUB_URL=https://github.com/<owner>/<repo>
 ```
 
-### ![](https://img.shields.io/badge/03-16a34a?style=flat-square) &nbsp;Apply migrations
+### ![](https://img.shields.io/badge/03-16a34a?style=flat-square) Apply migrations
 
 ```bash
 brew install supabase/tap/supabase   # macOS — see supabase.com/docs for other platforms
@@ -629,7 +639,7 @@ supabase link --project-ref <your-project-ref>
 supabase db push
 ```
 
-### ![](https://img.shields.io/badge/04-16a34a?style=flat-square) &nbsp;Create the first organizer
+### ![](https://img.shields.io/badge/04-16a34a?style=flat-square) Create the first organizer
 
 Sign up once at `http://localhost:3000/login`. The Auth trigger creates a non-privileged profile automatically. Grant the organizer role:
 
@@ -638,7 +648,7 @@ ADMIN_EMAIL=you@example.com npm run bootstrap:admin
 ADMIN_EMAIL=you@example.com npm run setup:check
 ```
 
-### ![](https://img.shields.io/badge/05-16a34a?style=flat-square) &nbsp;Populate squad data
+### ![](https://img.shields.io/badge/05-16a34a?style=flat-square) Populate squad data
 
 ```bash
 npm run data:players     # Required — seeds the 48-nation rosters from football-data.org
@@ -647,7 +657,7 @@ npm run data:photos      # Optional — self-hosts Wikimedia photos in Supabase 
 npm run data:fill-photos # Optional — gap-fills remaining missing photos via Kickoffapi CDN
 ```
 
-### ![](https://img.shields.io/badge/06-16a34a?style=flat-square) &nbsp;Live data (lineups, results, injuries, Golden Boot)
+### ![](https://img.shields.io/badge/06-16a34a?style=flat-square) Live data (lineups, results, injuries, Golden Boot)
 
 Live match data is fetched from Kickoffapi. Because Kickoffapi sits behind Cloudflare, server-side calls from Vercel or GitHub Actions are blocked by an IP challenge. Live data is refreshed by running scripts **from your local machine**, which then writes to Supabase — the app reads from Supabase:
 
@@ -662,7 +672,7 @@ npm run data:golden-boot # top scorers and assists
 
 Run these after matches finish (or before kickoff for lineups). The admin result-entry form in `/admin` is always available as a manual fallback.
 
-### ![](https://img.shields.io/badge/07-16a34a?style=flat-square) &nbsp;Verify and run
+### ![](https://img.shields.io/badge/07-16a34a?style=flat-square) Verify and run
 
 ```bash
 npm run setup:check  # schema, connectivity, and configured launch features
