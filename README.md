@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Private World Cup 2026 prediction league</strong><br/>
-  Predict every scoreline &nbsp;·&nbsp; Compete on a live leaderboard &nbsp;·&nbsp; Settle the prize pool
+  Predict every scoreline &nbsp;·&nbsp; Compete on a live leaderboard &nbsp;·&nbsp; Follow the prize pool
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
   <a href="https://youtu.be/IPu3W5JPbZQ">
     <img src="docs/MatchDay-Video-Thumbnail-1280x720.png" alt="Watch the MatchDay demo" width="720" />
   </a><br/>
-  <sub>▶ &nbsp;Click to watch the 90-second demo</sub>
+  <sub>▶ &nbsp;Click to watch the 150-second demo</sub>
 </p>
 
 <br/>
