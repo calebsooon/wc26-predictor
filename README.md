@@ -286,7 +286,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 ## Demo
 
-[![Watch the demo](docs/screenshots/DashBoard.png)](https://youtu.be/YOUR_VIDEO_ID)
+[![Watch the MatchDay demo](docs/MatchDay-Video-Thumbnail-1280x720.png)](https://youtu.be/IPu3W5JPbZQ)
 
 ---
 
@@ -310,6 +310,8 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | Predict a match | Scored match — league predictions revealed |
 |---|---|
 | ![Match prediction](docs/screenshots/MatchCard.png) | ![Completed match card](docs/screenshots/CompletedMatchCard.png) |
+
+![Full match page — lineups, prediction form, league picks](docs/screenshots/FullMatchDetails.png)
 
 </details>
 
