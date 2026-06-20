@@ -4,6 +4,7 @@ import { teamNameToCode } from '@/lib/team-match'
 
 // Public (auth-gated by middleware) Golden Boot feed: top scorers + assists for
 // the World Cup, enriched with our team codes. Key stays server-side.
+export const dynamic = 'force-dynamic'
 export const revalidate = 1800
 
 interface KStat { playerId: number; teamId: number; goals: number | null; assists: number | null; photo: string | null; player: { id: number; name: string } | null }
