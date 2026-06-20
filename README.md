@@ -281,13 +281,64 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 ## Screenshots
 
-> Drop your app screenshots here, or link a live demo.
+### Landing & Dashboard
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/architecture-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="docs/architecture-light.png">
-  <img alt="MatchDay architecture diagram" src="docs/architecture-light.png" />
-</picture>
+![Landing page](docs/screenshots/VisitPage.png)
+
+![Dashboard](docs/screenshots/DashBoard.png)
+
+### Core gameplay
+
+| Fixtures (dark) | Fixtures — group filter (light) |
+|---|---|
+| ![Fixtures](docs/screenshots/FixturesPage.png) | ![Fixtures light mode](docs/screenshots/FixturesLightModeGroupFilter.png) |
+
+| Predict a match | Scored match — league predictions revealed |
+|---|---|
+| ![Match prediction](docs/screenshots/MatchCard.png) | ![Completed match card](docs/screenshots/CompletedMatchCard.png) |
+
+### Standings & competition
+
+| Leaderboard | Points race chart |
+|---|---|
+| ![Leaderboard](docs/screenshots/Leaderboard.png) | ![Points race](docs/screenshots/Leaderboard1.png) |
+
+| Tournament bracket | Group predictor |
+|---|---|
+| ![Bracket](docs/screenshots/TournamentBracket.png) | ![Groups](docs/screenshots/Groups.png) |
+
+### Mobile (PWA)
+
+| Fixtures | Home & navigation |
+|---|---|
+| ![Mobile fixtures](docs/screenshots/PhoneFixture.png) | ![Mobile home](docs/screenshots/PhoneHome.png) |
+
+<details>
+<summary><strong>More screenshots</strong></summary>
+
+<br/>
+
+| Profile | Golden Boot |
+|---|---|
+| ![Profile](docs/screenshots/Profile.png) | ![Golden Boot](docs/screenshots/GoldenBoot.png) |
+
+| Squad browser | Head-to-head comparison |
+|---|---|
+| ![Squads](docs/screenshots/Squads.png) | ![Comparison](docs/screenshots/Comparison.png) |
+
+| Calendar export | Profile settings & colour-blind mode |
+|---|---|
+| ![Calendar](docs/screenshots/Calendar.png) | ![Settings](docs/screenshots/Settings.png) |
+
+| Admin — result entry | Admin — console |
+|---|---|
+| ![Score entry](docs/screenshots/ScoreEntry.png) | ![Admin console](docs/screenshots/Admin.png) |
+
+| PWA install guide |  |
+|---|---|
+| ![PWA install](docs/screenshots/PWAInstall.png) | |
+
+</details>
 
 ---
 
