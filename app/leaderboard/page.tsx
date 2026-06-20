@@ -13,6 +13,8 @@ import { PointsRaceChart, RaceCompareChart, playerPalette, type RaceSeries, type
 import { useColorblind } from '@/lib/prefs'
 import { getTeam } from '@/lib/teams'
 import { fmtDateTime } from '@/lib/date-format'
+import { useUrlState } from '@/lib/url-state'
+import { TeamLink } from '@/components/TeamLink'
 
 const PRED_COLS = 'user_id, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer, matches(gw_number, match_date)'
 
@@ -89,8 +91,13 @@ const VIEW_TABS = [
   { key: 'picks', label: 'Picks' },
 ]
 
+function leaderboardTabFromUrl(value: string | null): string {
+  return value === 'all' || /^[1-8]$/.test(value ?? '') ? value ?? 'all' : 'all'
+}
+
 export default function LeaderboardPage() {
   const supabase = createClient()
+  const { searchParams, replaceUrl } = useUrlState()
   const [rows, setRows] = useState<PredRow[]>([])
   const [groupRows, setGroupRows] = useState<ScoredGroupPred[]>([])
   const [tournRows, setTournRows] = useState<ScoredTournamentPred[]>([])
@@ -106,8 +113,8 @@ export default function LeaderboardPage() {
   const [activeLeagueId, setActiveLeagueId] = useState<string | null>(null)
   const [prevRanks, setPrevRanks] = useState<Map<string, number>>(new Map())
   const [userId, setUserId] = useState<string | null>(null)
-  const [tab, setTab] = useState('all')        // GW tab
-  const [view, setView] = useState('standings') // standings | picks
+  const [tab, setTab] = useState(() => leaderboardTabFromUrl(searchParams.get('tab')))
+  const [view, setView] = useState(() => searchParams.get('view') === 'picks' ? 'picks' : 'standings')
   const [raceVariant, setRaceVariant] = useState<RaceVariant>('absolute') // race chart mode
   const colorblind = useColorblind()
   const [loading, setLoading] = useState(true)
@@ -116,6 +123,11 @@ export default function LeaderboardPage() {
   const [pickMatches, setPickMatches] = useState<PickMatch[]>([])
   const [pickPreds, setPickPreds] = useState<PickPred[]>([])
   const [picksLoading, setPicksLoading] = useState(false)
+
+  useEffect(() => {
+    setTab(leaderboardTabFromUrl(searchParams.get('tab')))
+    setView(searchParams.get('view') === 'picks' ? 'picks' : 'standings')
+  }, [searchParams])
 
   const fetchRows = useCallback(async (ids: string[]) => {
     if (ids.length === 0) { setRows([]); setGroupRows([]); setTournRows([]); return }
@@ -385,7 +397,10 @@ export default function LeaderboardPage() {
           {VIEW_TABS.map((v) => (
             <button
               key={v.key}
-              onClick={() => setView(v.key)}
+              onClick={() => {
+                setView(v.key)
+                replaceUrl({ view: v.key === 'standings' ? null : v.key })
+              }}
               className={`px-4 h-8 rounded-lg text-sm font-bold transition-all ${view === v.key ? 'bg-card text-textp shadow-sm' : 'text-texts hover:text-textp'}`}
             >
               {v.label}
@@ -417,7 +432,10 @@ export default function LeaderboardPage() {
                   return (
                     <button
                       key={t.key}
-                      onClick={() => setTab(t.key)}
+                      onClick={() => {
+                        setTab(t.key)
+                        replaceUrl({ tab: t.key === 'all' ? null : t.key })
+                      }}
                       style={{
                         height: 36,
                         padding: '0 14px',
@@ -1083,15 +1101,15 @@ function PicksView({
 
             {/* Teams */}
             <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
+              <TeamLink code={home.code} className="flex items-center gap-2 group">
                 <FlagChip code={home.code} w={24} h={16} r={3} />
                 <span className="font-bold text-textp">{home.name}</span>
-              </div>
+              </TeamLink>
               <span className="text-texts font-bold text-sm px-2">vs</span>
-              <div className="flex items-center gap-2 flex-row-reverse">
+              <TeamLink code={away.code} className="flex items-center gap-2 flex-row-reverse group">
                 <FlagChip code={away.code} w={24} h={16} r={3} />
                 <span className="font-bold text-textp text-right">{away.name}</span>
-              </div>
+              </TeamLink>
             </div>
 
             {/* Member picks — always visible when reveal_predictions is on */}

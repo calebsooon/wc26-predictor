@@ -14,7 +14,7 @@ const ROUND_IDS = {
 const PLACEHOLDER = 'TBC'
 
 export async function POST() {
-  const supabase = createServerSupabaseClient()
+  const supabase = await createServerSupabaseClient()
   const denied = await requireAdmin(supabase)
   if (denied) return denied
 

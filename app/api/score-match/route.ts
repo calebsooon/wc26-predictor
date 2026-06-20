@@ -11,7 +11,7 @@ function ordinal(n: number) {
 }
 
 export async function POST(request: Request) {
-  const supabase = createServerSupabaseClient()
+  const supabase = await createServerSupabaseClient()
   const denied = await requireAdmin(supabase)
   if (denied) return denied
 

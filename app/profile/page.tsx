@@ -8,6 +8,7 @@ import {
   Button, Avatar, Skeleton, EmptyState, TrophyIcon, LockIcon, Modal,
 } from '@/components/ui'
 import FlagChip from '@/components/FlagChip'
+import { TeamLink } from '@/components/TeamLink'
 import { BarChart, DonutChart, RankLine } from '@/components/charts'
 import { getTeam } from '@/lib/teams'
 import { weightedMatchPoints, weightedGroupPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
@@ -1044,7 +1045,7 @@ export default function ProfilePage() {
                 { label: 'Runner-up', value: tournamentPred.runner_up },
               ].map((row) => row.value ? (
                 <div key={row.label} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 13px', borderRadius: 12, background: 'rgb(var(--surface2))', border: '1px solid rgb(var(--border))' }}>
-                  <FlagChip code={row.value} w={28} h={20} r={5} />
+                  <TeamLink code={row.value}><FlagChip code={row.value} w={28} h={20} r={5} /></TeamLink>
                   <div style={{ minWidth: 0 }}>
                     <p style={{ ...eyebrow, margin: 0 }}>{row.label}</p>
                     <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 700, color: 'rgb(var(--textp))' }}>{getTeam(row.value).name}</p>
@@ -1062,7 +1063,7 @@ export default function ProfilePage() {
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 9 }}>
                     {row.values.map((code) => (
                       <div key={`${row.label}-${code}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: 999, background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))' }}>
-                        <FlagChip code={code} w={22} h={16} r={4} />
+                        <TeamLink code={code}><FlagChip code={code} w={22} h={16} r={4} /></TeamLink>
                         <span style={{ fontSize: 12, fontWeight: 700, color: 'rgb(var(--textp))' }}>{getTeam(code).name}</span>
                       </div>
                     ))}
@@ -1106,7 +1107,7 @@ export default function ProfilePage() {
                   {gp.ranked_codes.slice(0, 4).map((code, idx) => (
                     <div key={`${gp.group_name}-${code}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ width: 16, fontSize: 12, fontWeight: 800, color: idx < 2 ? 'rgb(var(--gold))' : 'rgb(var(--texts))' }}>{idx + 1}</span>
-                      <FlagChip code={code} w={22} h={16} r={4} />
+                      <TeamLink code={code}><FlagChip code={code} w={22} h={16} r={4} /></TeamLink>
                       <span style={{ fontSize: 12, fontWeight: 700, color: 'rgb(var(--textp))' }}>{getTeam(code).name}</span>
                     </div>
                   ))}
@@ -1153,11 +1154,11 @@ export default function ProfilePage() {
                 >
                   {/* Score */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: 150, flexShrink: 0 }}>
-                    <FlagChip code={m.home_team} w={28} h={19} r={4} />
+                    <TeamLink code={m.home_team}><FlagChip code={m.home_team} w={28} h={19} r={4} /></TeamLink>
                     <span style={{ fontSize: 14, fontWeight: 700, color: 'rgb(var(--textp))', fontVariantNumeric: 'tabular-nums' }}>
                       {m.real_home_score}–{m.real_away_score}
                     </span>
-                    <FlagChip code={m.away_team} w={28} h={19} r={4} />
+                    <TeamLink code={m.away_team}><FlagChip code={m.away_team} w={28} h={19} r={4} /></TeamLink>
                   </div>
                   {/* Teams */}
                   <span style={{ flex: 1, fontSize: 12.5, color: 'rgb(var(--texts))', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

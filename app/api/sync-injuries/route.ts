@@ -3,13 +3,13 @@ import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/s
 import { requireAdmin } from '@/lib/require-admin'
 import { kapi, kickoffConfigured, WC_LEAGUE, WC_SEASON } from '@/lib/kickoff'
 import { matchPlayer, type RosterPlayer } from '@/lib/team-match'
+import { finishSyncRun, startSyncRun, type SyncTrigger } from '@/lib/sync-runs'
 
 interface KInjury { type: string | null; player: { id: number; name: string } | null }
 
 // Pull the WC injury/suspension feed and flag matching players. POST = admin; GET = cron.
-async function sync() {
+async function sync(service = createServiceSupabaseClient()) {
   if (!kickoffConfigured()) return { error: 'KICKOFF_API_KEY not set', status: 500 }
-  const service = createServiceSupabaseClient()
 
   // Paginate the injuries feed defensively.
   const injuries: KInjury[] = []
@@ -35,28 +35,39 @@ async function sync() {
     if (hit && !flagged.has(hit.id)) flagged.set(hit.id, inj.type ?? 'Out')
   }
 
-  // Clear all flags, then set the current ones.
-  await service.from('players').update({ injured: false, injury_type: null }).eq('injured', true)
-  let set = 0
-  for (const [id, type] of Array.from(flagged)) {
-    const { error } = await service.from('players').update({ injured: true, injury_type: type }).eq('id', id)
-    if (!error) set++
-  }
+  const flags = Array.from(flagged, ([player_id, injury_type]) => ({ player_id, injury_type }))
+  const { error: replaceError } = await service.rpc('replace_injury_flags', { p_flags: flags })
+  if (replaceError) return { error: replaceError.message, status: 500 }
 
-  return { ok: true, feed: injuries.length, flagged: set }
+  return { ok: true, feed: injuries.length, flagged: flags.length }
+}
+
+async function runSync(trigger: SyncTrigger) {
+  const service = createServiceSupabaseClient()
+  const runId = await startSyncRun(service, 'injuries', trigger)
+  try {
+    const result = await sync(service)
+    const status = 'error' in result ? 'failed' : 'success'
+    await finishSyncRun(service, runId, status, result)
+    return result
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown injury sync failure'
+    await finishSyncRun(service, runId, 'failed', { error: message })
+    return { error: message, status: 500 }
+  }
 }
 
 export async function POST() {
-  const supabase = createServerSupabaseClient()
+  const supabase = await createServerSupabaseClient()
   const denied = await requireAdmin(supabase)
   if (denied) return denied
-  const r = await sync()
+  const r = await runSync('admin')
   return NextResponse.json(r, { status: 'error' in r ? (r.status as number) : 200 })
 }
 
 export async function GET(request: Request) {
   const auth = request.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const r = await sync()
+  const r = await runSync('cron')
   return NextResponse.json(r, { status: 'error' in r ? (r.status as number) : 200 })
 }

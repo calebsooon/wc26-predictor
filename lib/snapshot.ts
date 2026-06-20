@@ -1,6 +1,6 @@
 /* ============================================================
    MatchDay — per-league rank snapshots (shared by the
-   snapshot-ranks and fetch-results admin routes).
+   snapshot-ranks and sync-results admin routes).
    ============================================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -92,6 +92,15 @@ export async function snapshotLeagueRanks(supabase: SupabaseClient): Promise<Sna
 
   const { error } = await supabase.from('rank_snapshots').insert(snapshots)
   if (error) throw new Error(`rank_snapshots insert failed: ${error.message}`)
+
+  // Rank movement is useful history, not an unbounded event log. Keeping six
+  // months covers a tournament and a generous post-tournament recap window.
+  const retentionCutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString()
+  const { error: cleanupError } = await supabase
+    .from('rank_snapshots')
+    .delete()
+    .lt('snapshot_at', retentionCutoff)
+  if (cleanupError) throw new Error(`rank_snapshots cleanup failed: ${cleanupError.message}`)
 
   // Build overtake notifications: anyone whose rank got worse
   const overtakes: { userId: string; newRank: number; leagueId: string }[] = []

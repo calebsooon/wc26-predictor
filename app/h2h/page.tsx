@@ -9,6 +9,8 @@ import { weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights, type MatchBr
 import type { ProfileLite } from '@/lib/leaderboard'
 import { getTeam } from '@/lib/teams'
 import { GW_SHORT } from '@/lib/prizes'
+import { useUrlState } from '@/lib/url-state'
+import { TeamLink } from '@/components/TeamLink'
 
 interface PredRow extends MatchBreakdown { user_id: string; match_id: string; points_awarded: number; pred_home: number; pred_away: number }
 
@@ -58,6 +60,7 @@ function smoothPath(pts: { x: number; y: number }[]): string {
 
 export default function H2HPage() {
   const supabase = useMemo(() => createClient(), [])
+  const { searchParams, replaceUrl } = useUrlState()
   const [members, setMembers] = useState<ProfileLite[]>([])
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [currentUserId, setCurrentUserId] = useState('')
@@ -69,6 +72,19 @@ export default function H2HPage() {
   const [matchMap, setMatchMap] = useState<Map<string, MatchRow>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!currentUserId || members.length === 0) return
+    const ids = new Set(members.map((member) => member.id))
+    const requestedA = searchParams.get('a')
+    const requestedB = searchParams.get('b')
+    const requestedView = searchParams.get('view')
+    const requestedGw = searchParams.get('gw')
+    setAId(requestedA && ids.has(requestedA) ? requestedA : currentUserId)
+    setBId(requestedB && ids.has(requestedB) ? requestedB : (members.find((member) => member.id !== currentUserId)?.id ?? ''))
+    setRaceView(requestedView === 'gameweek' || requestedView === 'specific' ? requestedView : 'season')
+    if (requestedGw && /^\d+$/.test(requestedGw)) setSelectedGw(requestedGw)
+  }, [currentUserId, members, searchParams])
 
   useEffect(() => {
     async function load() {
@@ -445,11 +461,17 @@ export default function H2HPage() {
           {/* Player selectors */}
           <div style={{ background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))', borderRadius: 18, boxShadow: 'var(--card-shadow)', padding: 16 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Select id="player-a" label="Player A" value={aId} onChange={setAId}>
+              <Select id="player-a" label="Player A" value={aId} onChange={(id) => {
+                setAId(id)
+                replaceUrl({ a: id })
+              }}>
                 <option value="">Select…</option>
                 {members.filter((m) => m.id !== bId).map((m) => <option key={m.id} value={m.id}>{m.username ?? '?'}</option>)}
               </Select>
-              <Select id="player-b" label="Player B" value={bId} onChange={setBId}>
+              <Select id="player-b" label="Player B" value={bId} onChange={(id) => {
+                setBId(id)
+                replaceUrl({ b: id })
+              }}>
                 <option value="">Select…</option>
                 {members.filter((m) => m.id !== aId).map((m) => <option key={m.id} value={m.id}>{m.username ?? '?'}</option>)}
               </Select>
@@ -654,7 +676,10 @@ export default function H2HPage() {
                           return (
                             <button
                               key={mode}
-                              onClick={() => setRaceView(mode)}
+                              onClick={() => {
+                                setRaceView(mode)
+                                replaceUrl({ view: mode === 'season' ? null : mode })
+                              }}
                               style={{
                                 height: 30,
                                 padding: '0 12px',
@@ -675,7 +700,10 @@ export default function H2HPage() {
                       </div>
                       {raceView === 'specific' && availableGws.length > 0 && (
                         <div style={{ minWidth: 118 }}>
-                          <Select id="race-gw" label="" value={selectedGw} onChange={setSelectedGw}>
+                          <Select id="race-gw" label="" value={selectedGw} onChange={(gw) => {
+                            setSelectedGw(gw)
+                            replaceUrl({ gw })
+                          }}>
                             {availableGws.map((gw) => <option key={gw} value={String(gw)}>{GW_SHORT[gw] ?? `GW${gw}`}</option>)}
                           </Select>
                         </div>
@@ -901,11 +929,11 @@ export default function H2HPage() {
                         {/* Center: match */}
                         <div style={{ minWidth: 120, textAlign: 'center', padding: '0 10px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-                            {home && <FlagChip code={home.code} w={22} h={15} r={3} />}
+                            {home && <TeamLink code={home.code}><FlagChip code={home.code} w={22} h={15} r={3} /></TeamLink>}
                             <span style={{ fontSize: 12, fontWeight: 700, color: 'rgb(var(--textp))' }}>
                               {match?.real_home_score != null ? `${match.real_home_score}–${match.real_away_score}` : 'vs'}
                             </span>
-                            {away && <FlagChip code={away.code} w={22} h={15} r={3} />}
+                            {away && <TeamLink code={away.code}><FlagChip code={away.code} w={22} h={15} r={3} /></TeamLink>}
                           </div>
                           {real && (
                             <div style={{ fontSize: 9.5, fontWeight: 600, color: 'rgb(var(--faint))', marginTop: 2 }}>
@@ -965,11 +993,11 @@ export default function H2HPage() {
 
                         {/* Center: flags + score */}
                         <div style={{ minWidth: 120, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                          {home && <FlagChip code={home.code} w={26} h={18} r={4} />}
+                          {home && <TeamLink code={home.code}><FlagChip code={home.code} w={26} h={18} r={4} /></TeamLink>}
                           <span style={{ fontSize: 13, fontWeight: 700, color: 'rgb(var(--textp))' }}>
                             {match?.real_home_score != null ? `${match.real_home_score}–${match.real_away_score}` : 'vs'}
                           </span>
-                          {away && <FlagChip code={away.code} w={26} h={18} r={4} />}
+                          {away && <TeamLink code={away.code}><FlagChip code={away.code} w={26} h={18} r={4} /></TeamLink>}
                         </div>
 
                         {/* Right: their pick + pts */}

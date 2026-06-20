@@ -3,7 +3,7 @@
 import { Toaster } from 'sonner'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import { createClient } from '@/lib/supabase-browser'
 import { getMyLeagues, setActiveLeague, isMoneyLeague, type League } from '@/lib/league'
@@ -29,21 +29,23 @@ interface Profile {
   is_admin: boolean
 }
 
-type NavItem = { href: string; label: string; icon: (p: { size?: number; className?: string }) => JSX.Element; admin?: boolean }
+type NavItem = { href: string; label: string; icon: (p: { size?: number; className?: string }) => JSX.Element; admin?: boolean; section?: string }
 
+// Grouped for the desktop sidebar (section label shown when it changes). Order
+// here is also the order used by the mobile drawer and command palette.
 const SIDEBAR: NavItem[] = [
   { href: '/dashboard',   label: 'Home',        icon: HomeIcon },
-  { href: '/predictions', label: 'Fixtures',    icon: CalIcon },
-  { href: '/groups',      label: 'Groups',      icon: GridIcon },
-  { href: '/bracket',     label: 'Bracket',     icon: TreeIcon },
-  { href: '/leaderboard', label: 'Leaderboard', icon: TrophyIcon },
-  { href: '/h2h',         label: 'Compare',     icon: ChartIcon },
-  { href: '/squads',      label: 'Squads',      icon: UsersIcon },
-  { href: '/golden-boot', label: 'Golden Boot', icon: TrophyIcon },
-  { href: '/profile',     label: 'Profile',     icon: UserIcon },
-  { href: '/admin',       label: 'Admin',       icon: ShieldIcon, admin: true },
-  { href: '/rules',       label: 'Rules',       icon: HelpIcon },
-  { href: '/install',     label: 'Get the app', icon: InstallIcon },
+  { href: '/predictions', label: 'Fixtures',    icon: CalIcon,     section: 'Play' },
+  { href: '/groups',      label: 'Groups',      icon: GridIcon,    section: 'Play' },
+  { href: '/bracket',     label: 'Bracket',     icon: TreeIcon,    section: 'Play' },
+  { href: '/leaderboard', label: 'Leaderboard', icon: TrophyIcon,  section: 'Standings' },
+  { href: '/h2h',         label: 'Compare',     icon: ChartIcon,   section: 'Standings' },
+  { href: '/golden-boot', label: 'Golden Boot', icon: TrophyIcon,  section: 'Standings' },
+  { href: '/squads',      label: 'Squads',      icon: UsersIcon,   section: 'Reference' },
+  { href: '/faq',         label: 'FAQ',         icon: HelpIcon,    section: 'Reference' },
+  { href: '/profile',     label: 'Profile',     icon: UserIcon,    section: 'You' },
+  { href: '/install',     label: 'Get the app', icon: InstallIcon, section: 'You' },
+  { href: '/admin',       label: 'Admin',       icon: ShieldIcon, admin: true, section: 'Admin' },
 ]
 
 const BOTTOM: NavItem[] = [
@@ -53,7 +55,7 @@ const BOTTOM: NavItem[] = [
 ]
 
 // Routes that render WITHOUT the app shell (own full-bleed layout)
-const BARE = ['/', '/login', '/auth']
+const BARE = ['/', '/login', '/auth', '/privacy', '/terms']
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
@@ -181,20 +183,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <LeagueSwitcher leagues={myLeagues} active={activeLeague} onSwitch={switchLeague} />
           </div>
         )}
-        <nav className="flex-1 p-3 space-y-1">
-          {items.map((it) => {
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto no-scrollbar">
+          {items.map((it, i) => {
             const Ic = it.icon
             const active = isActive(it.href)
+            const showSection = it.section && it.section !== items[i - 1]?.section
             return (
-              <Link
-                key={it.href}
-                href={it.href}
-                className={`w-full flex items-center gap-3 h-11 px-3 rounded-xl font-bold text-sm transition-all border ${active ? 'bg-accent/[0.10] border-accent/[0.22] text-accent' : 'text-texts hover:text-textp hover:bg-surface2 border-transparent'}`}
-              >
-                <Ic size={20} className={active ? 'text-accent' : ''} />
-                <span className="flex-1">{it.label}</span>
-                {it.admin && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gold/15 text-gold">ADMIN</span>}
-              </Link>
+              <Fragment key={it.href}>
+                {showSection && (
+                  <div className="px-3 pt-3 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-faint">{it.section}</div>
+                )}
+                <Link
+                  href={it.href}
+                  className={`w-full flex items-center gap-3 h-11 px-3 rounded-xl font-bold text-sm transition-all border ${active ? 'bg-accent/[0.10] border-accent/[0.22] text-accent' : 'text-texts hover:text-textp hover:bg-surface2 border-transparent'}`}
+                >
+                  <Ic size={20} className={active ? 'text-accent' : ''} />
+                  <span className="flex-1">{it.label}</span>
+                  {it.admin && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gold/15 text-gold">ADMIN</span>}
+                </Link>
+              </Fragment>
             )
           })}
         </nav>

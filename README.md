@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Next.js-14_App_Router-black?style=flat-square&logo=next.js" alt="Next.js 14" />
+  <img src="https://img.shields.io/badge/Next.js-15_App_Router-black?style=flat-square&logo=next.js" alt="Next.js 15" />
   <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Supabase-Postgres_+_Realtime-3ECF8E?style=flat-square&logo=supabase&logoColor=white" alt="Supabase" />
   <img src="https://img.shields.io/badge/Tailwind_CSS-v3-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" />
@@ -270,7 +270,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 ## Tech stack
 
 <p>
-  <img src="https://img.shields.io/badge/Next.js-14_App_Router-black?style=for-the-badge&logo=next.js" alt="Next.js" />
+  <img src="https://img.shields.io/badge/Next.js-15_App_Router-black?style=for-the-badge&logo=next.js" alt="Next.js" />
   <img src="https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React" />
   <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Tailwind_CSS-v3-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" />
@@ -285,10 +285,10 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 | Layer | Technology |
 | :--- | :--- |
-| **Framework** | Next.js 14 — App Router, server and client components, API route handlers |
+| **Framework** | Next.js 15 — App Router, server and client components, API route handlers |
 | **Language** | TypeScript in strict mode throughout |
 | **UI** | React 18, Tailwind CSS with CSS-variable design tokens (light/dark via `.dark` on `<html>`) |
-| **Database** | Supabase Postgres with Row Level Security — users read everything, write only their own rows |
+| **Database** | Supabase Postgres with Row Level Security — private league membership, protected invite codes, and safe profile updates |
 | **Auth** | Supabase Auth — email/password; `middleware.ts` guards every route except `/login` |
 | **Realtime** | Supabase Realtime — leaderboard updates push to all clients the moment a result is scored |
 | **Storage** | Supabase Storage — `avatars` bucket (public-read) for profile photos |
@@ -465,9 +465,9 @@ middleware.ts               Redirects unauthenticated users to /login for all ro
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/calebsooon/wc26-predictor.git
+git clone <your-repository-url>
 cd wc26-predictor
-npm install
+npm ci
 ```
 
 ### 2. Environment variables
@@ -482,11 +482,18 @@ Open `.env.local` and fill in your Supabase project values (found under **Projec
 NEXT_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_GITHUB_URL=https://github.com/<owner>/<repo>
 
 # Optional — live data, push, and scheduled sync
 KICKOFF_API_KEY=<kickoffapi-key>          # live lineups, results, injuries, scorers
 CRON_SECRET=<random-string>               # guards the scheduled sync endpoints
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=<public-key> # browser push subscription key
+VAPID_PRIVATE_KEY=<private-key>           # server-only push key
+VAPID_EMAIL=mailto:<you@example.com>
 ```
+
+`SUPABASE_SERVICE_ROLE_KEY`, `KICKOFF_API_KEY`, `CRON_SECRET`, and `VAPID_PRIVATE_KEY` are server-only secrets. Do not prefix them with `NEXT_PUBLIC_` and never commit `.env.local`.
 
 ### 3. Apply migrations
 
@@ -497,57 +504,66 @@ supabase link --project-ref <your-project-ref>
 supabase db push
 ```
 
-### 4. Run
+### 4. Create the first organizer
+
+Sign up once at `http://localhost:3000/login`. The Auth database trigger creates a non-privileged profile automatically. Grant the first organizer role from a trusted local shell, using the service key:
 
 ```bash
-npm run dev          # Development server → http://localhost:3000
-npm run build        # Production build (generates service worker)
-npm run lint         # ESLint
-npx tsc --noEmit     # TypeScript check
-npx vitest run       # Unit tests
+ADMIN_EMAIL=you@example.com npm run bootstrap:admin
+ADMIN_EMAIL=you@example.com npm run setup:check
+```
+
+This replaces editing `is_admin` in the Supabase Table Editor. The browser role cannot create profiles or set administrator fields.
+
+### 5. Populate data
+
+```bash
+# Required roster import. It reports expected request pacing for the free tier.
+npm run data:players
+
+# Optional enrichments; each can be rerun safely.
+npm run data:enrich
+npm run data:photos
+npm run data:stats
+```
+
+`data:players` uses football-data.org, while Wikidata and API-Football enrich player metadata. Live results, lineups, injuries, and the Golden Boot feed are sourced from Kickoffapi at runtime. The old destructive squad seed script is intentionally not part of the launch path.
+
+### 6. Verify and run
+
+```bash
+npm run setup:check  # schema, connectivity, and configured launch features
+npm run check        # lint, type-check, unit tests, production build
+npm run dev          # Development server -> http://localhost:3000
 ```
 
 > **PWA note:** the service worker is disabled in development to avoid stale-cache issues. To test offline behaviour run `npm run build && npm start`, then open DevTools → Application → Service Workers → tick **Offline**.
-
-### 5. Grant admin access
-
-In Supabase → **Table Editor → `profiles`**, set `is_admin = true` for your account. The Admin nav link appears on next page load.
-
-### 6. Populate squad data *(optional)*
-
-```bash
-FOOTBALL_API_TOKEN=<token> \
-SUPABASE_URL=https://<ref>.supabase.co \
-SUPABASE_SERVICE_KEY=<service-role-key> \
-npx tsx scripts/fetch-players.ts
-```
-
-Get a free API token at [football-data.org](https://www.football-data.org/client/register). The free tier fetches all 48 WC2026 squads (~1,250 players) with a 7-second delay between teams to stay within rate limits.
-
-### 7. Enrich player data *(optional)*
-
-```bash
-# Headshots, clubs, and dates of birth from Wikidata — no API key required
-npx tsx --env-file=.env.local scripts/fetch-wikidata-players.ts
-
-# ONLY_MISSING=1 fills only players still missing a photo / club / dob
-ONLY_MISSING=1 npx tsx --env-file=.env.local scripts/fetch-wikidata-players.ts
-```
-
-Live data (lineups, results, injuries, scorers) is pulled at runtime from Kickoffapi via the in-app admin actions and the scheduled sync — no seed script needed.
-
----
 
 ## Deployment
 
 | Step | Action |
 | :---: | :--- |
-| 1 | Push the repository to GitHub |
-| 2 | On [vercel.com](https://vercel.com) → **Add New Project** → import the repo (Next.js is auto-detected) |
-| 3 | Add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` under **Settings → Environment Variables** — plus `KICKOFF_API_KEY` and `CRON_SECRET` to enable live data and scheduled sync |
-| 4 | In Supabase → **Authentication → URL Configuration → Redirect URLs**, add `https://<your-vercel-domain>/auth/callback` |
-| 5 | *(Optional)* For automated live sync, add repository secrets `APP_URL` and `CRON_SECRET` under **GitHub → Settings → Secrets → Actions**; the `live-data` workflow then polls the sync endpoints on a schedule |
-| 6 | Vercel deploys automatically on every push to `main` |
+| 1 | Create a hosted Supabase project, run `supabase db push`, then add both `http://localhost:3000/auth/callback` and `https://<your-domain>/auth/callback` in **Authentication -> URL Configuration**. Set the production site URL too. |
+| 2 | Create the first Auth account, run `ADMIN_EMAIL=<email> npm run bootstrap:admin`, create a private league, and confirm a second account can join only through its invite code. |
+| 3 | Import the repository in [Vercel](https://vercel.com). Add every required value from `.env.example`; production must use the deployed `NEXT_PUBLIC_SITE_URL`. |
+| 4 | In GitHub **Settings -> Secrets and variables -> Actions**, add `APP_URL=https://<your-domain>` and `CRON_SECRET` with the exact same value used in Vercel. The workflow runs lineups/results and prediction reminders every 15 minutes, plus injuries every six hours; use **Run workflow** for a manual smoke test. |
+| 5 | Deploy, then run `ADMIN_EMAIL=<email> npm run setup:check` against the production environment. Check the Admin sync-health cards after the first workflow run. |
+
+### Fresh-project launch gate
+
+- `npm ci`, `supabase db push`, `npm run setup:check`, and `npm run check` complete without undocumented edits.
+- A normal account cannot change `is_admin`, retrieve a join code from a regular league read, add itself to a league directly, or update live match/player data.
+- The first organizer is created only with `npm run bootstrap:admin`; it creates a league, shares its invite code intentionally, and a second account joins through `/join`.
+- Test a locked prediction, Group Predictor team link, mobile `/squads?team=...` deep link, result scoring, calendar token rotation, push status, and the LinkedIn Open Graph preview.
+- Confirm the live provider endpoints with a manual GitHub Action before relying on its schedule. Provider availability and tournament data are external dependencies, so sync status and unmatched players are visible in Admin rather than silently discarded.
+
+## Launch notes
+
+MatchDay is intentionally a private-league product, not a public demo. It stores email-auth accounts, optional public avatars, browser push subscriptions, and revocable calendar-feed tokens; the in-app [Privacy](/privacy) and [Terms](/terms) pages describe those surfaces. It is an independent fan project and is not affiliated with FIFA.
+
+The repository is designed as a case study as well as an app: the architecture diagram above covers the client, scoring routes, Supabase, live providers, and scheduled automation. The `docs/` directory contains architecture assets for project walkthroughs and LinkedIn posts.
+
+---
 
 ---
 

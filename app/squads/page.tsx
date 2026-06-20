@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { TEAMS, getTeam, type TeamInfo, normalisePosition, POSITION_ORDER, POSITION_ABBR } from '@/lib/teams'
 import { PageHeader, Card, Skeleton, SearchIcon, Pill, EmptyState, UsersIcon, Avatar } from '@/components/ui'
 import FlagChip from '@/components/FlagChip'
+import { useUrlState } from '@/lib/url-state'
 
 interface Player {
   id: number; name: string; position: string | null; jersey_number: number | null
@@ -107,6 +108,7 @@ function SquadDetail({ team, players, myScorerPicks }: { team: TeamInfo; players
 
 export default function SquadsPage() {
   const supabase = createClient()
+  const { searchParams, replaceUrl } = useUrlState()
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
   const [myScorerPicks, setMyScorerPicks] = useState<Set<number>>(new Set())
   const [loading, setLoading] = useState(true)
@@ -211,6 +213,20 @@ export default function SquadsPage() {
   const selectedTeam = selected ? getTeam(selected) : null
   const selectedPlayers = selected ? (playersByCode[selected] ?? []) : []
 
+  function selectTeam(code: string) {
+    setSelected(code)
+    setMobileOpen(true)
+    replaceUrl({ team: code })
+  }
+
+  useEffect(() => {
+    const requested = searchParams.get('team')?.toUpperCase() ?? null
+    if (requested && TEAMS[requested]) {
+      setSelected(requested)
+      setMobileOpen(true)
+    }
+  }, [searchParams])
+
   if (loading) return <div className="space-y-5"><Skeleton className="h-9 w-40" /><Skeleton className="h-96 rounded-xl" /></div>
   if (error) return (
     <div className="space-y-5">
@@ -236,7 +252,7 @@ export default function SquadsPage() {
                 const count = playersByCode[team.code]?.filter((p) => normalisePosition(p.position) !== 'Coach').length ?? 0
                 const isSel = selected === team.code
                 return (
-                  <button key={team.code} onClick={() => { setSelected(team.code); setMobileOpen(true) }}
+                  <button key={team.code} onClick={() => selectTeam(team.code)}
                     className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${idx < filteredTeams.length - 1 ? 'border-b border-border/60' : ''} ${isSel ? 'bg-primary/12' : 'hover:bg-surface'}`}>
                     <FlagChip code={team.code} w={22} h={15} r={3} />
                     <span className={`text-sm font-bold flex-1 truncate ${isSel ? 'text-primary' : 'text-textp'}`}>{team.name}</span>

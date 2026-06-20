@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
 import { Pill } from '@/components/ui'
 import FlagChip from '@/components/FlagChip'
+import { TeamLink } from '@/components/TeamLink'
 
 interface Row {
   team_code: string; is_starting: boolean; shirt_number: number | null
@@ -73,8 +74,10 @@ export function FormationPitch({ matchId, homeCode, awayCode, homeFormation, awa
 
   const TeamLabel = ({ code, formation, away: isAway }: { code: string; formation: string | null; away?: boolean }) => (
     <div className={`flex items-center gap-2 ${isAway ? 'justify-start' : 'justify-end'}`}>
+      <TeamLink code={code} className="flex items-center gap-2 hover:opacity-75">
       <FlagChip code={code} w={20} h={14} r={3} />
       <span className="text-[12px] font-bold text-textp">{getTeam(code).name}</span>
+      </TeamLink>
       {formation && <Pill tone="default">{formation}</Pill>}
     </div>
   )

@@ -5,6 +5,8 @@ import {
 import RulesButton from '@/components/RulesButton'
 import { DEFAULT_WEIGHTS, SCORING_RULES, type ScoringWeights } from '@/lib/scoring'
 
+const githubUrl = process.env.NEXT_PUBLIC_GITHUB_URL
+
 const FEATURES = [
   { Ico: ChartIcon, title: 'Exact-score predictions', desc: 'Call every scoreline. Points for outcome, exact result, goal difference, scorers and more.' },
   { Ico: ShieldIcon, title: 'One private league', desc: 'Just your crew — no randoms, no noise. Everyone predicts the same schedule.' },
@@ -141,7 +143,11 @@ export default function Landing() {
       <footer>
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-7 flex items-center justify-between text-sm text-texts">
           <div className="flex items-center gap-2"><Logo size={20} /><span className="font-bold text-textp">MATCHDAY</span></div>
-          <span className="font-medium hidden sm:inline">Your road to glory starts here.</span>
+          <div className="flex items-center gap-3 font-medium">
+            {githubUrl && <a href={githubUrl} target="_blank" rel="noreferrer" className="hover:text-textp">GitHub</a>}
+            <Link href="/privacy" className="hover:text-textp">Privacy</Link>
+            <Link href="/terms" className="hover:text-textp">Terms</Link>
+          </div>
         </div>
       </footer>
     </div>

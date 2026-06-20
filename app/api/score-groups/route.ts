@@ -39,7 +39,7 @@ function buildActualOrder(matches: GroupMatch[], group: string): string[] {
 }
 
 export async function POST(req: Request) {
-  const supabase = createServerSupabaseClient()
+  const supabase = await createServerSupabaseClient()
   const denied = await requireAdmin(supabase)
   if (denied) return denied
 

@@ -2,10 +2,10 @@
  * Fetches WC2026 squad data from football-data.org v4 API and upserts players into Supabase.
  *
  * Usage:
- *   FOOTBALL_API_TOKEN=<token> SUPABASE_URL=<url> SUPABASE_SERVICE_KEY=<key> npx tsx scripts/fetch-players.ts
+ *   FOOTBALL_API_TOKEN=<token> npm run data:players
  *
  * Get a free API token at: https://www.football-data.org/client/register
- * SUPABASE_SERVICE_KEY is your project's "service_role" key (NOT the anon key).
+ * SUPABASE_SERVICE_ROLE_KEY is your project's "service_role" key (NOT the anon key).
  *
  * The free tier allows 10 req/min — this script respects that with a 7 s delay between team requests.
  *
@@ -17,16 +17,16 @@
 import { createClient } from '@supabase/supabase-js'
 
 const FOOTBALL_API_TOKEN = process.env.FOOTBALL_API_TOKEN ?? ''
-const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY ?? ''
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 const COMPETITION = 'WC'
 const SEASON = 2026
 
 if (!FOOTBALL_API_TOKEN) { console.error('Missing FOOTBALL_API_TOKEN'); process.exit(1) }
-if (!SUPABASE_URL) { console.error('Missing SUPABASE_URL'); process.exit(1) }
-if (!SUPABASE_SERVICE_KEY) { console.error('Missing SUPABASE_SERVICE_KEY'); process.exit(1) }
+if (!SUPABASE_URL) { console.error('Missing NEXT_PUBLIC_SUPABASE_URL'); process.exit(1) }
+if (!SUPABASE_SERVICE_ROLE_KEY) { console.error('Missing SUPABASE_SERVICE_ROLE_KEY'); process.exit(1) }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 interface FDTeam {
   id: number

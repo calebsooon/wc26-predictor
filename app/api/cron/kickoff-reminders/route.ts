@@ -6,7 +6,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 )
 
-// Runs every 10 min via Vercel Cron. Finds matches kicking off in the next
+// Runs every 15 min through the authenticated GitHub Actions scheduler. Finds
+// matches kicking off in the next
 // 25–35 min window and sends a push reminder to all subscribers.
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')

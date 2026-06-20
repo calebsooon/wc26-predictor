@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import {
@@ -13,6 +14,7 @@ import { type LBRow } from '@/components/football'
 import RulesModal from '@/components/RulesModal'
 import { CalendarExportButton } from '@/components/CalendarExport'
 import FlagChip from '@/components/FlagChip'
+import { TeamLink } from '@/components/TeamLink'
 import { BarChart, RankLine, DonutChart } from '@/components/charts'
 import PredictionModal from '@/components/PredictionModal'
 import { aggregateLeaderboard, type ProfileLite, type ScoredGroupPred, type ScoredTournamentPred } from '@/lib/leaderboard'
@@ -439,7 +441,7 @@ export default function DashboardPage() {
             <p className="text-sm font-bold text-textp">Play the bracket game</p>
             <p className="text-xs text-texts mt-0.5">Call the champion, finalists and more — just for fun, no effect on points.</p>
           </div>
-          <Link href="/bracket?tab=picks" className="shrink-0"><Pill tone="gold">Pick now →</Pill></Link>
+          <Link href="/bracket?phase=pre" className="shrink-0"><Pill tone="gold">Pick now →</Pill></Link>
         </div>
       )}
 
@@ -815,26 +817,29 @@ function HeroMatchCard({ m, hasPred, onOpen }: { m: DBMatch; hasPred: boolean; o
         </div>
 
         <div className="flex items-center justify-center gap-[22px]">
-          <div className="flex flex-col items-center gap-2.5 w-[104px]">
+          <TeamLink code={m.home_team} className="flex flex-col items-center gap-2.5 w-[104px] hover:opacity-75">
             <FlagChip code={m.home_team} w={60} h={40} r={8} />
             <span className="font-bold text-[15px] font-display text-center">{home.name}</span>
-          </div>
+          </TeamLink>
           <div className="flex flex-col items-center gap-0 shrink-0">
             <span className="font-bold text-[26px] text-faint font-display">vs</span>
           </div>
-          <div className="flex flex-col items-center gap-2.5 w-[104px]">
+          <TeamLink code={m.away_team} className="flex flex-col items-center gap-2.5 w-[104px] hover:opacity-75">
             <FlagChip code={m.away_team} w={60} h={40} r={8} />
             <span className="font-bold text-[15px] font-display text-center">{away.name}</span>
-          </div>
+          </TeamLink>
         </div>
 
-        <div className="flex justify-center mt-5">
+        <div className="flex justify-center items-center gap-4 mt-5">
           <button
             onClick={onOpen}
             className="h-[42px] px-[22px] rounded-[11px] bg-primary text-[rgb(4,38,20)] text-[13px] font-bold hover:opacity-90 active:scale-[0.98] transition-all"
           >
             {hasPred ? 'Edit prediction' : 'Submit prediction'}
           </button>
+          <Link href={`/match/${m.id}`} className="text-[12px] font-bold text-texts hover:text-primary">
+            Match details
+          </Link>
         </div>
       </div>
     </div>
@@ -944,13 +949,13 @@ function BannerPreview({ banners, leagueName }: { banners: BannerItem[]; leagueN
           </div>
         )}
       </div>
-      <div className="relative overflow-hidden rounded-[16px] border border-border bg-surface2">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+      <div className="relative overflow-hidden rounded-[16px] border border-border bg-surface2" style={{ aspectRatio: '16 / 7' }}>
+        <Image
           src={active.image_url}
           alt={`${leagueName || 'League'} banner ${index + 1}`}
-          className="block w-full h-auto object-cover"
-          style={{ aspectRatio: '16 / 7' }}
+          fill
+          sizes="(max-width: 1024px) 100vw, 700px"
+          className="object-cover"
         />
       </div>
     </div>

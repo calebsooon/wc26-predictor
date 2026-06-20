@@ -64,12 +64,26 @@ function setStoredActiveLeagueId(userId: string, leagueId: string) {
 
 /** Leagues the user belongs to (with join codes — only meaningful to admins). */
 export async function getMyLeagues(supabase: SupabaseClient, userId: string): Promise<League[]> {
-  const { data } = await supabase
-    .from('league_members')
-    .select('leagues(id, name, type, join_code, scoring, bracket_enabled, reveal_predictions, prize_pool, banners_enabled, label_id, league_labels(name, color))')
-    .eq('user_id', userId)
-  const rows = (data ?? []) as unknown as { leagues: League | null }[]
-  return rows.map((r) => r.leagues).filter((l): l is League => !!l)
+  void userId
+  const { data, error } = await supabase.rpc('get_my_leagues')
+  if (error) throw error
+  return ((data ?? []) as Array<{
+    id: string; name: string; type: LeagueType; join_code: string | null; scoring: unknown
+    bracket_enabled: boolean; reveal_predictions: boolean; prize_pool: boolean
+    banners_enabled: boolean; label_id: string | null; label_name: string | null; label_color: string | null
+  }>).map((row) => ({
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    join_code: row.join_code,
+    scoring: row.scoring,
+    bracket_enabled: row.bracket_enabled,
+    reveal_predictions: row.reveal_predictions,
+    prize_pool: row.prize_pool,
+    banners_enabled: row.banners_enabled,
+    label_id: row.label_id,
+    league_labels: row.label_name && row.label_color ? { name: row.label_name, color: row.label_color } : null,
+  }))
 }
 
 /**
@@ -86,7 +100,7 @@ export async function getActiveLeague(supabase: SupabaseClient, userId: string):
   // NB: league_members.user_id FKs to auth.users, not profiles — so we can't embed
   // profiles via PostgREST. Fetch member ids first, then their profiles by id.
   const [{ data: leagueRow }, { data: members }] = await Promise.all([
-    supabase.from('leagues').select('id, name, type, join_code, scoring, bracket_enabled, reveal_predictions, prize_pool, banners_enabled, label_id, league_labels(name, color)').eq('id', activeId).maybeSingle(),
+    supabase.from('leagues').select('id, name, type, scoring, bracket_enabled, reveal_predictions, prize_pool, banners_enabled, label_id, league_labels(name, color)').eq('id', activeId).maybeSingle(),
     supabase.from('league_members').select('user_id').eq('league_id', activeId),
   ])
 

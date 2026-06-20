@@ -3,6 +3,8 @@ import { Hanken_Grotesk, Schibsted_Grotesk } from "next/font/google";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+
 const hankenGrotesk = Hanken_Grotesk({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
@@ -20,7 +22,23 @@ const schibstedGrotesk = Schibsted_Grotesk({
 export const metadata: Metadata = {
   title: "MatchDay — World Cup 2026 Prediction League",
   description: "Your road to glory starts here.",
+  metadataBase: new URL(siteUrl),
   manifest: '/manifest.json',
+  alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website',
+    url: '/',
+    siteName: 'MatchDay',
+    title: 'MatchDay — World Cup 2026 Prediction League',
+    description: 'Private World Cup prediction leagues with live scoring, squads, brackets, and real-time rivalry.',
+    images: [{ url: '/opengraph-image', width: 1200, height: 630, alt: 'MatchDay World Cup 2026 prediction league' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'MatchDay — World Cup 2026 Prediction League',
+    description: 'Predict every match. Your road to glory.',
+    images: ['/opengraph-image'],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',

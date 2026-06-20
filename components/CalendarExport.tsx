@@ -50,6 +50,7 @@ function CalendarExportModal({ open, onClose }: { open: boolean; onClose: () => 
   const [scope, setScope] = useState('all')        // 'all' | '1'..'8'
   const [reminder, setReminder] = useState('60')
   const [help, setHelp] = useState('google')
+  const [rotating, setRotating] = useState(false)
 
   useEffect(() => { setOrigin(window.location.origin) }, [])
 
@@ -76,6 +77,24 @@ function CalendarExportModal({ open, onClose }: { open: boolean; onClose: () => 
       () => toast.success('Subscription link copied'),
       () => toast.error('Could not copy link'),
     )
+  }
+
+  async function rotateToken() {
+    if (!token || !window.confirm('Rotate your calendar link? Existing subscriptions will stop updating.')) return
+    setRotating(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Sign in again to rotate this link')
+      const nextToken = crypto.randomUUID()
+      const { error } = await supabase.from('profiles').update({ calendar_token: nextToken }).eq('id', user.id)
+      if (error) throw error
+      setToken(nextToken)
+      toast.success('Calendar link rotated')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not rotate link')
+    } finally {
+      setRotating(false)
+    }
   }
 
   return (
@@ -112,6 +131,9 @@ function CalendarExportModal({ open, onClose }: { open: boolean; onClose: () => 
                   <Button variant="outline" size="md" className="w-full">Download .ics</Button>
                 </a>
               </div>
+              <button onClick={() => void rotateToken()} disabled={rotating} className="self-start text-[11px] font-bold text-texts hover:text-error disabled:opacity-50">
+                {rotating ? 'Rotating link...' : 'Rotate calendar link'}
+              </button>
               <p className="text-[11px] text-faint leading-relaxed">
                 <span className="font-semibold text-texts">Subscribe</span> = stays in sync forever.
                 {' '}<span className="font-semibold text-texts">Download</span> = one-time snapshot (won’t auto-update).

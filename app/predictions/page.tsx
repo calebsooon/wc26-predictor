@@ -28,29 +28,47 @@ import { fmtDateKey, fmtDateOnlyKey, fmtTime, getUserTimeZone } from '@/lib/date
 import FlagChip from '@/components/FlagChip'
 import PredictionModal from '@/components/PredictionModal'
 import { getTeam } from '@/lib/teams'
+import { useUrlState } from '@/lib/url-state'
+import { TeamLink } from '@/components/TeamLink'
+import Link from 'next/link'
 
 interface RoundRow { id: string; name: string; order: number; matches: DBMatch[] }
 
 type MainFilter = 'open' | 'today' | 'missing' | 'closed' | 'full'
 type StageFilter = 'all' | 'group' | 'knockout'
 
+function mainFilterFromUrl(value: string | null): MainFilter {
+  return value === 'today' || value === 'missing' || value === 'closed' || value === 'full' ? value : 'open'
+}
+
+function stageFilterFromUrl(value: string | null): StageFilter {
+  return value === 'group' || value === 'knockout' ? value : 'all'
+}
+
 export default function FixturesPage() {
   const supabase = createClient()
   const router = useRouter()
+  const { searchParams, replaceUrl } = useUrlState()
   const [matches, setMatches] = useState<DBMatch[]>([])
   const [preds, setPreds] = useState<Record<string, MyPred>>({})
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
-  const [mainFilter, setMainFilter] = useState<MainFilter>('open')
-  const [stageFilter, setStageFilter] = useState<StageFilter>('all')
+  const [mainFilter, setMainFilter] = useState<MainFilter>(() => mainFilterFromUrl(searchParams.get('status')))
+  const [stageFilter, setStageFilter] = useState<StageFilter>(() => stageFilterFromUrl(searchParams.get('stage')))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [modalMatchId, setModalMatchId] = useState<string | null>(null)
-  const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(() => searchParams.get('group'))
   const [timeZone, setTimeZone] = useState('Asia/Singapore')
 
   useEffect(() => {
     setTimeZone(getUserTimeZone())
   }, [])
+
+  useEffect(() => {
+    setMainFilter(mainFilterFromUrl(searchParams.get('status')))
+    setStageFilter(stageFilterFromUrl(searchParams.get('stage')))
+    setSelectedGroup(searchParams.get('group'))
+  }, [searchParams])
 
   useEffect(() => {
     async function load() {
@@ -273,7 +291,10 @@ export default function FixturesPage() {
             return (
               <button
                 key={key}
-                onClick={() => setMainFilter(key)}
+                onClick={() => {
+                  setMainFilter(key)
+                  replaceUrl({ status: key === 'open' ? null : key })
+                }}
                 style={{
                   height: 36,
                   padding: '0 14px',
@@ -324,6 +345,7 @@ export default function FixturesPage() {
                 onClick={() => {
                   setStageFilter(key)
                   if (key !== 'group') setSelectedGroup(null)
+                  replaceUrl({ stage: key === 'all' ? null : key, group: key === 'group' ? searchParams.get('group') : null })
                 }}
                 style={{
                   height: 30,
@@ -355,7 +377,11 @@ export default function FixturesPage() {
               return (
                 <button
                   key={g}
-                  onClick={() => setSelectedGroup(active ? null : g)}
+                  onClick={() => {
+                    const next = active ? null : g
+                    setSelectedGroup(next)
+                    replaceUrl({ stage: 'group', group: next })
+                  }}
                   style={{
                     height: 28,
                     padding: '0 12px',
@@ -557,8 +583,13 @@ function MatchRow({
   }
 
   return (
-    <button
+    <div
       onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') onOpen()
+      }}
+      role="button"
+      tabIndex={0}
       className="hover:bg-textp/[0.035]"
       style={{
         display: 'flex',
@@ -612,19 +643,21 @@ function MatchRow({
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
         {/* Home */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <FlagChip code={m.home_team} w={26} h={18} r={4} />
-          <span style={{
-            fontSize: 14,
-            fontWeight: 700,
-            fontFamily: 'Schibsted Grotesk, sans-serif',
-            color: 'rgb(var(--textp))',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            flex: 1,
-          }}>
-            {home.name}
-          </span>
+          <TeamLink code={m.home_team} stopPropagation className="flex items-center gap-2 min-w-0 group" style={{ color: 'inherit' }}>
+            <FlagChip code={m.home_team} w={26} h={18} r={4} />
+            <span style={{
+              fontSize: 14,
+              fontWeight: 700,
+              fontFamily: 'Schibsted Grotesk, sans-serif',
+              color: 'rgb(var(--textp))',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              flex: 1,
+            }}>
+              {home.name}
+            </span>
+          </TeamLink>
           {hasScore && (
             <span style={{ fontSize: 14, fontWeight: 800, color: 'rgb(var(--textp))', marginLeft: 'auto', paddingRight: 4 }}>
               {m.real_home_score}
@@ -633,19 +666,21 @@ function MatchRow({
         </div>
         {/* Away */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <FlagChip code={m.away_team} w={26} h={18} r={4} />
-          <span style={{
-            fontSize: 14,
-            fontWeight: 700,
-            fontFamily: 'Schibsted Grotesk, sans-serif',
-            color: 'rgb(var(--textp))',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            flex: 1,
-          }}>
-            {away.name}
-          </span>
+          <TeamLink code={m.away_team} stopPropagation className="flex items-center gap-2 min-w-0 group" style={{ color: 'inherit' }}>
+            <FlagChip code={m.away_team} w={26} h={18} r={4} />
+            <span style={{
+              fontSize: 14,
+              fontWeight: 700,
+              fontFamily: 'Schibsted Grotesk, sans-serif',
+              color: 'rgb(var(--textp))',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              flex: 1,
+            }}>
+              {away.name}
+            </span>
+          </TeamLink>
           {hasScore && (
             <span style={{ fontSize: 14, fontWeight: 800, color: 'rgb(var(--textp))', marginLeft: 'auto', paddingRight: 4 }}>
               {m.real_away_score}
@@ -698,7 +733,14 @@ function MatchRow({
           </span>
         )}
       </div>
-    </button>
+      <Link
+        href={`/match/${m.id}`}
+        onClick={(event) => event.stopPropagation()}
+        className="shrink-0 text-[11px] font-bold text-texts hover:text-primary"
+      >
+        Match details
+      </Link>
+    </div>
   )
 }
 

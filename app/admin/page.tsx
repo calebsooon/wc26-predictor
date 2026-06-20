@@ -2,6 +2,7 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam, TEAMS } from '@/lib/teams'
@@ -260,7 +261,9 @@ function AdminRow({ m, onSaved }, ref) {
     setScoringFailed(false)
     const { error } = await supabase.from('matches').update({
       real_home_score: h, real_away_score: a, is_locked: true,
-      first_goal_team: fgt, first_goal_player_id: scorerId,
+      // -1 is the "Own goal" sentinel — no creditable scorer, so store NULL
+      // (the FK only accepts a real players.id or NULL).
+      first_goal_team: fgt, first_goal_player_id: scorerId === -1 ? null : scorerId,
       ...(isKnockout ? { match_winner: matchWinner } : {}),
     }).eq('id', m.id)
     if (error) { toast.error(error.message); setSaving(false); return }
@@ -473,6 +476,17 @@ function QuickImport({ matches, onDone }: { matches: Match[]; onDone: (updated: 
 
 function AdminActions() {
   const [busy, setBusy] = useState<string | null>(null)
+  const [health, setHealth] = useState<Record<string, { status: string; finished_at: string | null; details: Record<string, unknown> }>>({})
+
+  async function loadHealth() {
+    try {
+      const response = await fetch('/api/live-status')
+      const data = await response.json()
+      if (response.ok) setHealth(data.latest ?? {})
+    } catch {}
+  }
+
+  useEffect(() => { void loadHealth() }, [])
 
   async function call(key: string, label: string, url: string, body?: object) {
     setBusy(key)
@@ -480,7 +494,10 @@ function AdminActions() {
     try {
       const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
       const json = await res.json().catch(() => ({}))
-      if (res.ok) toast.success(json.message ?? `${label} done`, { id: tid })
+      if (res.ok) {
+        toast.success(json.message ?? `${label} done`, { id: tid })
+        void loadHealth()
+      }
       else toast.error(json.error ?? 'Error', { id: tid })
     } catch (e) {
       toast.error(String(e), { id: tid })
@@ -491,7 +508,6 @@ function AdminActions() {
   const actions = [
     { key: 'sync', label: 'Sync results + scorers', sub: 'Pull finished scores AND first goalscorer from Kickoffapi, then auto-score', url: '/api/sync-results' },
     { key: 'injuries', label: 'Sync injuries', sub: 'Flag injured / suspended players from the Kickoffapi feed', url: '/api/sync-injuries' },
-    { key: 'fetch', label: 'Auto-fetch results', sub: 'Pull finished scores from football-data.org and auto-score predictions', url: '/api/fetch-results' },
     { key: 'snapshot', label: 'Snapshot leaderboard', sub: 'Records current rank positions for movement arrows', url: '/api/snapshot-ranks' },
     { key: 'groups', label: 'Score group predictions', sub: 'Awards points for correct group order picks (all complete groups)', url: '/api/score-groups' },
     { key: 'tournament', label: 'Score tournament picks', sub: 'Awards points for champion / finalist / semi / quarter picks', url: '/api/score-tournament' },
@@ -501,6 +517,19 @@ function AdminActions() {
   return (
     <Card className="p-4">
       <SectionHeader title="Tournament actions" sub="Run these after results are in." />
+      <div className="grid grid-cols-3 gap-2 mt-3 mb-4">
+        {(['results', 'lineups', 'injuries'] as const).map((kind) => {
+          const run = health[kind]
+          const tone = run?.status === 'success' ? 'text-primary' : run?.status === 'partial' ? 'text-gold' : run?.status === 'failed' ? 'text-error' : 'text-texts'
+          return (
+            <div key={kind} className="rounded-lg border border-border bg-surface px-2.5 py-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-texts">{kind}</p>
+              <p className={`text-xs font-bold capitalize mt-0.5 ${tone}`}>{run?.status ?? 'Not run'}</p>
+              <p className="text-[10px] text-faint mt-0.5 truncate">{run?.finished_at ? fmtDateTime(run.finished_at) : 'No completed sync'}</p>
+            </div>
+          )
+        })}
+      </div>
       <div className="space-y-3 mt-3">
         {actions.map((a) => (
           <div key={a.key} className="flex items-center justify-between gap-3">
@@ -520,6 +549,7 @@ function AdminActions() {
 
 interface LabelRow { id: string; name: string; color: string }
 interface LeagueAdminRow { id: string; name: string; type: 'money' | 'points'; join_code: string; scoring: unknown; bracket_enabled: boolean; reveal_predictions: boolean; prize_pool: boolean; banners_enabled: boolean; label_id: string | null; league_labels: { name: string; color: string } | null; memberIds: string[]; bannerCount: number }
+interface LeagueAdminRaw extends Omit<LeagueAdminRow, 'league_labels' | 'memberIds' | 'bannerCount'> { label_name: string | null; label_color: string | null }
 interface BannerItem { id: string; image_url: string; storage_path: string; display_order: number }
 interface AdminProfile { id: string; username: string | null }
 
@@ -729,7 +759,7 @@ function LeagueManage({
           {banners.map((item, i) => (
             <div key={item.id} className="flex items-center gap-2.5 p-2 rounded-lg border border-border bg-surface">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={item.image_url} alt="" className="w-20 h-10 object-cover rounded-md shrink-0 bg-card" />
+              <Image src={item.image_url} alt="" width={80} height={40} className="w-20 h-10 object-cover rounded-md shrink-0 bg-card" />
               <span className="text-[12px] text-texts flex-1 truncate">Banner {i + 1}</span>
               <Button size="sm" variant="danger" onClick={() => deleteBanner(item)}>Remove</Button>
             </div>
@@ -1033,7 +1063,7 @@ function LeagueAdmin() {
 
   async function load() {
     const [{ data: ls }, { data: ms }, { data: ps }, { data: lbs }, { data: bs }] = await Promise.all([
-      supabase.from('leagues').select('id, name, type, join_code, scoring, bracket_enabled, reveal_predictions, prize_pool, banners_enabled, label_id, league_labels(name, color)').order('created_at'),
+      supabase.rpc('get_admin_leagues'),
       supabase.from('league_members').select('league_id, user_id'),
       supabase.from('profiles').select('id, username').order('username'),
       supabase.from('league_labels').select('id, name, color').order('name'),
@@ -1047,8 +1077,9 @@ function LeagueAdmin() {
     for (const b of (bs ?? []) as { league_id: string }[]) bannerCounts.set(b.league_id, (bannerCounts.get(b.league_id) ?? 0) + 1)
     setProfiles((ps ?? []) as AdminProfile[])
     setLabels((lbs ?? []) as LabelRow[])
-    setLeagues(((ls ?? []) as unknown as Omit<LeagueAdminRow, 'memberIds' | 'bannerCount'>[]).map((l) => ({
+    setLeagues(((ls ?? []) as LeagueAdminRaw[]).map(({ label_name, label_color, ...l }) => ({
       ...l,
+      league_labels: label_name && label_color ? { name: label_name, color: label_color } : null,
       memberIds: byLeague.get(l.id) ?? [],
       bannerCount: bannerCounts.get(l.id) ?? 0,
     })))

@@ -1,4 +1,4 @@
-import { createServerClient, type CookieOptions } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 
 export function createMiddlewareSupabaseClient(req: NextRequest, res: NextResponse) {
@@ -7,14 +7,13 @@ export function createMiddlewareSupabaseClient(req: NextRequest, res: NextRespon
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) { return req.cookies.get(name)?.value },
-        set(name: string, value: string, options: CookieOptions) {
-          req.cookies.set({ name, value, ...options })
-          res.cookies.set({ name, value, ...options })
-        },
-        remove(name: string, options: CookieOptions) {
-          req.cookies.set({ name, value: '', ...options })
-          res.cookies.set({ name, value: '', ...options })
+        getAll() { return req.cookies.getAll() },
+        setAll(cookiesToSet, headers) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            req.cookies.set({ name, value, ...options })
+            res.cookies.set({ name, value, ...options })
+          })
+          Object.entries(headers).forEach(([name, value]) => res.headers.set(name, value))
         },
       },
     }

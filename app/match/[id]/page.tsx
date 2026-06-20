@@ -19,6 +19,7 @@ import { fmtDateTime } from '@/lib/date-format'
 import { AddMatchToCalendar } from '@/components/AddMatchToCalendar'
 import { FormationPitch } from '@/components/FormationPitch'
 import { SquadPanel } from '@/components/MatchModal'
+import { TeamLink } from '@/components/TeamLink'
 
 interface OtherPred extends MatchBreakdown {
   user_id: string
@@ -209,20 +210,20 @@ export default function MatchDetailPage() {
           {scored && <Pill tone="green">Final</Pill>}
         </div>
         <div className="flex items-center justify-between">
-          <div className="flex-1 flex flex-col items-center gap-2.5">
+          <TeamLink code={match.home_team} className="flex-1 flex flex-col items-center gap-2.5 hover:opacity-75">
             <FlagChip code={match.home_team} w={60} h={40} r={8} />
             <span className="font-extrabold text-textp text-center leading-tight">{home.name}</span>
-          </div>
+          </TeamLink>
           <div className="px-3 text-center shrink-0">
             {scored
               ? <ScoreDisplay a={match.real_home_score} b={match.real_away_score} size="text-4xl" />
               : <div className="text-3xl font-black text-texts">VS</div>}
             <div className="text-[11px] text-texts font-bold mt-1.5">{fmtDateTime(match.match_date)}</div>
           </div>
-          <div className="flex-1 flex flex-col items-center gap-2.5">
+          <TeamLink code={match.away_team} className="flex-1 flex flex-col items-center gap-2.5 hover:opacity-75">
             <FlagChip code={match.away_team} w={60} h={40} r={8} />
             <span className="font-extrabold text-textp text-center leading-tight">{away.name}</span>
-          </div>
+          </TeamLink>
         </div>
         <div className="mt-5 pt-4 border-t border-border/60 flex items-center justify-center gap-2 text-sm">
           {locked

@@ -5,8 +5,7 @@
  *
  * Usage:
  *   # dry run, no DB writes, first N players (eyeball match quality):
- *   DRY_RUN=1 LIMIT=15 SUPABASE_URL=<url> SUPABASE_SERVICE_KEY=<key> \
- *     npx tsx --env-file=.env.local scripts/fetch-wikidata-players.ts
+ *   DRY_RUN=1 LIMIT=15 npm run data:enrich
  *
  *   # full run — refreshes ALL players (writes to DB):
  *   npx tsx --env-file=.env.local scripts/fetch-wikidata-players.ts
@@ -17,17 +16,17 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 const DRY_RUN = process.env.DRY_RUN === '1'
 const LIMIT = process.env.LIMIT ? Number(process.env.LIMIT) : Infinity
 // ONLY_MISSING=1 → only players still missing a photo/club/dob (fast gap-fill refresh).
 const ONLY_MISSING = process.env.ONLY_MISSING === '1'
 
-if (!SUPABASE_URL) { console.error('Missing SUPABASE_URL'); process.exit(1) }
-if (!SUPABASE_SERVICE_KEY) { console.error('Missing SUPABASE_SERVICE_KEY'); process.exit(1) }
+if (!SUPABASE_URL) { console.error('Missing NEXT_PUBLIC_SUPABASE_URL'); process.exit(1) }
+if (!SUPABASE_SERVICE_ROLE_KEY) { console.error('Missing SUPABASE_SERVICE_ROLE_KEY'); process.exit(1) }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 const WD = 'https://www.wikidata.org/w/api.php'
 const UA = 'MatchDay-WC2026/1.0 (https://matchday.app; dartharyan2017@gmail.com)'
 const FOOTBALLER_HINT = /football|soccer/i
@@ -51,7 +50,8 @@ async function searchPlayer(name: string): Promise<SearchHit | null> {
   return hits.find((h) => h.description && FOOTBALLER_HINT.test(h.description)) ?? null
 }
 
-interface Claim { mainsnak: { datavalue?: { value: any } }; qualifiers?: Record<string, { datavalue?: { value: any } }[]> }
+interface DataValue { value?: { id?: string; time?: string } }
+interface Claim { mainsnak: { datavalue?: DataValue }; qualifiers?: Record<string, { datavalue?: DataValue }[]> }
 interface Entity { claims?: Record<string, Claim[]>; labels?: Record<string, { value: string }> }
 
 function pickCurrentTeamQid(claims: Record<string, Claim[]>): string | null {

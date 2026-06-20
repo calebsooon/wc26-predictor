@@ -1,27 +1,20 @@
 import withPWAInit from '@ducanh2912/next-pwa'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const projectRoot = path.dirname(fileURLToPath(import.meta.url))
+const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
+  ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
+  : null
 
 const withPWA = withPWAInit({
   dest: 'public',
   customWorkerSrc: 'worker',
-  cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
+  cacheOnFrontEndNav: false,
+  aggressiveFrontEndNavCaching: false,
   reloadOnOnline: true,
   disable: process.env.NODE_ENV === 'development',
-  workboxOptions: {
-    disableDevLogs: true,
-    runtimeCaching: [
-      {
-        // Cache Supabase REST reads for bracket/group/tournament data — StaleWhileRevalidate
-        // so returning visitors see instant data even on flaky connections.
-        urlPattern: /^https:\/\/[^/]+\.supabase\.co\/rest\/v1\/(tournament_predictions|group_predictions|bracket_results)/i,
-        handler: 'StaleWhileRevalidate',
-        options: {
-          cacheName: 'supabase-game-data',
-          expiration: { maxEntries: 64, maxAgeSeconds: 4 * 60 * 60 },
-        },
-      },
-    ],
-  },
+  workboxOptions: { disableDevLogs: true },
   fallbacks: {
     document: '/offline',
   },
@@ -29,13 +22,21 @@ const withPWA = withPWAInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  outputFileTracingRoot: projectRoot,
+  async headers() {
+    return [{
+      source: '/:path*',
+      headers: [
+        { key: 'X-Content-Type-Options', value: 'nosniff' },
+        { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        { key: 'X-Frame-Options', value: 'DENY' },
+        { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+      ],
+    }]
+  },
   images: {
     remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '*.supabase.co',
-        pathname: '/storage/v1/object/public/**',
-      },
+      ...(supabaseHost ? [{ protocol: 'https', hostname: supabaseHost, pathname: '/storage/v1/object/public/**' }] : []),
       {
         // Player headshots back-filled from Wikidata → Wikimedia Commons.
         protocol: 'https',

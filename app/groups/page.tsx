@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
@@ -8,6 +9,7 @@ import ThemeToggle from '@/components/ThemeToggle'
 import FlagChip from '@/components/FlagChip'
 import { getActiveLeague } from '@/lib/league'
 import { DEFAULT_WEIGHTS, weightedGroupPoints, type ScoringWeights } from '@/lib/scoring'
+import { useUrlState } from '@/lib/url-state'
 
 interface Match {
   id: string
@@ -212,6 +214,21 @@ function GroupCard({ groupName, matches, pred, userId, weights, activeTab, onSav
   ) : null
 
   const displayTeams = settled ? resultRanking : order
+  const teamLinkStyle = {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    minWidth: 0,
+    color: 'inherit',
+    textDecoration: 'none',
+    cursor: 'pointer',
+  } as const
+  const standingsTeamLinkStyle = {
+    ...teamLinkStyle,
+    gridColumn: '2 / span 2',
+    gap: 4,
+  } as const
 
   return (
     <div style={{
@@ -290,8 +307,15 @@ function GroupCard({ groupName, matches, pred, userId, weights, activeTab, onSav
                     <div style={{ position: 'absolute', left: 0, top: 6, bottom: 6, width: 3, borderRadius: '0 999px 999px 0', background: 'rgb(var(--primary))' }} />
                   )}
                   <span style={{ textAlign: 'center', fontSize: 13, fontWeight: 800, color: qualifying ? 'rgb(var(--primary))' : 'rgb(var(--texts))' }}>{i + 1}</span>
-                  <FlagChip code={t.code} w={26} h={17} r={4} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'rgb(var(--textp))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
+                  <Link
+                    href={`/squads?team=${encodeURIComponent(t.code)}`}
+                    style={standingsTeamLinkStyle}
+                    aria-label={`Open ${t.fullName} squad`}
+                    title={`Open ${t.fullName} squad`}
+                  >
+                    <FlagChip code={t.code} w={26} h={17} r={4} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'rgb(var(--textp))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
+                  </Link>
                   <span style={{ fontSize: 11, color: 'rgb(var(--texts))', textAlign: 'center' }}>{row.mp}</span>
                   <span style={{ fontSize: 11, color: 'rgb(var(--success))', textAlign: 'center', fontWeight: 700 }}>{row.w}</span>
                   <span style={{ fontSize: 11, color: 'rgb(var(--texts))', textAlign: 'center' }}>{row.d}</span>
@@ -348,33 +372,39 @@ function GroupCard({ groupName, matches, pred, userId, weights, activeTab, onSav
                     transition: 'background 0.15s',
                   }}
                 >
-                  {/* Position number */}
-                  <span style={{
-                    width: 18,
-                    textAlign: 'center',
-                    fontSize: 14,
-                    fontWeight: 800,
-                    fontFamily: 'var(--font-display, inherit)',
-                    color: i === 0 ? 'rgb(var(--gold))' : 'rgb(var(--texts))',
-                    flexShrink: 0,
-                  }}>
-                    {i + 1}
-                  </span>
+                  <Link
+                    href={`/squads?team=${encodeURIComponent(t.code)}`}
+                    style={teamLinkStyle}
+                    aria-label={`Open ${t.fullName} squad`}
+                    title={`Open ${t.fullName} squad`}
+                  >
+                    <span style={{
+                      width: 18,
+                      textAlign: 'center',
+                      fontSize: 14,
+                      fontWeight: 800,
+                      fontFamily: 'var(--font-display, inherit)',
+                      color: i === 0 ? 'rgb(var(--gold))' : 'rgb(var(--texts))',
+                      flexShrink: 0,
+                    }}>
+                      {i + 1}
+                    </span>
 
-                  <FlagChip code={t.code} w={30} h={20} r={5} />
+                    <FlagChip code={t.code} w={30} h={20} r={5} />
 
-                  <span style={{
-                    flex: 1,
-                    fontSize: 14,
-                    fontWeight: 700,
-                    fontFamily: 'var(--font-display, inherit)',
-                    color: 'rgb(var(--textp))',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {t.name}
-                  </span>
+                    <span style={{
+                      flex: 1,
+                      fontSize: 14,
+                      fontWeight: 700,
+                      fontFamily: 'var(--font-display, inherit)',
+                      color: 'rgb(var(--textp))',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {t.name}
+                    </span>
+                  </Link>
 
                   {settled ? resultLabel : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
@@ -424,13 +454,18 @@ function GroupCard({ groupName, matches, pred, userId, weights, activeTab, onSav
 
 export default function GroupsPage() {
   const supabase = createClient()
+  const { searchParams, replaceUrl } = useUrlState()
   const [matches, setMatches] = useState<Match[]>([])
   const [userId, setUserId] = useState<string | null>(null)
   const [savedPreds, setSavedPreds] = useState<Record<string, GroupPredRow>>({})
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
-  const [activeTab, setActiveTab] = useState<'pred' | 'stand'>('stand')
+  const [activeTab, setActiveTab] = useState<'pred' | 'stand'>(searchParams.get('tab') === 'pred' ? 'pred' : 'stand')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setActiveTab(searchParams.get('tab') === 'pred' ? 'pred' : 'stand')
+  }, [searchParams])
 
   useEffect(() => {
     async function load() {
@@ -557,7 +592,10 @@ export default function GroupsPage() {
               return (
                 <button
                   key={tab}
-                  onClick={() => setActiveTab(tab)}
+                  onClick={() => {
+                    setActiveTab(tab)
+                    replaceUrl({ tab: tab === 'stand' ? null : tab })
+                  }}
                   style={{
                     height: 30,
                     padding: '0 12px',

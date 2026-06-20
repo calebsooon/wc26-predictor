@@ -25,14 +25,8 @@ export default function LoginPage() {
     setError(null)
 
     if (mode === 'signup') {
-      const { data, error } = await supabase.auth.signUp({ email, password })
+      const { error } = await supabase.auth.signUp({ email, password })
       if (error) { setError(error.message); setLoading(false); return }
-      if (data.user) {
-        const username = email.split('@')[0]
-        await supabase
-          .from('profiles')
-          .upsert({ id: data.user.id, username }, { onConflict: 'id', ignoreDuplicates: true })
-      }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) { setError(error.message); setLoading(false); return }

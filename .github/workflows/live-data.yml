@@ -7,32 +7,46 @@ name: Live data sync
 on:
   schedule:
     - cron: '*/15 * * * *'   # every 15 min (GitHub may delay during peak load)
+    - cron: '7 */6 * * *'    # injury feed is slow-moving; refresh four times daily
   workflow_dispatch: {}        # allow manual "Run workflow" from the Actions tab
 
 jobs:
   sync:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '*/15 * * * *'
     runs-on: ubuntu-latest
     steps:
       - name: Fetch lineups for imminent matches
         run: |
-          curl -fsS -X GET "$APP_URL/api/fetch-lineup" \
-            -H "Authorization: Bearer $CRON_SECRET" || echo "lineup sync failed (non-fatal)"
+          curl --fail-with-body --retry 2 --max-time 25 -sS -X GET "$APP_URL/api/fetch-lineup" \
+            -H "Authorization: Bearer $CRON_SECRET"
         env:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
 
       - name: Sync finished results + first scorer
         run: |
-          curl -fsS -X GET "$APP_URL/api/sync-results" \
-            -H "Authorization: Bearer $CRON_SECRET" || echo "results sync failed (non-fatal)"
+          curl --fail-with-body --retry 2 --max-time 45 -sS -X GET "$APP_URL/api/sync-results" \
+            -H "Authorization: Bearer $CRON_SECRET"
         env:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
 
+      - name: Send prediction reminders for imminent matches
+        run: |
+          curl --fail-with-body --retry 2 --max-time 30 -sS -X GET "$APP_URL/api/cron/kickoff-reminders" \
+            -H "Authorization: Bearer $CRON_SECRET"
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+  injuries:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '7 */6 * * *'
+    runs-on: ubuntu-latest
+    steps:
       - name: Refresh injuries
         run: |
-          curl -fsS -X GET "$APP_URL/api/sync-injuries" \
-            -H "Authorization: Bearer $CRON_SECRET" || echo "injuries sync failed (non-fatal)"
+          curl --fail-with-body --retry 2 --max-time 45 -sS -X GET "$APP_URL/api/sync-injuries" \
+            -H "Authorization: Bearer $CRON_SECRET"
         env:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}

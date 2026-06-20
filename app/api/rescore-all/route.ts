@@ -6,7 +6,7 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import { snapshotLeagueRanks } from '@/lib/snapshot'
 
 export async function POST() {
-  const supabase = createServerSupabaseClient()
+  const supabase = await createServerSupabaseClient()
   const denied = await requireAdmin(supabase)
   if (denied) return denied
 

@@ -9,6 +9,8 @@ import FlagChip from '@/components/FlagChip'
 import { getActiveLeague } from '@/lib/league'
 import { TOURNAMENT_POINTS } from '@/lib/scoring'
 import ThemeToggle from '@/components/ThemeToggle'
+import { useUrlState } from '@/lib/url-state'
+import { TeamLink } from '@/components/TeamLink'
 
 /* ---------- types ---------- */
 interface TournamentPred {
@@ -270,8 +272,9 @@ function SemiCorrectnessBadge({ code, settled, correct }: { code: string | null;
 /* ---------- main inner component ---------- */
 function BracketPageInner() {
   const supabase = useMemo(() => createClient(), [])
+  const { searchParams, replaceUrl } = useUrlState()
   const [loading, setLoading] = useState(true)
-  const [phase, setPhase] = useState<BracketPhase>('pre')
+  const [phase, setPhase] = useState<BracketPhase>(searchParams.get('phase') === 'r32' ? 'r32' : 'pre')
   const [predsByPhase, setPredsByPhase] = useState<Record<BracketPhase, TournamentPred>>({
     pre: EMPTY_PRED,
     r32: EMPTY_PRED,
@@ -281,6 +284,10 @@ function BracketPageInner() {
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
   const saveMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [bracketResults, setBracketResults] = useState<BracketResults>({ champion: null, runner_up: null, semi: [], quarter: [], settled: false })
+
+  useEffect(() => {
+    setPhase(searchParams.get('phase') === 'r32' ? 'r32' : 'pre')
+  }, [searchParams])
 
   useEffect(() => {
     async function load() {
@@ -452,7 +459,10 @@ function BracketPageInner() {
               return (
                 <button
                   key={option.key}
-                  onClick={() => setPhase(option.key)}
+                  onClick={() => {
+                    setPhase(option.key)
+                    replaceUrl({ phase: option.key === 'pre' ? null : option.key })
+                  }}
                   style={{
                     height: 30,
                     padding: '0 12px',
@@ -974,26 +984,39 @@ function PickerSection({
             const active = selected.includes(code)
             const team = getTeam(code)
             return (
-              <button
-                key={code}
-                onClick={() => onToggle(code)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '7px 9px',
-                  borderRadius: 999,
-                  border: active ? '1px solid rgba(var(--primary),0.32)' : '1px solid rgb(var(--border))',
-                  background: active ? 'rgba(var(--primary),0.10)' : 'rgb(var(--card))',
-                  color: active ? 'rgb(var(--primary))' : 'rgb(var(--textp))',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                <FlagChip code={code} w={20} h={14} r={4} />
-                <span>{team.name}</span>
-              </button>
+              <div key={code} style={{ display: 'inline-flex', alignItems: 'stretch' }}>
+                <button
+                  onClick={() => onToggle(code)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '7px 9px',
+                    borderRadius: '999px 0 0 999px',
+                    border: active ? '1px solid rgba(var(--primary),0.32)' : '1px solid rgb(var(--border))',
+                    background: active ? 'rgba(var(--primary),0.10)' : 'rgb(var(--card))',
+                    color: active ? 'rgb(var(--primary))' : 'rgb(var(--textp))',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <FlagChip code={code} w={20} h={14} r={4} />
+                  <span>{team.name}</span>
+                </button>
+                <TeamLink
+                  code={code}
+                  className="inline-flex items-center px-2 text-[10px] font-bold text-texts hover:text-primary"
+                  style={{
+                    border: active ? '1px solid rgba(var(--primary),0.32)' : '1px solid rgb(var(--border))',
+                    borderLeft: 'none',
+                    borderRadius: '0 999px 999px 0',
+                    background: active ? 'rgba(var(--primary),0.10)' : 'rgb(var(--card))',
+                  }}
+                >
+                  Squad
+                </TeamLink>
+              </div>
             )
           })}
         </div>

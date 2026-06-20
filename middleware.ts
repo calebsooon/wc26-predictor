@@ -9,7 +9,7 @@ export async function middleware(request: NextRequest) {
   const { data: { session } } = await supabase.auth.getSession()
 
   const pathname = request.nextUrl.pathname
-  const isPublicHome = pathname === '/'
+  const isPublicHome = pathname === '/' || pathname === '/privacy' || pathname === '/terms'
   const isLoginPage = request.nextUrl.pathname === '/login'
 
   if (!session && !isLoginPage && !isPublicHome) {
@@ -27,6 +27,6 @@ export const config = {
   matcher: [
     // Exclude Next internals, auth callback, and public metadata (manifest/icons)
     // so the PWA manifest and favicon load without an auth redirect.
-    '/((?!_next/static|_next/image|favicon.ico|auth/callback|api/calendar|api/cron|api/sync-results|api/sync-injuries|api/fetch-lineup|manifest\\.json|manifest\\.webmanifest|icon|apple-icon|sitemap\\.xml|robots\\.txt).*)',
+    '/((?!_next/static|_next/image|favicon.ico|auth/callback|api/calendar|api/cron|api/sync-results|api/sync-injuries|api/fetch-lineup|manifest\\.json|manifest\\.webmanifest|icon|apple-icon|sitemap\\.xml|robots\\.txt|privacy|terms).*)',
   ],
 }

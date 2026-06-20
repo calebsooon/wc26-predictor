@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/s
 import { requireAdmin } from '@/lib/require-admin'
 import { kapi, findFixture, kickoffConfigured, type KLineup } from '@/lib/kickoff'
 import { teamNameToCode, groupPlayersByCode, matchPlayer, type RosterPlayer } from '@/lib/team-match'
+import { finishSyncRun, startSyncRun, type SyncTrigger } from '@/lib/sync-runs'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 // Pull the confirmed lineup + formation for a match from Kickoffapi into the
@@ -47,14 +48,25 @@ async function syncLineup(service: SupabaseClient, matchId: string) {
     take(lu.substitutes ?? [], false)
   }
 
-  await service.from('lineups').delete().eq('match_id', m.id)
-  if (rows.length) {
-    const { error } = await service.from('lineups').insert(rows)
-    if (error) return { error: error.message, status: 500 }
+  // Never replace a known lineup with a payload we could not map back to our
+  // roster. The unmatched names remain visible in the sync-run log for repair.
+  if (unmatched.length > 0 || rows.length === 0) {
+    return {
+      error: unmatched.length > 0 ? 'One or more lineup players could not be matched' : 'No lineup players could be matched',
+      status: 422,
+      written: 0,
+      unmatched,
+    }
   }
-  await service.from('matches').update({
-    home_formation: formations[m.home_team] ?? null, away_formation: formations[m.away_team] ?? null,
-  }).eq('id', m.id)
+
+  const { error: replaceError } = await service.rpc('replace_match_lineup', {
+    p_match_id: m.id,
+    p_rows: rows,
+    p_home_formation: formations[m.home_team] ?? null,
+    p_away_formation: formations[m.away_team] ?? null,
+    p_provider_fixture_id: found.fixture.id,
+  })
+  if (replaceError) return { error: replaceError.message, status: 500 }
 
   return {
     ok: true, fixtureId: found.fixture.id,
@@ -63,8 +75,22 @@ async function syncLineup(service: SupabaseClient, matchId: string) {
   }
 }
 
+async function runSync(service: SupabaseClient, matchId: string, trigger: SyncTrigger) {
+  const runId = await startSyncRun(service, 'lineups', trigger)
+  try {
+    const result = await syncLineup(service, matchId)
+    const status = 'error' in result ? 'failed' : 'success'
+    await finishSyncRun(service, runId, status, { matchId, ...result })
+    return result
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown lineup sync failure'
+    await finishSyncRun(service, runId, 'failed', { matchId, error: message })
+    return { error: message, status: 500 }
+  }
+}
+
 export async function POST(request: Request) {
-  const supabase = createServerSupabaseClient()
+  const supabase = await createServerSupabaseClient()
   const denied = await requireAdmin(supabase)
   if (denied) return denied
   if (!kickoffConfigured()) return NextResponse.json({ error: 'KICKOFF_API_KEY not set' }, { status: 500 })
@@ -73,7 +99,7 @@ export async function POST(request: Request) {
   try { match_id = (await request.json()).match_id } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
   if (!match_id) return NextResponse.json({ error: 'match_id required' }, { status: 400 })
 
-  const r = await syncLineup(createServiceSupabaseClient(), match_id)
+  const r = await runSync(createServiceSupabaseClient(), match_id, 'admin')
   return NextResponse.json(r, { status: 'error' in r ? (r.status as number) : 200 })
 }
 
@@ -91,7 +117,7 @@ export async function GET(request: Request) {
 
   const results: Record<string, unknown>[] = []
   for (const mm of (matches ?? []) as { id: string }[]) {
-    try { results.push({ id: mm.id, ...(await syncLineup(service, mm.id)) }) }
+    try { results.push({ id: mm.id, ...(await runSync(service, mm.id, 'cron')) }) }
     catch (e) { results.push({ id: mm.id, error: (e as Error).message }) }
   }
   return NextResponse.json({ ok: true, checked: results.length, results })

@@ -11,9 +11,10 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(
   request: Request,
-  { params }: { params: { token: string } },
+  { params }: { params: Promise<{ token: string }> },
 ) {
-  const token = params.token.replace(/\.ics$/i, '')
+  const { token: rawToken } = await params
+  const token = rawToken.replace(/\.ics$/i, '')
   if (!/^[0-9a-f-]{36}$/i.test(token)) {
     return new NextResponse('Not found', { status: 404 })
   }
