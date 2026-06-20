@@ -24,28 +24,42 @@
 
 <br/>
 
-MatchDay is a private, invite-only prediction league for FIFA World Cup 2026. Players predict scorelines, group finishing orders, and the full knockout bracket across 104 matches. An admin enters real results, points settle instantly via server-side scoring, and a zero-sum prize pool updates live — no page refresh needed.
+<p align="center">
+  <a href="https://youtu.be/IPu3W5JPbZQ">
+    <img src="docs/MatchDay-Video-Thumbnail-1280x720.png" alt="Watch the MatchDay demo" width="720" />
+  </a><br/>
+  <sub>▶ &nbsp;Click to watch the 90-second demo</sub>
+</p>
+
+<br/>
+
+<p align="center">
+  A private prediction league for FIFA World Cup 2026.<br/>
+  Predict every scoreline, group order, and knockout bracket across 104 matches.<br/>
+  Points settle instantly. The leaderboard updates live. The prize pool runs itself.
+</p>
 
 ---
 
 ## Highlights
 
-- **Full-tournament prediction system** — scorelines, group orders, and knockout bracket in one app, across 8 gameweeks and 104 matches
-- **Granular scoring** — correct outcome, exact score, goal difference, total goals, BTTS, first-goal team, and first scorer (+4 pts), all with independent hedging
-- **Zero-sum prize pool** — per-gameweek and overall payouts settle automatically from a shared pot; dashboard shows projected and settled totals at all times
-- **Real-time everything** — Supabase Realtime pushes leaderboard and prediction updates to every connected client the moment a result is scored
-- **Multi-league** — admin-created leagues with private join codes; each group of friends gets isolated standings, rules, and a prize pool
-- **Live squad data** — 48-nation rosters with headshots, clubs, ages, and injury flags; formation pitch rendered from confirmed lineups; Golden Boot race with headshots and flags
-- **Calendar integration** — RFC 5545 iCalendar feed per user, timezone-aware, with configurable reminders; subscribes to Google, Apple, Outlook, and Notion calendars
-- **PWA** — installable on iOS, Android, and desktop; offline shell with Workbox
-- **Colour-blind mode** — Okabe–Ito CVD-safe palette, scoped to the leaderboard chart alone or the whole app; synced across devices
-- **RLS-hardened** — predictions hidden before kickoff, scoped to shared league members only; invite codes never exposed to the client
+| | |
+| :-- | :-- |
+| ![](https://img.shields.io/badge/SCOPE-16a34a?style=flat-square) | **104 matches · 8 gameweeks** — group stage through the final, fully predicted |
+| ![](https://img.shields.io/badge/SCORING-2563eb?style=flat-square) | **Granular scoring** — outcome · exact score · goal diff · total goals · BTTS · first scorer (+4 pts) |
+| ![](https://img.shields.io/badge/PRIZES-d97706?style=flat-square) | **Zero-sum prize pool** — per-GW and overall payouts settle automatically from a shared pot |
+| ![](https://img.shields.io/badge/REALTIME-7c3aed?style=flat-square) | **Live leaderboard** — Supabase Realtime pushes updates the moment a result lands |
+| ![](https://img.shields.io/badge/LEAGUES-0891b2?style=flat-square) | **Multi-league** — private leagues with join codes; isolated standings per group of friends |
+| ![](https://img.shields.io/badge/DATA-ea580c?style=flat-square) | **Live squad data** — 48-nation rosters · headshots · confirmed lineups · Golden Boot · injuries |
+| ![](https://img.shields.io/badge/CALENDAR-0284c7?style=flat-square) | **iCal feed** — auto-updating per user; works in Google, Apple, Outlook, and Notion |
+| ![](https://img.shields.io/badge/PWA-4f46e5?style=flat-square) | **Installable** — iOS, Android, and desktop; offline shell with Workbox |
+| ![](https://img.shields.io/badge/A11Y-db2777?style=flat-square) | **Colour-blind mode** — Okabe–Ito CVD-safe palette, scoped to chart or whole app; DB-synced |
+| ![](https://img.shields.io/badge/SECURITY-475569?style=flat-square) | **RLS-hardened** — predictions gated by kickoff time and league membership at the DB level |
 
 ---
 
 ## Contents
 
-- [Demo](#demo)
 - [How it works](#how-it-works)
 - [Scoring](#scoring)
 - [Prize pool](#prize-pool)
@@ -60,9 +74,9 @@ MatchDay is a private, invite-only prediction league for FIFA World Cup 2026. Pl
 
 ## How it works
 
-**1. Join your league** &nbsp;—&nbsp; Sign up with email, enter your invite code, and you're in. Leagues are private and admin-created; each group of friends gets its own isolated standings and prize pool. Multiple leagues are supported.
+![](https://img.shields.io/badge/01-16a34a?style=flat-square) &nbsp;**Join your league** &nbsp;—&nbsp; Sign up with email, enter your invite code, and you're in. Leagues are private and admin-created; each group of friends gets its own isolated standings and prize pool. Multiple leagues are supported.
 
-**2. Submit predictions before kickoff** &nbsp;—&nbsp; Head to **Fixtures** and enter your scoreline for each match. On top of the score, you can predict:
+![](https://img.shields.io/badge/02-16a34a?style=flat-square) &nbsp;**Submit predictions before kickoff** &nbsp;—&nbsp; Head to **Fixtures** and enter your scoreline for each match. On top of the score, you can predict:
 
 - **First-goal team** — which side opens the scoring
 - **First scorer** — the specific player (highest reward, +4 pts)
@@ -71,17 +85,17 @@ MatchDay is a private, invite-only prediction league for FIFA World Cup 2026. Pl
 
 Predictions lock at kickoff. The admin enters the result and every prediction is scored automatically across all per-category columns.
 
-**3. Compete across 8 gameweeks** &nbsp;—&nbsp; Points accumulate through the group stage and all knockout rounds. Supabase Realtime pushes leaderboard updates the moment results land — no refresh needed.
+![](https://img.shields.io/badge/03-16a34a?style=flat-square) &nbsp;**Compete across 8 gameweeks** &nbsp;—&nbsp; Points accumulate through the group stage and all knockout rounds. Supabase Realtime pushes leaderboard updates the moment results land — no refresh needed.
 
-**4. Predict the structure** &nbsp;—&nbsp; Beyond individual matches, predict group finishing orders (+2 per correct placement) and the full knockout bracket — champion, runner-up, semi-finalists, and quarter-finalists (up to +47 pts total).
+![](https://img.shields.io/badge/04-16a34a?style=flat-square) &nbsp;**Predict the structure** &nbsp;—&nbsp; Beyond individual matches, predict group finishing orders (+2 per correct placement) and the full knockout bracket — champion, runner-up, semi-finalists, and quarter-finalists (up to +47 pts total).
 
-**5. The prize pool settles itself** &nbsp;—&nbsp; Each gameweek and the overall standings pay out and claw back based on finishing position. The dashboard shows your current rank, settled net, projected total, and best/worst prize range at all times.
+![](https://img.shields.io/badge/05-16a34a?style=flat-square) &nbsp;**The prize pool settles itself** &nbsp;—&nbsp; Each gameweek and the overall standings pay out and claw back based on finishing position. The dashboard shows your current rank, settled net, projected total, and best/worst prize range at all times.
 
 ---
 
 ## Scoring
 
-### Match predictions &nbsp;—&nbsp; max 14 pts
+### Match predictions &nbsp;&nbsp; ![](https://img.shields.io/badge/max_14_pts-16a34a?style=flat-square)
 
 | Category | Pts | Notes |
 | :--- | :---: | :--- |
@@ -95,11 +109,11 @@ Predictions lock at kickoff. The admin enters the result and every prediction is
 
 > Total goals and goal difference are entered **separately** from the scoreline, so a well-placed hedge can bank points even when the exact score is wrong.
 
-### Group predictions
+### Group predictions &nbsp;&nbsp; ![](https://img.shields.io/badge/max_8_pts_per_group-16a34a?style=flat-square)
 
-**+2** for each team placed in the correct group finishing position — max 8 pts per group across 12 groups.
+**+2** for each team placed in the correct group finishing position across 12 groups.
 
-### Tournament bracket &nbsp;—&nbsp; max 47 pts
+### Tournament bracket &nbsp;&nbsp; ![](https://img.shields.io/badge/max_47_pts-16a34a?style=flat-square)
 
 | Pick | Pts |
 | :--- | :---: |
@@ -116,13 +130,13 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 | Position | Per gameweek | Overall |
 | :---: | :---: | :---: |
-| 1st | +$15 | +$40 |
-| 2nd | +$10 | +$20 |
-| 3rd | +$5 | +$10 |
-| 4th | $0 | $0 |
-| 5th | −$5 | −$10 |
-| 6th | −$10 | −$20 |
-| 7th | −$15 | −$40 |
+| 1st | ![](https://img.shields.io/badge/+%2415-16a34a?style=flat-square) | ![](https://img.shields.io/badge/+%2440-16a34a?style=flat-square) |
+| 2nd | ![](https://img.shields.io/badge/+%2410-16a34a?style=flat-square) | ![](https://img.shields.io/badge/+%2420-16a34a?style=flat-square) |
+| 3rd | ![](https://img.shields.io/badge/+%245-16a34a?style=flat-square) | ![](https://img.shields.io/badge/+%2410-16a34a?style=flat-square) |
+| 4th | ![](https://img.shields.io/badge/%240-6b7280?style=flat-square) | ![](https://img.shields.io/badge/%240-6b7280?style=flat-square) |
+| 5th | ![](https://img.shields.io/badge/-%245-dc2626?style=flat-square) | ![](https://img.shields.io/badge/-%2410-dc2626?style=flat-square) |
+| 6th | ![](https://img.shields.io/badge/-%2410-dc2626?style=flat-square) | ![](https://img.shields.io/badge/-%2420-dc2626?style=flat-square) |
+| 7th | ![](https://img.shields.io/badge/-%2415-dc2626?style=flat-square) | ![](https://img.shields.io/badge/-%2440-dc2626?style=flat-square) |
 
 **Tiebreakers:** total points → most correct outcomes → most exact scorelines → shared rank.
 
@@ -147,7 +161,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 ## Features
 
 <details>
-<summary><strong>Predictions &amp; gameplay</strong></summary>
+<summary>![](https://img.shields.io/badge/GAMEPLAY-16a34a?style=flat-square) &nbsp;<strong>Predictions &amp; gameplay</strong></summary>
 
 <br/>
 
@@ -164,7 +178,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary><strong>Fixtures &amp; results</strong></summary>
+<summary>![](https://img.shields.io/badge/FIXTURES-2563eb?style=flat-square) &nbsp;<strong>Fixtures &amp; results</strong></summary>
 
 <br/>
 
@@ -181,7 +195,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary><strong>Live data</strong></summary>
+<summary>![](https://img.shields.io/badge/LIVE_DATA-ea580c?style=flat-square) &nbsp;<strong>Live data</strong></summary>
 
 <br/>
 
@@ -197,7 +211,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary><strong>Leaderboard &amp; social</strong></summary>
+<summary>![](https://img.shields.io/badge/STANDINGS-7c3aed?style=flat-square) &nbsp;<strong>Leaderboard &amp; social</strong></summary>
 
 <br/>
 
@@ -213,7 +227,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary><strong>Profile &amp; personalisation</strong></summary>
+<summary>![](https://img.shields.io/badge/PROFILE-db2777?style=flat-square) &nbsp;<strong>Profile &amp; personalisation</strong></summary>
 
 <br/>
 
@@ -228,7 +242,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary><strong>Admin</strong></summary>
+<summary>![](https://img.shields.io/badge/ADMIN-475569?style=flat-square) &nbsp;<strong>Admin</strong></summary>
 
 <br/>
 
@@ -244,7 +258,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary><strong>Platform</strong></summary>
+<summary>![](https://img.shields.io/badge/PLATFORM-0891b2?style=flat-square) &nbsp;<strong>Platform</strong></summary>
 
 <br/>
 
@@ -259,7 +273,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary><strong>Pages &amp; routes</strong></summary>
+<summary>![](https://img.shields.io/badge/ROUTES-0284c7?style=flat-square) &nbsp;<strong>Pages &amp; routes</strong></summary>
 
 <br/>
 
@@ -281,14 +295,6 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | `/admin` | Result entry and all scoring actions |
 
 </details>
-
----
-
-## Demo
-
-> ▶ [**Watch the demo on YouTube**](https://youtu.be/IPu3W5JPbZQ)
-
-[![Watch the MatchDay demo](docs/MatchDay-Video-Thumbnail-1280x720.png)](https://youtu.be/IPu3W5JPbZQ)
 
 ---
 
@@ -575,7 +581,7 @@ middleware.ts               Redirects unauthenticated users to /login for all ro
 
 ## Local development
 
-### 1. Clone and install
+### ![](https://img.shields.io/badge/01-16a34a?style=flat-square) &nbsp;Clone and install
 
 ```bash
 git clone <your-repository-url>
@@ -583,7 +589,7 @@ cd wc26-predictor
 npm ci
 ```
 
-### 2. Environment variables
+### ![](https://img.shields.io/badge/02-16a34a?style=flat-square) &nbsp;Environment variables
 
 ```bash
 cp .env.example .env.local
@@ -614,7 +620,7 @@ VAPID_EMAIL=mailto:<you@example.com>
 NEXT_PUBLIC_GITHUB_URL=https://github.com/<owner>/<repo>
 ```
 
-### 3. Apply migrations
+### ![](https://img.shields.io/badge/03-16a34a?style=flat-square) &nbsp;Apply migrations
 
 ```bash
 brew install supabase/tap/supabase   # macOS — see supabase.com/docs for other platforms
@@ -623,7 +629,7 @@ supabase link --project-ref <your-project-ref>
 supabase db push
 ```
 
-### 4. Create the first organizer
+### ![](https://img.shields.io/badge/04-16a34a?style=flat-square) &nbsp;Create the first organizer
 
 Sign up once at `http://localhost:3000/login`. The Auth trigger creates a non-privileged profile automatically. Grant the organizer role:
 
@@ -632,7 +638,7 @@ ADMIN_EMAIL=you@example.com npm run bootstrap:admin
 ADMIN_EMAIL=you@example.com npm run setup:check
 ```
 
-### 5. Populate squad data
+### ![](https://img.shields.io/badge/05-16a34a?style=flat-square) &nbsp;Populate squad data
 
 ```bash
 npm run data:players     # Required — seeds the 48-nation rosters from football-data.org
@@ -641,7 +647,7 @@ npm run data:photos      # Optional — self-hosts Wikimedia photos in Supabase 
 npm run data:fill-photos # Optional — gap-fills remaining missing photos via Kickoffapi CDN
 ```
 
-### 6. Live data (lineups, results, injuries, Golden Boot)
+### ![](https://img.shields.io/badge/06-16a34a?style=flat-square) &nbsp;Live data (lineups, results, injuries, Golden Boot)
 
 Live match data is fetched from Kickoffapi. Because Kickoffapi sits behind Cloudflare, server-side calls from Vercel or GitHub Actions are blocked by an IP challenge. Live data is refreshed by running scripts **from your local machine**, which then writes to Supabase — the app reads from Supabase:
 
@@ -656,7 +662,7 @@ npm run data:golden-boot # top scorers and assists
 
 Run these after matches finish (or before kickoff for lineups). The admin result-entry form in `/admin` is always available as a manual fallback.
 
-### 7. Verify and run
+### ![](https://img.shields.io/badge/07-16a34a?style=flat-square) &nbsp;Verify and run
 
 ```bash
 npm run setup:check  # schema, connectivity, and configured launch features
