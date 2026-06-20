@@ -45,16 +45,16 @@
 
 | | |
 | :-- | :-- |
-| ![](https://img.shields.io/badge/SCOPE-16a34a?style=flat-square) | **104 matches · 8 gameweeks** — group stage through the final, fully predicted |
-| ![](https://img.shields.io/badge/SCORING-2563eb?style=flat-square) | **Granular scoring** — outcome · exact score · goal diff · total goals · BTTS · first scorer (+4 pts) |
-| ![](https://img.shields.io/badge/PRIZES-d97706?style=flat-square) | **Zero-sum prize pool** — per-GW and overall payouts settle automatically from a shared pot |
-| ![](https://img.shields.io/badge/REALTIME-7c3aed?style=flat-square) | **Live leaderboard** — Supabase Realtime pushes updates the moment a result lands |
-| ![](https://img.shields.io/badge/LEAGUES-0891b2?style=flat-square) | **Multi-league** — private leagues with join codes; isolated standings per group of friends |
-| ![](https://img.shields.io/badge/DATA-ea580c?style=flat-square) | **Live squad data** — 48-nation rosters · headshots · confirmed lineups · Golden Boot · injuries |
-| ![](https://img.shields.io/badge/CALENDAR-0284c7?style=flat-square) | **iCal feed** — auto-updating per user; works in Google, Apple, Outlook, and Notion |
-| ![](https://img.shields.io/badge/PWA-4f46e5?style=flat-square) | **Installable** — iOS, Android, and desktop; offline shell with Workbox |
-| ![](https://img.shields.io/badge/A11Y-db2777?style=flat-square) | **Colour-blind mode** — Okabe–Ito CVD-safe palette, scoped to chart or whole app; DB-synced |
-| ![](https://img.shields.io/badge/SECURITY-475569?style=flat-square) | **RLS-hardened** — predictions gated by kickoff time and league membership at the DB level |
+| ![](https://img.shields.io/badge/SCOPE-16a34a?style=flat-square) | **104 matches · 8 gameweeks.** Group stage through the final, fully predicted |
+| ![](https://img.shields.io/badge/SCORING-2563eb?style=flat-square) | **Granular scoring.** Outcome · exact score · goal diff · total goals · BTTS · first scorer (+4 pts) |
+| ![](https://img.shields.io/badge/PRIZES-d97706?style=flat-square) | **Zero-sum prize pool.** Per-GW and overall payouts settle automatically from a shared pot |
+| ![](https://img.shields.io/badge/REALTIME-7c3aed?style=flat-square) | **Live leaderboard.** Supabase Realtime pushes updates the moment a result lands |
+| ![](https://img.shields.io/badge/LEAGUES-0891b2?style=flat-square) | **Multi-league.** Private leagues with join codes; isolated standings per group of friends |
+| ![](https://img.shields.io/badge/DATA-ea580c?style=flat-square) | **Live squad data.** 48-nation rosters · headshots · confirmed lineups · Golden Boot · injuries |
+| ![](https://img.shields.io/badge/CALENDAR-0284c7?style=flat-square) | **iCal feed.** Auto-updating per user; works in Google, Apple, Outlook, and Notion |
+| ![](https://img.shields.io/badge/PWA-4f46e5?style=flat-square) | **Installable.** iOS, Android, and desktop; offline shell with Workbox |
+| ![](https://img.shields.io/badge/A11Y-db2777?style=flat-square) | **Colour-blind mode.** Okabe–Ito CVD-safe palette, scoped to chart or whole app; DB-synced |
+| ![](https://img.shields.io/badge/SECURITY-475569?style=flat-square) | **RLS-hardened.** Predictions gated by kickoff time and league membership at the DB level |
 
 ---
 
@@ -171,7 +171,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 ## Features
 
 <details>
-<summary><strong>◆ &nbsp;Predictions &amp; gameplay</strong></summary>
+<summary><strong>Predictions &amp; gameplay</strong></summary>
 
 <br/>
 
@@ -188,7 +188,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary><strong>◆ &nbsp;Fixtures &amp; results</strong></summary>
+<summary><strong>Fixtures &amp; results</strong></summary>
 
 <br/>
 
@@ -205,7 +205,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary><strong>◆ &nbsp;Live data</strong></summary>
+<summary><strong>Live data</strong></summary>
 
 <br/>
 
@@ -221,7 +221,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary><strong>◆ &nbsp;Leaderboard &amp; social</strong></summary>
+<summary><strong>Leaderboard &amp; social</strong></summary>
 
 <br/>
 
@@ -237,7 +237,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary><strong>◆ &nbsp;Profile &amp; personalisation</strong></summary>
+<summary><strong>Profile &amp; personalisation</strong></summary>
 
 <br/>
 
@@ -252,7 +252,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary><strong>◆ &nbsp;Admin</strong></summary>
+<summary><strong>Admin</strong></summary>
 
 <br/>
 
@@ -268,7 +268,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary><strong>◆ &nbsp;Platform</strong></summary>
+<summary><strong>Platform</strong></summary>
 
 <br/>
 
@@ -283,7 +283,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 </details>
 
 <details>
-<summary><strong>◆ &nbsp;Pages &amp; routes</strong></summary>
+<summary><strong>Pages &amp; routes</strong></summary>
 
 <br/>
 
