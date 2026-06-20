@@ -36,6 +36,24 @@ const nextConfig = {
         hostname: '*.supabase.co',
         pathname: '/storage/v1/object/public/**',
       },
+      {
+        // Player headshots back-filled from Wikidata → Wikimedia Commons.
+        protocol: 'https',
+        hostname: 'commons.wikimedia.org',
+        pathname: '/wiki/Special:FilePath/**',
+      },
+      {
+        // Special:FilePath 302-redirects to the upload host where bytes live.
+        protocol: 'https',
+        hostname: 'upload.wikimedia.org',
+        pathname: '/**',
+      },
+      {
+        // Golden Boot headshots come straight from the Kickoffapi CDN.
+        protocol: 'https',
+        hostname: 'cdn.kickoffapi.com',
+        pathname: '/**',
+      },
     ],
   },
 }

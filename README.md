@@ -156,6 +156,24 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | Stage filter | All · Group Stage · Knockout — second filter row |
 | Consensus reveal | After kickoff, every member's full prediction for that match is revealed |
 | Prediction wall | See the whole league's pick distribution per match |
+| Calendar export | Subscribe to or download fixtures as an iCalendar feed — auto-updating, timezone-aware, with a configurable reminder; works in Google, Apple, Outlook, and Notion calendars |
+| Lineups &amp; formation | Confirmed starting XI and manager formation rendered on a positional pitch once published |
+
+</details>
+
+<details>
+<summary><strong>Live data &amp; automation</strong></summary>
+
+<br/>
+
+| Feature | Detail |
+| :--- | :--- |
+| Live lineups | Confirmed XI, substitutes, shirt numbers, and formation pulled from a live football data provider |
+| Auto results &amp; first scorer | Final scores and the opening goalscorer fetched from match events, then scored automatically |
+| Injury &amp; suspension flags | Out players flagged across the squad views |
+| Golden Boot race | Live tournament top scorers and assists, with headshots and nation flags |
+| Player enrichment | Headshots, clubs, and dates of birth sourced from Wikidata |
+| Scheduled sync | A GitHub Actions workflow polls the authenticated sync endpoints on a schedule — no platform cron required |
 
 </details>
 
@@ -186,6 +204,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | Avatar upload | Circular crop tool — drag to reposition, slider to zoom |
 | Settled prize | Shows real GW earnings after each gameweek closes |
 | Light / dark mode | Follows system preference; toggle available in the header |
+| Colour-blind mode | CVD-safe (Okabe–Ito) palette, scoped to the leaderboard chart alone or the whole app; synced across devices |
 
 </details>
 
@@ -197,6 +216,9 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | Feature | Detail |
 | :--- | :--- |
 | Result entry | Score and first scorer per match; locks prediction input for all players |
+| Fetch lineup | One-click confirmed lineup and formation import per match |
+| Sync results + scorers | Pull finished scores and the first goalscorer, then auto-score every prediction |
+| Sync injuries | Refresh injury and suspension flags across the squad data |
 | Scoring audit log | Every action recorded in `scoring_events` |
 | Rank snapshots | Captures rank state automatically after scoring for movement arrows |
 | Rescore all | Full recompute — use after any rule or data correction |
@@ -235,7 +257,8 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | `/bracket` | Full knockout bracket and tournament picks |
 | `/leaderboard` | Live standings, per-GW view, rank movement, CSV export |
 | `/h2h` | Head-to-head compare — pick any two members |
-| `/squads` | 48-nation squad browser with position grouping and jersey numbers |
+| `/squads` | 48-nation squad browser — headshots, clubs, ages, injury flags, and your first-scorer picks |
+| `/golden-boot` | Live top scorers and assists across the tournament |
 | `/profile` | Stats, accuracy, rank chart, badges, bracket and group picks |
 | `/rules` | Scoring rules reference |
 | `/admin` | Result entry and all scoring actions |
@@ -271,6 +294,10 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | **Storage** | Supabase Storage — `avatars` bucket (public-read) for profile photos |
 | **PWA** | `@ducanh2912/next-pwa` with Workbox service worker, offline shell, and app badge |
 | **Hosting** | Vercel — auto-deploys on every push to `main` |
+| **Live data** | Kickoffapi for fixtures, lineups, match events, injuries, and scorers; Wikidata for player bios; football-data.org for squad seeding |
+| **Scheduling** | GitHub Actions scheduled workflow pings authenticated sync endpoints — keeps live data current without a platform cron |
+| **Calendar** | RFC 5545 iCalendar feeds for cross-app fixture subscription (Google, Apple, Outlook, Notion) |
+| **Accessibility** | Colour-blind-safe palette mode (Okabe–Ito), DB-backed and synced across devices |
 | **Design** | Schibsted Grotesk typeface, token-driven colour scheme, custom SVG charts with no chart library |
 
 ---
@@ -301,7 +328,21 @@ flowchart LR
     ScoreTournament["score-tournament"]
     SnapshotRanks["snapshot-ranks"]
     RescoreAll["rescore-all"]
-    API --> ScoreMatch & ScoreGroups & ScoreTournament & SnapshotRanks & RescoreAll
+    LiveSync["fetch-lineup · sync-results · sync-injuries"]
+    GoldenBoot["golden-boot"]
+    Calendar["calendar (iCal feed)"]
+    API --> ScoreMatch & ScoreGroups & ScoreTournament & SnapshotRanks & RescoreAll & LiveSync & GoldenBoot & Calendar
+  end
+
+  subgraph External["External APIs"]
+    direction TB
+    Kickoff["Kickoffapi — lineups, events, injuries, scorers"]
+    Wikidata["Wikidata — player bios"]
+  end
+
+  subgraph Scheduler["Automation"]
+    direction TB
+    GHA["GitHub Actions — scheduled sync"]
   end
 
   subgraph Data["Supabase"]
@@ -322,6 +363,8 @@ flowchart LR
   Client -->|"supabase-js — RLS-guarded"| Data
   Client -->|"admin POST"| Server
   Server -->|"validated writes"| Data
+  Server -->|"fetch — server-side keys"| External
+  Scheduler -->|"GET + CRON_SECRET"| Server
   Realtime -. "live push — no reload" .-> Client
   Domain -. "imported by" .-> Client & Server
 
@@ -333,11 +376,12 @@ flowchart LR
   classDef domain fill:#eef2ff,stroke:#4f46e5,color:#312e81,stroke-width:2px
   classDef worker fill:#fffbeb,stroke:#d97706,color:#92400e,stroke-width:2px
 
-  class Client,Server,Data,Domain layer
+  class Client,Server,Data,Domain,External,Scheduler layer
   class Browser,Pages,Components,ClientLib client
   class PWA pwa
   class SW worker
-  class API,ScoreMatch,ScoreGroups,ScoreTournament,SnapshotRanks,RescoreAll server
+  class API,ScoreMatch,ScoreGroups,ScoreTournament,SnapshotRanks,RescoreAll,LiveSync,GoldenBoot,Calendar server
+  class Kickoff,Wikidata,GHA worker
   class Postgres,Auth,Realtime,Storage data
   class Scoring,Prizes,Leaderboard domain
 ```
@@ -364,7 +408,8 @@ app/
   bracket/                  Knockout bracket and tournament picks
   leaderboard/              Live standings, per-GW view, rank arrows, CSV export
   h2h/                      Head-to-head compare with stats and points race chart
-  squads/                   48-nation squad browser with position grouping
+  squads/                   48-nation browser — photos, clubs, ages, injuries, scorer picks
+  golden-boot/              Live top scorers and assists
   profile/                  Stats, accuracy, rank chart tabs, badges, avatar crop
   rules/                    Scoring rules reference
   admin/                    Result entry and scoring actions (is_admin guard)
@@ -374,6 +419,11 @@ app/
     score-tournament/       Score bracket predictions
     snapshot-ranks/         Capture rank snapshot
     rescore-all/            Full recompute of all scored predictions
+    fetch-lineup/           Import confirmed XI + formation (admin + cron)
+    sync-results/           Pull scores + first scorer, then auto-score (admin + cron)
+    sync-injuries/          Refresh injury / suspension flags (admin + cron)
+    golden-boot/            Live top scorers / assists feed
+    calendar/[token]/       Per-user iCalendar fixture feed (subscribe / download)
 
 components/
   AppShell.tsx              Desktop sidebar, mobile bottom nav, theme toggle
@@ -390,6 +440,9 @@ lib/
   leaderboard.ts            aggregateLeaderboard — shared aggregation and canonical sort
   league.ts                 getActiveLeague, isMoneyLeague, multi-league helpers
   teams.ts                  48 WC2026 teams with code, name, flag, and playerKey
+  kickoff.ts                Kickoffapi client — fixtures, lineups, events
+  team-match.ts             External team/player name → our codes and roster matching
+  ics.ts                    RFC 5545 iCalendar builder for the fixture feed
   rate-limit.ts             In-memory token bucket (10 req/min per key)
   supabase-browser.ts       Browser Supabase client (anon key)
   supabase-server.ts        Server Supabase client (service role, RSC)
@@ -397,6 +450,9 @@ lib/
 supabase/migrations/        SQL migrations applied in filename order via supabase db push
 scripts/
   fetch-players.ts          Pulls WC2026 squads from football-data.org into the players table
+  fetch-wikidata-players.ts Enriches players with photos, clubs, and DOBs from Wikidata
+.github/workflows/
+  live-data.yml             Scheduled GitHub Action that pings the sync endpoints
 middleware.ts               Redirects unauthenticated users to /login for all routes
 ```
 
@@ -426,6 +482,10 @@ Open `.env.local` and fill in your Supabase project values (found under **Projec
 NEXT_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
+
+# Optional — live data, push, and scheduled sync
+KICKOFF_API_KEY=<kickoffapi-key>          # live lineups, results, injuries, scorers
+CRON_SECRET=<random-string>               # guards the scheduled sync endpoints
 ```
 
 ### 3. Apply migrations
@@ -464,6 +524,18 @@ npx tsx scripts/fetch-players.ts
 
 Get a free API token at [football-data.org](https://www.football-data.org/client/register). The free tier fetches all 48 WC2026 squads (~1,250 players) with a 7-second delay between teams to stay within rate limits.
 
+### 7. Enrich player data *(optional)*
+
+```bash
+# Headshots, clubs, and dates of birth from Wikidata — no API key required
+npx tsx --env-file=.env.local scripts/fetch-wikidata-players.ts
+
+# ONLY_MISSING=1 fills only players still missing a photo / club / dob
+ONLY_MISSING=1 npx tsx --env-file=.env.local scripts/fetch-wikidata-players.ts
+```
+
+Live data (lineups, results, injuries, scorers) is pulled at runtime from Kickoffapi via the in-app admin actions and the scheduled sync — no seed script needed.
+
 ---
 
 ## Deployment
@@ -472,9 +544,10 @@ Get a free API token at [football-data.org](https://www.football-data.org/client
 | :---: | :--- |
 | 1 | Push the repository to GitHub |
 | 2 | On [vercel.com](https://vercel.com) → **Add New Project** → import the repo (Next.js is auto-detected) |
-| 3 | Add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` under **Settings → Environment Variables** |
+| 3 | Add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` under **Settings → Environment Variables** — plus `KICKOFF_API_KEY` and `CRON_SECRET` to enable live data and scheduled sync |
 | 4 | In Supabase → **Authentication → URL Configuration → Redirect URLs**, add `https://<your-vercel-domain>/auth/callback` |
-| 5 | Vercel deploys automatically on every push to `main` |
+| 5 | *(Optional)* For automated live sync, add repository secrets `APP_URL` and `CRON_SECRET` under **GitHub → Settings → Secrets → Actions**; the `live-data` workflow then polls the sync endpoints on a schedule |
+| 6 | Vercel deploys automatically on every push to `main` |
 
 ---
 

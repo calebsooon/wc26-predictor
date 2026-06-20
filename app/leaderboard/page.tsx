@@ -9,7 +9,8 @@ import { aggregateLeaderboard, type ProfileLite, type ScoredGroupPred, type Scor
 import { getActiveLeague, getMyLeagues, setActiveLeague, isMoneyLeague, type League, type LeagueLabel } from '@/lib/league'
 import { DEFAULT_WEIGHTS, weightedMatchPoints, type ScoringWeights } from '@/lib/scoring'
 import { GW_NAMES, GW_SHORT, GW_PRIZES, OVERALL_PRIZES, formatPrize, prizeTone } from '@/lib/prizes'
-import { PointsRaceChart, RaceCompareChart, PLAYER_PALETTE, type RaceSeries, type RaceVariant } from '@/components/charts'
+import { PointsRaceChart, RaceCompareChart, playerPalette, type RaceSeries, type RaceVariant } from '@/components/charts'
+import { useColorblind } from '@/lib/prefs'
 import { getTeam } from '@/lib/teams'
 import { fmtDateTime } from '@/lib/date-format'
 
@@ -108,6 +109,7 @@ export default function LeaderboardPage() {
   const [tab, setTab] = useState('all')        // GW tab
   const [view, setView] = useState('standings') // standings | picks
   const [raceVariant, setRaceVariant] = useState<RaceVariant>('absolute') // race chart mode
+  const colorblind = useColorblind()
   const [loading, setLoading] = useState(true)
 
   // Picks tab state
@@ -294,9 +296,10 @@ export default function LeaderboardPage() {
   }, [rows, tab])
 
   const raceSeries = useMemo<RaceSeries[]>(() => {
+    const palette = playerPalette(colorblind)
     return board.map((p, idx) => {
       const userRows = rows.filter((r) => r.user_id === p.id)
-      const color = PLAYER_PALETTE[idx % PLAYER_PALETTE.length]
+      const color = palette[idx % palette.length]
       if (tab === 'all') {
         const gwCount = raceLabels.length
         let cum = 0
@@ -338,7 +341,7 @@ export default function LeaderboardPage() {
         .reduce((s, r) => s + weightedMatchPoints(r, weights), 0)
       return { id: p.id, name: p.name, color, data: [pts] }
     })
-  }, [rows, board, tab, raceLabels, weights])
+  }, [rows, board, tab, raceLabels, weights, colorblind])
   const myIdx = board.findIndex((r) => r.you)
   const srStatus = myIdx >= 0 ? `You are ranked ${myIdx + 1} of ${board.length}${leagueName ? ` in ${leagueName}` : ''} with ${board[myIdx].pts} points.` : ''
 

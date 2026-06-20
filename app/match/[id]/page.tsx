@@ -16,6 +16,8 @@ import { POINTS, weightedMatchPoints, DEFAULT_WEIGHTS, type MatchBreakdown, type
 import { getActiveLeague } from '@/lib/league'
 import { PlayerCardPicker, type PlayerForPicker } from '@/components/PlayerCardPicker'
 import { fmtDateTime } from '@/lib/date-format'
+import { AddMatchToCalendar } from '@/components/AddMatchToCalendar'
+import { FormationPitch } from '@/components/FormationPitch'
 import { SquadPanel } from '@/components/MatchModal'
 
 interface OtherPred extends MatchBreakdown {
@@ -227,7 +229,32 @@ export default function MatchDetailPage() {
             ? <span className="flex items-center gap-1.5 text-error font-bold"><LockIcon size={14} /> Predictions locked</span>
             : <span className="flex items-center gap-1.5 font-semibold text-texts"><LockIcon size={14} className="text-gold" /> Locks in <Countdown kickoff={match.match_date} /></span>}
         </div>
+        {!scored && (
+          <div className="mt-4 flex justify-center">
+            <AddMatchToCalendar
+              title={`${home.name} vs ${away.name}`}
+              match={{
+                id: match.id,
+                match_date: match.match_date,
+                home_team: match.home_team,
+                away_team: match.away_team,
+                group_name: match.group_name,
+                gw_number: null,
+                round_name: match.round_name ?? null,
+              }}
+            />
+          </div>
+        )}
       </Card>
+
+      {/* Confirmed lineups — renders only once a lineup has been fetched */}
+      <FormationPitch
+        matchId={match.id}
+        homeCode={match.home_team}
+        awayCode={match.away_team}
+        homeFormation={(match as { home_formation?: string | null }).home_formation ?? null}
+        awayFormation={(match as { away_formation?: string | null }).away_formation ?? null}
+      />
 
       {/* consensus bar — visible once match kicks off */}
       {locked && others.length > 0 && (

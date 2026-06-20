@@ -34,6 +34,30 @@ function EditConfirmButton({ saving, onConfirm, label }: { saving: boolean; onCo
   )
 }
 
+/* ── FetchLineupButton — pulls confirmed XI + formation from Kickoffapi ─────── */
+function FetchLineupButton({ matchId, onDone }: { matchId: string; onDone?: () => void }) {
+  const [busy, setBusy] = useState(false)
+  async function run() {
+    setBusy(true)
+    try {
+      const res = await fetch('/api/fetch-lineup', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ match_id: matchId }),
+      })
+      const j = await res.json()
+      if (!res.ok) { toast.error(j.error ?? 'Lineup fetch failed'); return }
+      toast.success(`Lineup saved — ${j.formations?.home ?? '?'} vs ${j.formations?.away ?? '?'} (${j.written} players${j.unmatched?.length ? `, ${j.unmatched.length} unmatched` : ''})`)
+      onDone?.()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Lineup fetch failed')
+    } finally { setBusy(false) }
+  }
+  return (
+    <Button size="sm" variant="outline" onClick={run} disabled={busy}>
+      {busy ? 'Fetching…' : 'Fetch lineup'}
+    </Button>
+  )
+}
+
 /* ── LineupEditor ────────────────────────────────────────────────────────── */
 const POS_OPTIONS = ['GK', 'RB', 'CB', 'LB', 'RM', 'CM', 'LM', 'CAM', 'RW', 'LW', 'ST', 'CF']
 
@@ -357,6 +381,7 @@ function AdminRow({ m, onSaved }, ref) {
       )}
 
       <div className="flex items-center justify-end gap-2 mt-3 flex-wrap">
+        <FetchLineupButton matchId={m.id} />
         {hasScore && <Pill tone="green">{m.real_home_score}–{m.real_away_score} (scored)</Pill>}
         {scoringFailed && (
           <Button size="sm" variant="outline" onClick={scoreOnly} disabled={saving}>
@@ -464,6 +489,8 @@ function AdminActions() {
   }
 
   const actions = [
+    { key: 'sync', label: 'Sync results + scorers', sub: 'Pull finished scores AND first goalscorer from Kickoffapi, then auto-score', url: '/api/sync-results' },
+    { key: 'injuries', label: 'Sync injuries', sub: 'Flag injured / suspended players from the Kickoffapi feed', url: '/api/sync-injuries' },
     { key: 'fetch', label: 'Auto-fetch results', sub: 'Pull finished scores from football-data.org and auto-score predictions', url: '/api/fetch-results' },
     { key: 'snapshot', label: 'Snapshot leaderboard', sub: 'Records current rank positions for movement arrows', url: '/api/snapshot-ranks' },
     { key: 'groups', label: 'Score group predictions', sub: 'Awards points for correct group order picks (all complete groups)', url: '/api/score-groups' },
