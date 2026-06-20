@@ -14,6 +14,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
+import { nameKey as norm } from '@/lib/normalize'
 
 const API_KEY = process.env.API_FOOTBALL_KEY ?? ''
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
@@ -38,11 +39,6 @@ interface ApiPlayer {
 interface ApiResp { response: ApiPlayer[]; paging: { current: number; total: number } }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-
-// Strip diacritics + non-alphanumerics for fuzzy name matching.
-function norm(s: string): string {
-  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
-}
 
 async function fetchPage(page: number): Promise<ApiResp> {
   const url = `https://v3.football.api-sports.io/players?league=${LEAGUE}&season=${SEASON}&page=${page}`

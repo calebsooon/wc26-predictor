@@ -18,22 +18,48 @@ function surname(name: string): string {
   return parts.length > 1 ? parts[parts.length - 1] : name
 }
 
-// Place one team's XI on its half of the pitch from the "row:col" grid values.
+// Map a position label to a pitch band: 0=GK, 1=DEF, 2=MID, 3=FWD. Handles both
+// the API's single letters (G/D/M/F) and manual labels (GK/CB/CAM/ST…).
+function band(label: string | null): number {
+  const l = (label ?? '').toUpperCase().trim()
+  if (l === 'GK' || l === 'G') return 0
+  if (l === 'D' || ['RB', 'LB', 'CB', 'RWB', 'LWB', 'WB', 'RCB', 'LCB'].includes(l)) return 1
+  if (l === 'F' || ['ST', 'CF', 'RW', 'LW', 'RF', 'LF', 'SS', 'W'].includes(l)) return 3
+  if (l === 'M' || l.includes('M')) return 2
+  return 2
+}
+
+// Place one team's XI on its half of the pitch. Prefer the provider "row:col"
+// grid; fall back to position-label bands for manually-entered lineups (no grid).
 function positions(players: Row[], home: boolean): { x: number; y: number; p: Row }[] {
-  const withGrid = players.filter((p) => p.grid)
-  if (withGrid.length === 0) return []
-  const rows = Array.from(new Set(withGrid.map((p) => Number(p.grid!.split(':')[0])))).sort((a, b) => a - b)
-  const maxRow = rows[rows.length - 1] || 1
   const out: { x: number; y: number; p: Row }[] = []
-  for (const r of rows) {
-    const inRow = withGrid.filter((p) => Number(p.grid!.split(':')[0]) === r)
-      .sort((a, b) => Number(a.grid!.split(':')[1]) - Number(b.grid!.split(':')[1]))
-    const depth = maxRow > 1 ? (r - 1) / (maxRow - 1) : 0   // 0 = GK line, 1 = attack
+  const withGrid = players.filter((p) => p.grid)
+
+  if (withGrid.length > 0) {
+    const rows = Array.from(new Set(withGrid.map((p) => Number(p.grid!.split(':')[0])))).sort((a, b) => a - b)
+    const maxRow = rows[rows.length - 1] || 1
+    for (const r of rows) {
+      const inRow = withGrid.filter((p) => Number(p.grid!.split(':')[0]) === r)
+        .sort((a, b) => Number(a.grid!.split(':')[1]) - Number(b.grid!.split(':')[1]))
+      const depth = maxRow > 1 ? (r - 1) / (maxRow - 1) : 0   // 0 = GK line, 1 = attack
+      const y = home ? 96 - depth * 44 : 4 + depth * 44
+      inRow.forEach((p, i) => out.push({ x: ((i + 1) / (inRow.length + 1)) * 100, y, p }))
+    }
+    return out
+  }
+
+  // Fallback: group by position band (GK→DEF→MID→FWD) and lay each out as a row.
+  const byBand = new Map<number, Row[]>()
+  for (const p of players) {
+    const b = band(p.position_label)
+    const arr = byBand.get(b) ?? []
+    arr.push(p)
+    byBand.set(b, arr)
+  }
+  for (const [b, arr] of Array.from(byBand)) {
+    const depth = b / 3   // 0 = GK line, 1 = attack line
     const y = home ? 96 - depth * 44 : 4 + depth * 44
-    inRow.forEach((p, i) => {
-      const x = ((i + 1) / (inRow.length + 1)) * 100
-      out.push({ x, y, p })
-    })
+    arr.forEach((p, i) => out.push({ x: ((i + 1) / (arr.length + 1)) * 100, y, p }))
   }
   return out
 }

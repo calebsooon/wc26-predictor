@@ -50,3 +50,21 @@ jobs:
         env:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+  # Diagnostic (manual runs only): can the runner reach Kickoffapi directly?
+  # No API key needed — Cloudflare's challenge happens at the edge before the
+  # API checks the key. JSON 401 = reachable; "Just a moment" = blocked.
+  diagnose-egress:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: GitHub runner -> Kickoffapi
+        run: |
+          code=$(curl -s -o /tmp/ko.html -w "%{http_code}" "https://api.kickoffapi.com/api/v1/status")
+          echo "HTTP status: $code"
+          echo "--- first 200 bytes ---"; head -c 200 /tmp/ko.html; echo
+          if grep -qi "just a moment" /tmp/ko.html; then
+            echo "RESULT: BLOCKED — Cloudflare challenges this runner too (datacenter IPs blocked across the board)"
+          else
+            echo "RESULT: REACHABLE — GitHub Actions can call Kickoffapi; automation via GH Actions -> Supabase is viable"
+          fi

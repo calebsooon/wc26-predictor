@@ -10,7 +10,7 @@ import type { ProfileLite } from '@/lib/leaderboard'
 import { getTeam } from '@/lib/teams'
 import { GW_SHORT } from '@/lib/prizes'
 import { useUrlState } from '@/lib/url-state'
-import { TeamLink } from '@/components/TeamLink'
+import Link from 'next/link'
 
 interface PredRow extends MatchBreakdown { user_id: string; match_id: string; points_awarded: number; pred_home: number; pred_away: number }
 
@@ -928,13 +928,13 @@ export default function H2HPage() {
                         </div>
                         {/* Center: match */}
                         <div style={{ minWidth: 120, textAlign: 'center', padding: '0 10px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-                            {home && <TeamLink code={home.code}><FlagChip code={home.code} w={22} h={15} r={3} /></TeamLink>}
+                          <Link href={`/match/${match_id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, textDecoration: 'none' }}>
+                            {home && <FlagChip code={home.code} w={22} h={15} r={3} />}
                             <span style={{ fontSize: 12, fontWeight: 700, color: 'rgb(var(--textp))' }}>
                               {match?.real_home_score != null ? `${match.real_home_score}–${match.real_away_score}` : 'vs'}
                             </span>
-                            {away && <TeamLink code={away.code}><FlagChip code={away.code} w={22} h={15} r={3} /></TeamLink>}
-                          </div>
+                            {away && <FlagChip code={away.code} w={22} h={15} r={3} />}
+                          </Link>
                           {real && (
                             <div style={{ fontSize: 9.5, fontWeight: 600, color: 'rgb(var(--faint))', marginTop: 2 }}>
                               Result: {outcomeLabel(real)}
@@ -992,13 +992,13 @@ export default function H2HPage() {
                         </div>
 
                         {/* Center: flags + score */}
-                        <div style={{ minWidth: 120, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                          {home && <TeamLink code={home.code}><FlagChip code={home.code} w={26} h={18} r={4} /></TeamLink>}
+                        <Link href={`/match/${match_id}`} style={{ minWidth: 120, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, textDecoration: 'none' }}>
+                          {home && <FlagChip code={home.code} w={26} h={18} r={4} />}
                           <span style={{ fontSize: 13, fontWeight: 700, color: 'rgb(var(--textp))' }}>
                             {match?.real_home_score != null ? `${match.real_home_score}–${match.real_away_score}` : 'vs'}
                           </span>
-                          {away && <TeamLink code={away.code}><FlagChip code={away.code} w={26} h={18} r={4} /></TeamLink>}
-                        </div>
+                          {away && <FlagChip code={away.code} w={26} h={18} r={4} />}
+                        </Link>
 
                         {/* Right: their pick + pts */}
                         <div style={{ textAlign: 'left', display: 'flex', alignItems: 'center' }}>

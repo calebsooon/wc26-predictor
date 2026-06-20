@@ -48,11 +48,13 @@ async function syncLineup(service: SupabaseClient, matchId: string) {
     take(lu.substitutes ?? [], false)
   }
 
-  // Never replace a known lineup with a payload we could not map back to our
-  // roster. The unmatched names remain visible in the sync-run log for repair.
-  if (unmatched.length > 0 || rows.length === 0) {
+  // Insert everyone we matched; skip the odd unmatched player (usually a late
+  // sub not in our seeded squad). Bail only if too few starters matched, so we
+  // never replace a good lineup with a near-empty payload.
+  const startersMatched = rows.filter((r) => r.is_starting).length
+  if (startersMatched < 16) {
     return {
-      error: unmatched.length > 0 ? 'One or more lineup players could not be matched' : 'No lineup players could be matched',
+      error: `Only ${startersMatched} starters could be matched to the squad`,
       status: 422,
       written: 0,
       unmatched,

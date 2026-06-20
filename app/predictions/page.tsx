@@ -29,7 +29,6 @@ import FlagChip from '@/components/FlagChip'
 import PredictionModal from '@/components/PredictionModal'
 import { getTeam } from '@/lib/teams'
 import { useUrlState } from '@/lib/url-state'
-import { TeamLink } from '@/components/TeamLink'
 import Link from 'next/link'
 
 interface RoundRow { id: string; name: string; order: number; matches: DBMatch[] }
@@ -643,7 +642,7 @@ function MatchRow({
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
         {/* Home */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <TeamLink code={m.home_team} stopPropagation className="flex items-center gap-2 min-w-0 group" style={{ color: 'inherit' }}>
+          <div className="flex items-center gap-2 min-w-0" style={{ color: 'inherit' }}>
             <FlagChip code={m.home_team} w={26} h={18} r={4} />
             <span style={{
               fontSize: 14,
@@ -657,7 +656,7 @@ function MatchRow({
             }}>
               {home.name}
             </span>
-          </TeamLink>
+          </div>
           {hasScore && (
             <span style={{ fontSize: 14, fontWeight: 800, color: 'rgb(var(--textp))', marginLeft: 'auto', paddingRight: 4 }}>
               {m.real_home_score}
@@ -666,7 +665,7 @@ function MatchRow({
         </div>
         {/* Away */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <TeamLink code={m.away_team} stopPropagation className="flex items-center gap-2 min-w-0 group" style={{ color: 'inherit' }}>
+          <div className="flex items-center gap-2 min-w-0" style={{ color: 'inherit' }}>
             <FlagChip code={m.away_team} w={26} h={18} r={4} />
             <span style={{
               fontSize: 14,
@@ -680,7 +679,7 @@ function MatchRow({
             }}>
               {away.name}
             </span>
-          </TeamLink>
+          </div>
           {hasScore && (
             <span style={{ fontSize: 14, fontWeight: 800, color: 'rgb(var(--textp))', marginLeft: 'auto', paddingRight: 4 }}>
               {m.real_away_score}

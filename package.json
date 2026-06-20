@@ -18,7 +18,12 @@
     "data:enrich": "tsx --env-file=.env.local scripts/fetch-wikidata-players.ts",
     "data:photos": "tsx --env-file=.env.local scripts/cache-player-photos.ts",
     "data:stats": "tsx --env-file=.env.local scripts/fetch-player-stats.ts",
-    "data:fill-photos": "tsx --env-file=.env.local scripts/fill-missing-photos.ts"
+    "data:fill-photos": "tsx --env-file=.env.local scripts/fill-missing-photos.ts",
+    "data:golden-boot": "tsx --env-file=.env.local scripts/sync-golden-boot.ts",
+    "data:lineups": "tsx --env-file=.env.local scripts/sync-lineups.ts",
+    "data:results": "tsx --env-file=.env.local scripts/sync-results.ts",
+    "data:injuries": "tsx --env-file=.env.local scripts/sync-injuries.ts",
+    "data:live": "npm run data:results && npm run data:lineups && npm run data:injuries && npm run data:golden-boot"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",

@@ -1152,13 +1152,13 @@ export default function ProfilePage() {
                     borderTop: '1px solid rgba(var(--border),0.55)',
                   }}
                 >
-                  {/* Score */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: 150, flexShrink: 0 }}>
-                    <TeamLink code={m.home_team}><FlagChip code={m.home_team} w={28} h={19} r={4} /></TeamLink>
+                  {/* Score — opens the match */}
+                  <div onClick={() => router.push(`/match/${p.match_id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, width: 150, flexShrink: 0, cursor: 'pointer' }}>
+                    <FlagChip code={m.home_team} w={28} h={19} r={4} />
                     <span style={{ fontSize: 14, fontWeight: 700, color: 'rgb(var(--textp))', fontVariantNumeric: 'tabular-nums' }}>
                       {m.real_home_score}–{m.real_away_score}
                     </span>
-                    <TeamLink code={m.away_team}><FlagChip code={m.away_team} w={28} h={19} r={4} /></TeamLink>
+                    <FlagChip code={m.away_team} w={28} h={19} r={4} />
                   </div>
                   {/* Teams */}
                   <span style={{ flex: 1, fontSize: 12.5, color: 'rgb(var(--texts))', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

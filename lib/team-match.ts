@@ -2,13 +2,10 @@
 // codes, and group our players by team. Shared by the live-data routes.
 
 import { TEAMS } from '@/lib/teams'
+import { foldAscii, nameKey } from '@/lib/normalize'
 
 export function normTeam(s: string): string {
-  return s
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')   // strip diacritics
-    .toLowerCase()
-    .replace(/&/g, 'and')
-    .replace(/[^a-z0-9]/g, '')
+  return foldAscii(s).toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, '')
 }
 
 // Build a normalised lookup from every alias we know for each team.
@@ -51,9 +48,7 @@ export function groupPlayersByCode(players: RosterPlayer[]): Map<string, RosterP
   return map
 }
 
-function normPerson(s: string): string {
-  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '')
-}
+const normPerson = nameKey
 
 // Match an external player name to one of our roster rows. Tries full-name,
 // then last-token (handles "K. Mbappé" vs "Kylian Mbappé").

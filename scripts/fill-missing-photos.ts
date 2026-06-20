@@ -10,6 +10,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
+import { nameKey as norm } from '@/lib/normalize'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
@@ -23,7 +24,6 @@ if (!KEY) { console.error('Missing KICKOFF_API_KEY'); process.exit(1) }
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 const BASE = 'https://api.kickoffapi.com/api/v1'
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '')
 
 interface KickoffPlayer { name: string | null; photo: string | null }
 interface KickoffTeam { id: number }

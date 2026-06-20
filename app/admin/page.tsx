@@ -60,7 +60,7 @@ function FetchLineupButton({ matchId, onDone }: { matchId: string; onDone?: () =
 }
 
 /* ── LineupEditor ────────────────────────────────────────────────────────── */
-const POS_OPTIONS = ['GK', 'RB', 'CB', 'LB', 'RM', 'CM', 'LM', 'CAM', 'RW', 'LW', 'ST', 'CF']
+const POS_OPTIONS = ['GK', 'RB', 'RWB', 'CB', 'LB', 'LWB', 'CDM', 'DM', 'CM', 'RM', 'LM', 'CAM', 'AM', 'RW', 'LW', 'CF', 'ST', 'SS']
 
 interface LineupEntry { playerId: number; name: string; jersey: number | null; status: 'out' | 'starter' | 'sub'; posLabel: string }
 

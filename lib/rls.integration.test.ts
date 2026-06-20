@@ -13,10 +13,12 @@ describeRls('Supabase RLS launch boundaries', () => {
   let member: SupabaseClient
   let memberId = ''
   let outsiderId = ''
+  let mateId = ''
   let leagueId = ''
   let otherLeagueId = ''
   let roundId = ''
   let matchId = ''
+  let futureMatchId = ''
 
   beforeAll(async () => {
     if (!url || !anonKey || !serviceKey) throw new Error('Set Supabase credentials before enabling SUPABASE_RLS_TEST')
@@ -31,6 +33,11 @@ describeRls('Supabase RLS launch boundaries', () => {
     })
     if (outsiderError || !outsider.user) throw outsiderError ?? new Error('Unable to create RLS test outsider')
     outsiderId = outsider.user.id
+    const { data: mate, error: mateError } = await service.auth.admin.createUser({
+      email: `${runId}-mate@example.test`, password, email_confirm: true,
+    })
+    if (mateError || !mate.user) throw mateError ?? new Error('Unable to create RLS test league-mate')
+    mateId = mate.user.id
 
     const { data: firstLeague, error: firstLeagueError } = await service
       .from('leagues')
@@ -50,6 +57,7 @@ describeRls('Supabase RLS launch boundaries', () => {
 
     const { error: membershipError } = await service.from('league_members').insert({ league_id: leagueId, user_id: memberId })
     if (membershipError) throw membershipError
+    await service.from('league_members').insert({ league_id: leagueId, user_id: mateId })  // same league as member, reveal OFF
     const { data: round, error: roundError } = await service.from('rounds').insert({ name: runId, order: 9999 }).select('id').single()
     if (roundError || !round) throw roundError ?? new Error('Unable to create test round')
     roundId = round.id
@@ -59,9 +67,18 @@ describeRls('Supabase RLS launch boundaries', () => {
       .single()
     if (matchError || !match) throw matchError ?? new Error('Unable to create test match')
     matchId = match.id
-    const { error: predictionError } = await service.from('predictions').insert({
-      user_id: outsiderId, match_id: matchId, pred_home: 1, pred_away: 0,
-    })
+    // An upcoming match (kickoff a week out) to verify the pre-kickoff hide.
+    const { data: future, error: futureError } = await service.from('matches')
+      .insert({ round_id: roundId, match_date: new Date(Date.now() + 7 * 86400_000).toISOString(), home_team: 'BRA', away_team: 'ARG' })
+      .select('id')
+      .single()
+    if (futureError || !future) throw futureError ?? new Error('Unable to create future match')
+    futureMatchId = future.id
+    const { error: predictionError } = await service.from('predictions').insert([
+      { user_id: outsiderId, match_id: matchId, pred_home: 1, pred_away: 0 },
+      { user_id: mateId, match_id: matchId, pred_home: 2, pred_away: 1 },        // league-mate, kicked-off
+      { user_id: mateId, match_id: futureMatchId, pred_home: 0, pred_away: 0 },  // league-mate, upcoming
+    ])
     if (predictionError) throw predictionError
 
     member = createClient(url, anonKey, { auth: { persistSession: false } })
@@ -75,6 +92,7 @@ describeRls('Supabase RLS launch boundaries', () => {
     if (leagueId || otherLeagueId) await service.from('leagues').delete().in('id', [leagueId, otherLeagueId].filter(Boolean))
     if (memberId) await service.auth.admin.deleteUser(memberId)
     if (outsiderId) await service.auth.admin.deleteUser(outsiderId)
+    if (mateId) await service.auth.admin.deleteUser(mateId)
   })
 
   it('cannot elevate its profile role', async () => {
@@ -92,9 +110,12 @@ describeRls('Supabase RLS launch boundaries', () => {
     expect(error).not.toBeNull()
   })
 
-  it('cannot alter a live match', async () => {
-    const { error } = await member.from('matches').update({ is_locked: true }).eq('id', matchId)
-    expect(error).not.toBeNull()
+  it('cannot alter a live match (RLS denies the write — 0 rows)', async () => {
+    // Non-admin writes are blocked by the admin-only RLS policy, which denies
+    // silently (no error, no rows affected) rather than raising.
+    const { data, error } = await member.from('matches').update({ is_locked: true }).eq('id', matchId).select('id')
+    expect(error).toBeNull()
+    expect(data ?? []).toHaveLength(0)
   })
 
   it('cannot read a closed-match prediction from a user outside its leagues', async () => {
@@ -106,5 +127,28 @@ describeRls('Supabase RLS launch boundaries', () => {
       .maybeSingle()
     expect(error).toBeNull()
     expect(data).toBeNull()
+  })
+
+  // Time-gate (timezone-agnostic: match_date is timestamptz vs now()).
+  it('CANNOT read a league-mate prediction before kickoff (reveal off)', async () => {
+    const { data, error } = await member
+      .from('predictions')
+      .select('pred_home, pred_away')
+      .eq('user_id', mateId)
+      .eq('match_id', futureMatchId)
+      .maybeSingle()
+    expect(error).toBeNull()
+    expect(data).toBeNull()
+  })
+
+  it('CAN read a league-mate prediction once the match has kicked off', async () => {
+    const { data, error } = await member
+      .from('predictions')
+      .select('pred_home, pred_away')
+      .eq('user_id', mateId)
+      .eq('match_id', matchId)
+      .maybeSingle()
+    expect(error).toBeNull()
+    expect(data?.pred_home).toBe(2)
   })
 })
