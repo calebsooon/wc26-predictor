@@ -286,6 +286,8 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 ## Demo
 
+> ▶ [**Watch the demo on YouTube**](https://youtu.be/IPu3W5JPbZQ)
+
 [![Watch the MatchDay demo](docs/MatchDay-Video-Thumbnail-1280x720.png)](https://youtu.be/IPu3W5JPbZQ)
 
 ---
