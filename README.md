@@ -287,7 +287,10 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 ![Dashboard](docs/screenshots/DashBoard.png)
 
-### Core gameplay
+<details>
+<summary><strong>Core gameplay</strong></summary>
+
+<br/>
 
 | Fixtures (dark) | Fixtures — group filter (light) |
 |---|---|
@@ -297,7 +300,12 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 |---|---|
 | ![Match prediction](docs/screenshots/MatchCard.png) | ![Completed match card](docs/screenshots/CompletedMatchCard.png) |
 
-### Standings & competition
+</details>
+
+<details>
+<summary><strong>Standings &amp; competition</strong></summary>
+
+<br/>
 
 | Leaderboard | Points race chart |
 |---|---|
@@ -307,11 +315,18 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 |---|---|
 | ![Bracket](docs/screenshots/TournamentBracket.png) | ![Groups](docs/screenshots/Groups.png) |
 
-### Mobile (PWA)
+</details>
 
-| Fixtures | Home & navigation |
+<details>
+<summary><strong>Mobile (PWA)</strong></summary>
+
+<br/>
+
+| Fixtures | Home &amp; navigation |
 |---|---|
 | ![Mobile fixtures](docs/screenshots/PhoneFixture.png) | ![Mobile home](docs/screenshots/PhoneHome.png) |
+
+</details>
 
 <details>
 <summary><strong>More screenshots</strong></summary>
@@ -326,7 +341,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 |---|---|
 | ![Squads](docs/screenshots/Squads.png) | ![Comparison](docs/screenshots/Comparison.png) |
 
-| Calendar export | Profile settings & colour-blind mode |
+| Calendar export | Profile settings &amp; colour-blind mode |
 |---|---|
 | ![Calendar](docs/screenshots/Calendar.png) | ![Settings](docs/screenshots/Settings.png) |
 
@@ -344,21 +359,21 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 ## Tech stack
 
-| Layer | Technology |
-| :--- | :--- |
-| **Framework** | Next.js 15 — App Router, server and client components, API route handlers |
-| **Language** | TypeScript in strict mode throughout |
-| **UI** | React 18, Tailwind CSS with CSS-variable design tokens (light/dark via `.dark` on `<html>`) |
-| **Database** | Supabase Postgres with Row Level Security — private league membership, protected invite codes, prediction visibility scoped by kickoff time and league membership |
-| **Auth** | Supabase Auth — email/password; `middleware.ts` guards every route except `/login` |
-| **Realtime** | Supabase Realtime — leaderboard updates push to all clients the moment a result is scored |
-| **Storage** | Supabase Storage — `avatars` bucket for profile photos; `player-photos` bucket for self-hosted player headshots |
-| **PWA** | `@ducanh2912/next-pwa` with Workbox service worker, offline shell, and app badge |
-| **Hosting** | Vercel — auto-deploys on every push to `main` |
-| **Live data** | Kickoffapi for fixtures, lineups, match events, injuries, and scorers; Wikidata for player bios and photos; football-data.org for squad seeding |
-| **Calendar** | RFC 5545 iCalendar feeds for cross-app fixture subscription (Google, Apple, Outlook, Notion) |
-| **Accessibility** | Colour-blind-safe palette mode (Okabe–Ito), DB-backed and synced across devices |
-| **Design** | Schibsted Grotesk typeface, token-driven colour scheme, custom SVG charts — no chart library |
+| | Layer | Technology |
+| :---: | :--- | :--- |
+| ![Next.js](https://img.shields.io/badge/-Next.js-000?style=flat-square&logo=next.js) | **Framework** | Next.js 15 — App Router, server and client components, API route handlers |
+| ![TypeScript](https://img.shields.io/badge/-TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white) | **Language** | TypeScript in strict mode throughout |
+| ![React](https://img.shields.io/badge/-React-61DAFB?style=flat-square&logo=react&logoColor=000) ![Tailwind](https://img.shields.io/badge/-Tailwind-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white) | **UI** | React 18, Tailwind CSS with CSS-variable design tokens (light/dark via `.dark` on `<html>`) |
+| ![Supabase](https://img.shields.io/badge/-Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=000) | **Database** | Supabase Postgres with Row Level Security — prediction visibility scoped by kickoff time and league membership |
+| ![Supabase](https://img.shields.io/badge/-Auth-3ECF8E?style=flat-square&logo=supabase&logoColor=000) | **Auth** | Supabase Auth — email/password; `middleware.ts` guards every route except `/login` |
+| ![Supabase](https://img.shields.io/badge/-Realtime-3ECF8E?style=flat-square&logo=supabase&logoColor=000) | **Realtime** | Supabase Realtime — leaderboard updates push to all clients the moment a result is scored |
+| ![Supabase](https://img.shields.io/badge/-Storage-3ECF8E?style=flat-square&logo=supabase&logoColor=000) | **Storage** | Supabase Storage — `avatars` bucket for profile photos; `player-photos` for self-hosted headshots |
+| ![PWA](https://img.shields.io/badge/-PWA-5A0FC8?style=flat-square&logo=pwa) | **PWA** | `@ducanh2912/next-pwa` with Workbox service worker, offline shell, and app badge |
+| ![Vercel](https://img.shields.io/badge/-Vercel-000?style=flat-square&logo=vercel) | **Hosting** | Vercel — auto-deploys on every push to `main` |
+| ![Postgres](https://img.shields.io/badge/-Postgres-4169E1?style=flat-square&logo=postgresql&logoColor=white) | **Live data** | Kickoffapi for fixtures, lineups, events, injuries, scorers; Wikidata for bios and photos |
+| ![Google Calendar](https://img.shields.io/badge/-iCalendar-4285F4?style=flat-square&logo=googlecalendar&logoColor=white) | **Calendar** | RFC 5545 iCalendar feeds — auto-updating, timezone-aware; works in Google, Apple, Outlook, Notion |
+| | **Accessibility** | Colour-blind-safe palette mode (Okabe–Ito), DB-backed and synced across devices |
+| | **Design** | Schibsted Grotesk typeface, token-driven colour scheme, custom SVG charts — no chart library |
 
 ---
 
