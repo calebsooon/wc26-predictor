@@ -18,7 +18,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) { console.error('Missing NEXT_P
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 const BUCKET = 'player-photos'
-const UA = 'MatchDay-WC2026/1.0 (https://matchday.app; dartharyan2017@gmail.com)'
+const UA = 'MatchDay-WC2026/1.0 (+https://github.com/calebsooon/wc26-predictor)'
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' }

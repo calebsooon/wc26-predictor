@@ -28,7 +28,7 @@ if (!SUPABASE_SERVICE_ROLE_KEY) { console.error('Missing SUPABASE_SERVICE_ROLE_K
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 const WD = 'https://www.wikidata.org/w/api.php'
-const UA = 'MatchDay-WC2026/1.0 (https://matchday.app; dartharyan2017@gmail.com)'
+const UA = 'MatchDay-WC2026/1.0 (+https://github.com/calebsooon/wc26-predictor)'
 const FOOTBALLER_HINT = /football|soccer/i
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
