@@ -10,6 +10,10 @@
 </p>
 
 <p align="center">
+  Built by <a href="https://github.com/calebsooon">@calebsooon</a> &nbsp;&amp;&nbsp; <a href="https://github.com/aryan12singh">@aryan12singh</a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/Next.js-15_App_Router-black?style=flat-square&logo=next.js" alt="Next.js 15" />
   <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Supabase-Postgres_+_Realtime-3ECF8E?style=flat-square&logo=supabase&logoColor=white" alt="Supabase" />
@@ -41,6 +45,7 @@ MatchDay is a private, invite-only prediction league for FIFA World Cup 2026. Pl
 
 ## Contents
 
+- [Demo](#demo)
 - [How it works](#how-it-works)
 - [Scoring](#scoring)
 - [Prize pool](#prize-pool)
@@ -276,6 +281,12 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | `/admin` | Result entry and all scoring actions |
 
 </details>
+
+---
+
+## Demo
+
+[![Watch the demo](docs/screenshots/DashBoard.png)](https://youtu.be/YOUR_VIDEO_ID)
 
 ---
 
@@ -682,5 +693,6 @@ MatchDay is a private-league product, not a public demo. It stores email-auth ac
 ---
 
 <p align="center">
-  <sub>Built for WC2026 &nbsp;·&nbsp; Private league &nbsp;·&nbsp; Not affiliated with FIFA</sub>
+  <sub>Built for WC2026 &nbsp;·&nbsp; Private league &nbsp;·&nbsp; Not affiliated with FIFA</sub><br/>
+  <sub>Built by <a href="https://github.com/calebsooon">@calebsooon</a> &nbsp;&amp;&nbsp; <a href="https://github.com/aryan12singh">@aryan12singh</a></sub>
 </p>
