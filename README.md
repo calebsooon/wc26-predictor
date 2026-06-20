@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  Built by <a href="https://github.com/calebsooon">@calebsooon</a> &nbsp;&amp;&nbsp; <a href="https://github.com/aryan12singh">@aryan12singh</a>
+  Built by <a href="https://github.com/aryan12singh">@aryan12singh</a> &nbsp;&amp;&nbsp; <a href="https://github.com/calebsooon">@calebsooon</a>
 </p>
 
 <p align="center">
@@ -694,5 +694,5 @@ MatchDay is a private-league product, not a public demo. It stores email-auth ac
 
 <p align="center">
   <sub>Built for WC2026 &nbsp;·&nbsp; Private league &nbsp;·&nbsp; Not affiliated with FIFA</sub><br/>
-  <sub>Built by <a href="https://github.com/calebsooon">@calebsooon</a> &nbsp;&amp;&nbsp; <a href="https://github.com/aryan12singh">@aryan12singh</a></sub>
+  <sub>Built by <a href="https://github.com/aryan12singh">@aryan12singh</a> &nbsp;&amp;&nbsp; <a href="https://github.com/calebsooon">@calebsooon</a></sub>
 </p>
