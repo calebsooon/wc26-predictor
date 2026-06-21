@@ -154,7 +154,7 @@ export default function MatchModal({ match, onClose }: { match: ModalMatch; onCl
 
         {!isTBC ? (
           <div className="flex-1 overflow-y-auto p-4">
-            <MatchLineups matchId={match.id} homeCode={match.home_team} awayCode={match.away_team} homeFormation={match.home_formation ?? null} awayFormation={match.away_formation ?? null} />
+            <MatchLineups matchId={match.id} homeCode={match.home_team} awayCode={match.away_team} homeFormation={match.home_formation ?? null} awayFormation={match.away_formation ?? null} homeScore={match.real_home_score} awayScore={match.real_away_score} scoreLabel={hasScore ? 'Final score' : match.is_locked ? 'Live match' : 'Pre-match'} />
           </div>
         ) : (
           <div className="px-5 py-8 text-center text-texts text-sm">Teams will be confirmed after the group stage.</div>

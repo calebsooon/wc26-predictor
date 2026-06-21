@@ -36,49 +36,25 @@ function EditConfirmButton({ saving, onConfirm, label }: { saving: boolean; onCo
   )
 }
 
-/* ── FetchLineupButton — pulls confirmed XI + formation from Kickoffapi ─────── */
-function FetchLineupButton({ matchId, onDone }: { matchId: string; onDone?: () => void }) {
-  const [busy, setBusy] = useState(false)
-  async function run() {
-    setBusy(true)
-    try {
-      const res = await fetch('/api/fetch-lineup', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ match_id: matchId }),
-      })
-      const j = await res.json()
-      if (!res.ok) { toast.error(j.error ?? 'Lineup fetch failed'); return }
-      toast.success(`Lineup saved — ${j.formations?.home ?? '?'} vs ${j.formations?.away ?? '?'} (${j.written} players${j.unmatched?.length ? `, ${j.unmatched.length} unmatched` : ''})`)
-      onDone?.()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Lineup fetch failed')
-    } finally { setBusy(false) }
-  }
-  return (
-    <Button size="sm" variant="outline" onClick={run} disabled={busy}>
-      {busy ? 'Fetching…' : 'Fetch lineup'}
-    </Button>
-  )
-}
-
-function SyncEventsButton({ matchId }: { matchId: string }) {
-  const [busy, setBusy] = useState(false)
-  async function run() {
-    setBusy(true)
-    try {
-      const res = await fetch('/api/sync-events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ match_id: matchId }) })
-      const json = await res.json()
-      if (!res.ok) toast.error(json.error ?? 'Substitution sync failed')
-      else toast.success(json.written ? `${json.written} substitution${json.written === 1 ? '' : 's'} synced` : 'No verified substitutions found')
-    } catch (error) { toast.error(error instanceof Error ? error.message : 'Substitution sync failed') }
-    finally { setBusy(false) }
-  }
-  return <Button size="sm" variant="outline" onClick={run} disabled={busy}>{busy ? 'Refreshing…' : 'Refresh events'}</Button>
-}
-
 /* ── LineupEditor ────────────────────────────────────────────────────────── */
 const POS_OPTIONS = ['GK', 'RB', 'RWB', 'CB', 'LB', 'LWB', 'CDM', 'DM', 'CM', 'RM', 'LM', 'CAM', 'AM', 'RW', 'LW', 'CF', 'ST', 'SS']
+const PITCH_ROWS = [{ value: '0', label: 'GK' }, { value: '1', label: 'Def' }, { value: '2', label: 'Mid' }, { value: '3', label: 'Fwd' }]
+const PITCH_LANES = [{ value: '1', label: 'Far L' }, { value: '2', label: 'Left' }, { value: '3', label: 'Centre' }, { value: '4', label: 'Right' }, { value: '5', label: 'Far R' }]
 
-interface LineupEntry { playerId: number; name: string; jersey: number | null; status: 'out' | 'starter' | 'sub'; posLabel: string }
+interface LineupEntry { playerId: number; name: string; jersey: number | null; status: 'out' | 'starter' | 'sub'; posLabel: string; grid: string | null }
+
+function defaultGrid(position: string) {
+  const pos = position.toUpperCase()
+  if (pos === 'GK') return '0:3'
+  if (['RB', 'RWB'].includes(pos)) return '1:5'
+  if (['LB', 'LWB'].includes(pos)) return '1:1'
+  if (pos === 'CB') return '1:3'
+  if (['DM', 'CDM'].includes(pos)) return '2:3'
+  if (['RM', 'RW'].includes(pos)) return '2:5'
+  if (['LM', 'LW'].includes(pos)) return '2:1'
+  if (['CAM', 'AM', 'CM'].includes(pos)) return '2:3'
+  return '3:3'
+}
 
 function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamCode: string; playerKey: string }) {
   const supabase = createClient()
@@ -92,10 +68,10 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
       setLoading(true)
       const [{ data: players }, { data: lineup }] = await Promise.all([
         supabase.from('players').select('id, name, jersey_number, position').eq('team_name', playerKey).order('jersey_number', { nullsFirst: false }),
-        supabase.from('lineups').select('player_id, is_starting, position_label, shirt_number').eq('match_id', matchId).eq('team_code', teamCode),
+        supabase.from('lineups').select('player_id, is_starting, position_label, shirt_number, grid').eq('match_id', matchId).eq('team_code', teamCode),
       ])
-      const lineupMap = new Map((lineup ?? []).map((l: { player_id: number; is_starting: boolean; position_label: string | null; shirt_number: number | null }) =>
-        [l.player_id, { is_starting: l.is_starting, posLabel: l.position_label ?? '', jersey: l.shirt_number }]
+      const lineupMap = new Map((lineup ?? []).map((l: { player_id: number; is_starting: boolean; position_label: string | null; shirt_number: number | null; grid: string | null }) =>
+        [l.player_id, { is_starting: l.is_starting, posLabel: l.position_label ?? '', jersey: l.shirt_number, grid: l.grid }]
       ))
       setEntries((players ?? []).filter((p: { id: number; name: string; jersey_number: number | null; position: string | null }) =>
         normalisePosition(p.position) !== 'Coach'
@@ -105,6 +81,7 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
           playerId: p.id, name: p.name, jersey: p.jersey_number,
           status: l ? (l.is_starting ? 'starter' : 'sub') : 'out',
           posLabel: l?.posLabel ?? POSITION_ABBR[normalisePosition(p.position ?? '')] ?? '',
+          grid: l?.grid ?? null,
         }
       }))
       setLoading(false)
@@ -125,7 +102,7 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
       const rows = selected.map((e, i) => ({
         match_id: matchId, team_code: teamCode, player_id: e.playerId,
         is_starting: e.status === 'starter', shirt_number: e.jersey,
-        position_label: e.posLabel || null, sort_order: i,
+        position_label: e.posLabel || null, grid: e.status === 'starter' ? (e.grid ?? defaultGrid(e.posLabel)) : null, sort_order: i, source: 'manual',
       }))
       const { error } = await supabase.from('lineups').insert(rows)
       if (error) { toast.error(error.message); setSaving(false); return }
@@ -160,6 +137,7 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
           )
         })}
       </div>
+      {tab === 'starter' && <p className="text-[10px] text-texts">Set each starter&apos;s row and lane to place left/right centre-backs, midfielders, and wide players accurately on the match pitch.</p>}
 
       <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
         {filtered.length === 0 && <p className="text-sm text-texts py-3 text-center">None</p>}
@@ -177,8 +155,16 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
                 {POS_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             )}
+            {e.status === 'starter' && <>
+              <select value={e.grid?.split(':')[0] ?? defaultGrid(e.posLabel).split(':')[0]} onChange={(ev) => update(e.playerId, { grid: `${ev.target.value}:${e.grid?.split(':')[1] ?? defaultGrid(e.posLabel).split(':')[1]}` })} className="h-7 rounded-md border border-border bg-surface px-1 text-[10px] text-textp" aria-label={`${e.name} pitch row`}>
+                {PITCH_ROWS.map((row) => <option key={row.value} value={row.value}>{row.label}</option>)}
+              </select>
+              <select value={e.grid?.split(':')[1] ?? defaultGrid(e.posLabel).split(':')[1]} onChange={(ev) => update(e.playerId, { grid: `${e.grid?.split(':')[0] ?? defaultGrid(e.posLabel).split(':')[0]}:${ev.target.value}` })} className="h-7 rounded-md border border-border bg-surface px-1 text-[10px] text-textp" aria-label={`${e.name} pitch lane`}>
+                {PITCH_LANES.map((lane) => <option key={lane.value} value={lane.value}>{lane.label}</option>)}
+              </select>
+            </>}
             <div className="flex gap-1 shrink-0">
-              <button onClick={() => update(e.playerId, { status: 'starter' })}
+              <button onClick={() => update(e.playerId, { status: 'starter', grid: e.grid ?? defaultGrid(e.posLabel) })}
                 className={`px-2 py-1 rounded text-[10.5px] font-bold border transition-all ${e.status === 'starter' ? 'bg-primary/15 border-primary/40 text-primary' : 'border-border text-texts hover:text-textp'}`}>
                 XI
               </button>
@@ -448,8 +434,7 @@ function AdminRow({ m, onSaved }, ref) {
       )}
 
       <div className="flex items-center justify-end gap-2 mt-3 flex-wrap">
-        <FetchLineupButton matchId={m.id} />
-        <SyncEventsButton matchId={m.id} />
+        <span className="mr-auto text-[10px] text-texts">FIFA updates run locally with <code>npm run data:fifa:matches</code>.</span>
         {hasScore && <Pill tone="green">{m.real_home_score}–{m.real_away_score} (scored)</Pill>}
         {scoringFailed && (
           <Button size="sm" variant="outline" onClick={scoreOnly} disabled={saving}>

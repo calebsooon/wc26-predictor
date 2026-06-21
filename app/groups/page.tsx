@@ -231,7 +231,7 @@ function GroupCard({ groupName, matches, pred, userId, weights, activeTab, onSav
   } as const
 
   return (
-    <div style={{
+    <div id={`group-${groupName}`} style={{
       background: 'rgb(var(--card))',
       border: '1px solid rgb(var(--border))',
       boxShadow: 'var(--card-shadow)',
@@ -466,6 +466,12 @@ export default function GroupsPage() {
   useEffect(() => {
     setActiveTab(searchParams.get('tab') === 'pred' ? 'pred' : 'stand')
   }, [searchParams])
+
+  useEffect(() => {
+    const group = searchParams.get('group')
+    if (!group || !matches.length) return
+    requestAnimationFrame(() => document.getElementById(`group-${group.toUpperCase()}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }, [matches.length, searchParams])
 
   useEffect(() => {
     async function load() {

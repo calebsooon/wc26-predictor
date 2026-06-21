@@ -50,7 +50,7 @@
 | ![](https://img.shields.io/badge/PRIZES-d97706?style=flat-square) | **Zero-sum prize pool.** Per-GW and overall payouts settle automatically from a shared pot |
 | ![](https://img.shields.io/badge/REALTIME-7c3aed?style=flat-square) | **Live leaderboard.** Supabase Realtime pushes updates the moment a result lands |
 | ![](https://img.shields.io/badge/LEAGUES-0891b2?style=flat-square) | **Multi-league.** Private leagues with join codes; isolated standings per group of friends |
-| ![](https://img.shields.io/badge/DATA-ea580c?style=flat-square) | **Live squad data.** 48-nation rosters · headshots · confirmed lineups · Golden Boot · injuries |
+| ![](https://img.shields.io/badge/DATA-ea580c?style=flat-square) | **Live squad data.** FIFA-cached 48-nation rosters · full-kit player images · team stats · confirmed lineups · Golden Boot · injuries |
 | ![](https://img.shields.io/badge/CALENDAR-0284c7?style=flat-square) | **iCal feed.** Auto-updating per user; works in Google, Apple, Outlook, and Notion |
 | ![](https://img.shields.io/badge/PWA-4f46e5?style=flat-square) | **Installable.** iOS, Android, and desktop; offline shell with Workbox |
 | ![](https://img.shields.io/badge/A11Y-db2777?style=flat-square) | **Colour-blind mode.** Okabe–Ito CVD-safe palette, scoped to chart or whole app; DB-synced |
@@ -211,12 +211,13 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 | Feature | Detail |
 | :--- | :--- |
-| Live lineups | Confirmed XI, substitutes, shirt numbers, and formation pulled from Kickoffapi |
-| Results &amp; first scorer | Final scores and the opening goalscorer fetched from match events, then scored automatically |
+| FIFA Match Centre | Official fixtures, results, venue, officials, weather, team sheets, substitutions, and match stats cached into Supabase |
+| Live lineups | Confirmed XI, bench, shirt numbers, formation, and verified substitutions rendered on a positional pitch |
 | Injury flags | Out/suspended players flagged across squad views |
-| Golden Boot | Tournament top scorers and assists, derived from finished match events and stored in Supabase |
+| FIFA team centre | 48 team cards, confederation filters, form, fixtures, tournament stats, and full-kit squad cards — all served from Supabase |
+| Golden Boot | FIFA-published tournament scorers and assists, cached in Supabase with FIFA’s official ordering |
 | Player enrichment | Headshots, clubs, and dates of birth sourced from Wikidata; self-hosted in Supabase Storage |
-| Residential sync | Live data is pulled via local `npm run data:*` scripts (Kickoffapi blocks datacenter IPs); the app reads from Supabase |
+| Local sync | FIFA is read by manual local `npm run data:fifa:*` imports; every page reads only cached Supabase data |
 
 </details>
 
@@ -513,7 +514,7 @@ flowchart LR
 3. `lib/leaderboard.ts` aggregates scored predictions — shared between the dashboard mini-table and `/leaderboard`
 4. `lib/prizes.ts` derives the prize snapshot from aggregated standings
 5. Supabase Realtime pushes `predictions` UPDATE events to all connected clients — standings update instantly with no page reload
-6. Live data (lineups, results, injuries, Golden Boot) is fetched from Kickoffapi via residential `npm run data:*` scripts and cached in Supabase; the app reads from Supabase, not from the provider directly
+6. Live data (lineups, results, injuries) is fetched from Kickoffapi via residential `npm run data:*` scripts. Golden Boot uses FIFA’s published stats table; all feeds are cached in Supabase and the app never reads a provider directly.
 
 <details>
 <summary>Project structure</summary>
@@ -579,7 +580,8 @@ scripts/
   sync-lineups.ts           Residential: pull confirmed XI + formations
   sync-injuries.ts          Residential: pull injury / suspension flags
   sync-events.ts            Residential: pull verified substitutions into the live XI
-  sync-golden-boot.ts       Residential: pull top scorers / assists into Supabase cache
+  sync-golden-boot.ts       Cache FIFA’s official scorer / assist table into Supabase
+  sync-fifa-teams.ts        Cache FIFA team, roster, player-stat, flag, and full-kit media data
   grant-admin.ts            Bootstrap the first organizer account
   setup-check.ts            Schema, connectivity, and launch-readiness check
 .github/workflows/
@@ -659,21 +661,21 @@ npm run data:photos      # Optional — self-hosts Wikimedia photos in Supabase 
 npm run data:fill-photos # Optional — gap-fills remaining missing photos via Kickoffapi CDN
 ```
 
-### ![](https://img.shields.io/badge/06-16a34a?style=flat-square) Live data (lineups, results, injuries, Golden Boot)
+### ![](https://img.shields.io/badge/06-16a34a?style=flat-square) FIFA match-centre sync
 
-Live match data is fetched from Kickoffapi. Because Kickoffapi sits behind Cloudflare, server-side calls from Vercel or GitHub Actions are blocked by an IP challenge. Live data is refreshed by running scripts **from your local machine**, which then writes to Supabase — the app reads from Supabase:
+Match data is imported from FIFA GameDay by scripts run **from your local machine**. The import stores the official fixture schedule, results, venue and referee details, confirmed team sheets, substitutions, and rich team/player match stats in Supabase. Page loads never call FIFA.
 
 ```bash
-npm run data:live        # run all five: results → lineups → substitutions → injuries → Golden Boot
-# or individually:
-npm run data:results     # finished scores + first scorer; re-scores predictions
-npm run data:lineups     # confirmed XI + formations (published ~75 min before kickoff)
-npm run data:events      # verified substitutions for live match centres
-npm run data:injuries    # injury / suspension flags
-npm run data:golden-boot # top scorers and assists
+npm run data:fifa-teams     # one-time / occasional: 48 squads, player images, and team stats
+npm run data:fifa:fixtures  # all 104 fixture IDs, schedule, status, result, venue metadata
+npm run data:fifa:backfill  # one-time: every published lineup, substitution, and stat pack
+npm run data:fifa:daily     # daily: nearby match-centre updates + FIFA Golden Boot
+npm run data:fifa:matches   # one incremental nearby-match refresh (without Golden Boot)
+MATCH_ID=<uuid> npm run data:fifa:matches # one selected match, ideal after a correction
+npm run data:live           # alias for data:fifa:daily
 ```
 
-Run these after matches finish (or before kickoff for lineups). The admin result-entry form in `/admin` is always available as a manual fallback.
+Run `npm run data:fifa-teams` after the official FIFA team centre changes (daily during the tournament is plenty); it only downloads media whose FIFA timestamp changed. Run `npm run data:fifa:backfill` once after applying the FIFA Match Centre migration, then use `npm run data:fifa:daily` each day and around matches. Admin result entry and manual lineup positioning remain the correction path when FIFA has not published a field yet.
 
 ### ![](https://img.shields.io/badge/07-16a34a?style=flat-square) Verify and run
 
