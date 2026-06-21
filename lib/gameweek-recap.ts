@@ -29,6 +29,9 @@ export interface GameweekRecap {
   climber: { row: AggRow; movement: number } | null
   personal: { row: AggRow | null; movement: number | null }
   stories: Array<{ kind: 'highest_points' | 'consensus_miss' | 'exact_calls'; match: RecapMatch; value: number }>
+  headline: string
+  moment: { title: string; body: string; kind: 'highest_points' | 'consensus_miss' | 'exact_calls' | 'climber' } | null
+  shareText: string
 }
 
 function board(predictions: RecapPrediction[], profiles: ProfileLite[], userId: string | null, weights: ScoringWeights) {
@@ -100,17 +103,54 @@ export function buildGameweekRecap({
   if (exact && matchById.get(exact[0])) stories.push({ kind: 'exact_calls', match: matchById.get(exact[0])!, value: exact[1] })
 
   const scoredMatches = scoredIds.size
+  const leader = standings[0] ?? null
+  const consensusStory = stories.find((story) => story.kind === 'consensus_miss')
+  const pointsStory = stories.find((story) => story.kind === 'highest_points')
+  const exactStory = stories.find((story) => story.kind === 'exact_calls')
+  const headline = consensusStory
+    ? `${consensusStory.match.home_team}–${consensusStory.match.away_team} stunned the league`
+    : climber
+      ? `${climber.row.name} climbs ${climber.movement} place${climber.movement === 1 ? '' : 's'}`
+      : leader
+        ? `${leader.name} leads ${gameweek} with ${leader.pts} points`
+        : `The story of gameweek ${gameweek}`
+  const moment = consensusStory
+    ? { kind: 'consensus_miss' as const, title: 'Moment of the week', body: `${consensusStory.value}% of the league missed ${consensusStory.match.home_team} ${consensusStory.match.real_home_score}–${consensusStory.match.real_away_score} ${consensusStory.match.away_team}.` }
+    : pointsStory
+      ? { kind: 'highest_points' as const, title: 'Moment of the week', body: `${pointsStory.match.home_team} ${pointsStory.match.real_home_score}–${pointsStory.match.real_away_score} ${pointsStory.match.away_team} produced the week’s best ${pointsStory.value}-point prediction.` }
+      : exactStory
+        ? { kind: 'exact_calls' as const, title: 'Moment of the week', body: `${exactStory.value} player${exactStory.value === 1 ? '' : 's'} called ${exactStory.match.home_team} ${exactStory.match.real_home_score}–${exactStory.match.real_away_score} ${exactStory.match.away_team} exactly.` }
+        : climber
+          ? { kind: 'climber' as const, title: 'Moment of the week', body: `${climber.row.name} gained ${climber.movement} place${climber.movement === 1 ? '' : 's'} on the overall table.` }
+          : null
+  const podium = standings.slice(0, 3).map((row, index) => `${index + 1}. ${row.name} — ${row.pts} pts`).join('\n')
+  const shareText = [
+    `🏆 MATCHDAY · GAMEWEEK ${gameweek} RECAP`,
+    '',
+    headline,
+    moment?.body ?? '',
+    '',
+    '📊 GAMEWEEK TABLE',
+    podium || 'No scores settled yet',
+    climber ? `📈 Biggest climber: ${climber.row.name} (+${climber.movement})` : '',
+    sniper ? `🎯 Scoreline sniper: ${sniper.name} (${sniper.exact} exact)` : '',
+    '',
+    '#MatchDay',
+  ].filter(Boolean).join('\n')
   return {
     gameweek,
     state: gwMatches.length === 0 ? 'upcoming' : scoredMatches === gwMatches.length ? 'final' : 'live',
     totalMatches: gwMatches.length,
     scoredMatches,
     standings,
-    leader: standings[0] ?? null,
+    leader,
     sniper: sniper && (sniper.exact ?? 0) > 0 ? sniper : null,
     climber,
     personal: { row: standings.find((row) => row.id === userId) ?? null, movement: userId ? movement(userId) : null },
     stories,
+    headline,
+    moment,
+    shareText,
   }
 }
 
