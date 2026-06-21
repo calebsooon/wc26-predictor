@@ -22,7 +22,8 @@
     "data:lineups": "tsx --env-file=.env.local scripts/sync-lineups.ts",
     "data:results": "tsx --env-file=.env.local scripts/sync-results.ts",
     "data:injuries": "tsx --env-file=.env.local scripts/sync-injuries.ts",
-    "data:live": "npm run data:results && npm run data:lineups && npm run data:injuries && npm run data:golden-boot"
+    "data:events": "tsx --env-file=.env.local scripts/sync-events.ts",
+    "data:live": "npm run data:results && npm run data:lineups && npm run data:events && npm run data:injuries && npm run data:golden-boot"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",

@@ -594,6 +594,19 @@ export default function DashboardPage() {
         )}
       </div>
 
+      {currentGW && (
+        <Link href={`/recap?gw=${currentGW}`} className="block group">
+          <div className="bg-card border border-border rounded-[18px] px-[22px] py-[16px] flex items-center justify-between gap-4 transition-colors group-hover:border-primary/45">
+            <div>
+              <p className="text-[10.5px] font-semibold uppercase tracking-wider text-primary">Gameweek story</p>
+              <p className="mt-1 font-display font-bold text-[16px]">{GW_SHORT[currentGW] ?? `GW${currentGW}`} {gwMatchRows.filter((m) => m.gw_number === currentGW && m.real_home_score != null).length === gwMatchRows.filter((m) => m.gw_number === currentGW).length ? 'recap is ready' : 'so far'}</p>
+              <p className="text-[12px] text-texts mt-0.5">See movers, scoreline snipers, and the matches that shaped the table.</p>
+            </div>
+            <span className="text-sm font-bold text-primary shrink-0">Open recap →</span>
+          </div>
+        </Link>
+      )}
+
       {/* ── Analytics band ───────────────────────────────────── */}
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         {/* Trajectory */}

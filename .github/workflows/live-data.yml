@@ -33,6 +33,15 @@ jobs:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
 
+      - name: Sync verified substitutions
+        continue-on-error: true
+        run: |
+          curl --fail-with-body --retry 2 --max-time 30 -sS -X GET "$APP_URL/api/sync-events" \
+            -H "Authorization: Bearer $CRON_SECRET"
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
       - name: Send prediction reminders for imminent matches
         continue-on-error: true
         run: |

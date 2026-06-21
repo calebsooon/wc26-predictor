@@ -17,8 +17,8 @@ import { getActiveLeague } from '@/lib/league'
 import { PlayerCardPicker, type PlayerForPicker } from '@/components/PlayerCardPicker'
 import { fmtDateTime } from '@/lib/date-format'
 import { AddMatchToCalendar } from '@/components/AddMatchToCalendar'
-import { FormationPitch } from '@/components/FormationPitch'
-import { SquadPanel } from '@/components/MatchModal'
+import { MatchLineups } from '@/components/MatchLineups'
+import { LeagueRead } from '@/components/LeagueRead'
 import { TeamLink } from '@/components/TeamLink'
 
 interface OtherPred extends MatchBreakdown {
@@ -60,7 +60,7 @@ export default function MatchDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
-  const [lineupTab, setLineupTab] = useState<'home' | 'away'>('home')
+  const [revealPredictions, setRevealPredictions] = useState(false)
   // Reactive lock: recalculate every second so form locks at kickoff even if page stays open
   const [secsLeft, setSecsLeft] = useState<number | null>(null)
   const matchDate = match?.match_date ?? null
@@ -114,9 +114,10 @@ export default function MatchDetailPage() {
         if (p.pred_btts != null) { setPredBtts(p.pred_btts as boolean); setBttsManual(true) }
       }
 
-      const { weights: leagueWeights, allowGdManual: gdManualAllowed, memberIds } = await getActiveLeague(supabase, user.id)
+      const { league, weights: leagueWeights, allowGdManual: gdManualAllowed, memberIds } = await getActiveLeague(supabase, user.id)
       setWeights(leagueWeights)
       setAllowGdManual(gdManualAllowed)
+      setRevealPredictions(league?.reveal_predictions === true)
       // Fetch picks for this match scoped to league members.
       // Profiles fetched separately — the embedded join (profiles(username,avatar_url))
       // can fail silently on some Supabase plans, returning null data with no error shown.
@@ -248,48 +249,20 @@ export default function MatchDetailPage() {
         )}
       </Card>
 
-      {/* Confirmed lineups — renders only once a lineup has been fetched */}
-      <FormationPitch
+      {((locked || revealPredictions) && others.length > 0) && (
+        <LeagueRead
+          homeName={home.name} awayName={away.name} homeCode={match.home_team} awayCode={match.away_team}
+          picks={others} userId={userId} playerNames={new Map(players.map((player) => [player.id, player.name]))}
+        />
+      )}
+
+      <MatchLineups
         matchId={match.id}
         homeCode={match.home_team}
         awayCode={match.away_team}
         homeFormation={(match as { home_formation?: string | null }).home_formation ?? null}
         awayFormation={(match as { away_formation?: string | null }).away_formation ?? null}
       />
-
-      {/* consensus bar — visible once match kicks off */}
-      {locked && others.length > 0 && (
-        <ConsensusBar
-          homeTeam={home.name}
-          awayTeam={away.name}
-          homeName={match.home_team}
-          awayName={match.away_team}
-          others={others}
-        />
-      )}
-
-      {/* lineups */}
-      <Card className="overflow-hidden">
-        <div className="flex border-b border-border">
-          {(['home', 'away'] as const).map((side) => {
-            const t = side === 'home' ? home : away
-            const active = lineupTab === side
-            return (
-              <button key={side} onClick={() => setLineupTab(side)}
-                className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${active ? 'border-b-2 border-primary text-textp bg-card' : 'text-texts hover:text-textp bg-surface'}`}>
-                <FlagChip code={side === 'home' ? match.home_team : match.away_team} w={20} h={14} r={3} />
-                {t.name}
-              </button>
-            )
-          })}
-        </div>
-        <div className="p-5">
-          <SquadPanel
-            code={lineupTab === 'home' ? match.home_team : match.away_team}
-            matchId={match.id}
-          />
-        </div>
-      </Card>
 
       {/* prediction entry */}
       {!locked && (
@@ -528,57 +501,5 @@ export default function MatchDetailPage() {
         </Card>
       )}
     </div>
-  )
-}
-
-function ConsensusBar({
-  homeTeam, awayTeam, homeName, awayName, others,
-}: {
-  homeTeam: string
-  awayTeam: string
-  homeName: string
-  awayName: string
-  others: OtherPred[]
-}) {
-  const total = others.filter((o) => o.pred_home != null && o.pred_away != null).length
-  if (total === 0) return null
-
-  const counts = { home: 0, draw: 0, away: 0 }
-  for (const o of others) {
-    if (o.pred_home == null || o.pred_away == null) continue
-    if (o.pred_home > o.pred_away) counts.home++
-    else if (o.pred_home === o.pred_away) counts.draw++
-    else counts.away++
-  }
-
-  const pct = (n: number) => Math.round((n / total) * 100)
-
-  const bars: { label: string; code: string; count: number; color: string }[] = [
-    { label: homeTeam, code: homeName, count: counts.home, color: 'rgb(var(--primary))' },
-    { label: 'Draw', code: 'draw', count: counts.draw, color: 'rgb(var(--texts))' },
-    { label: awayTeam, code: awayName, count: counts.away, color: 'rgb(var(--gold))' },
-  ]
-  const max = Math.max(...bars.map((b) => b.count), 1)
-
-  return (
-    <Card className="p-5">
-      <SectionHeader title="League consensus" sub={`Based on ${total} pick${total !== 1 ? 's' : ''} in your league`} />
-      <div className="mt-3 space-y-2.5">
-        {bars.map((bar) => (
-          <div key={bar.code} className="flex items-center gap-3">
-            <span className="text-[12px] font-bold text-textp w-24 shrink-0 truncate">{bar.label}</span>
-            <div className="flex-1 h-5 bg-surface rounded-full overflow-hidden border border-border/60">
-              <div
-                className="h-full rounded-full transition-all duration-700"
-                style={{ width: `${(bar.count / max) * 100}%`, background: bar.color }}
-              />
-            </div>
-            <span className="text-[12px] font-extrabold tabular-nums text-textp w-10 text-right">
-              {pct(bar.count)}%
-            </span>
-          </div>
-        ))}
-      </div>
-    </Card>
   )
 }

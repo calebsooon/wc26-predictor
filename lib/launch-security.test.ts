@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 const root = process.cwd()
 const migration = readFileSync(resolve(root, 'supabase/migrations/20260620000000_launch_security_and_live_data.sql'), 'utf8')
 const predictionScopeMigration = readFileSync(resolve(root, 'supabase/migrations/20260620000002_prediction_membership_scope.sql'), 'utf8')
+const substitutionMigration = readFileSync(resolve(root, 'supabase/migrations/20260621000000_lineup_substitutions.sql'), 'utf8')
 const loginPage = readFileSync(resolve(root, 'app/login/page.tsx'), 'utf8')
 
 describe('launch security migration contract', () => {
@@ -34,5 +35,12 @@ describe('launch security migration contract', () => {
     expect(predictionScopeMigration).toContain('revoke all on function public.shares_league(uuid) from public, anon')
     expect(predictionScopeMigration).toContain('group_predictions: read own, revealed, or scored league row')
     expect(predictionScopeMigration).toContain('tournament_predictions: read own, revealed, or scored league row')
+  })
+
+  it('keeps live substitutions readable to members but writable only by admins', () => {
+    expect(substitutionMigration).toContain('alter table public.lineup_substitutions enable row level security')
+    expect(substitutionMigration).toContain('lineup_substitutions: authenticated read')
+    expect(substitutionMigration).toContain('lineup_substitutions: admin insert')
+    expect(substitutionMigration).toContain('lineup_substitutions: admin delete')
   })
 })

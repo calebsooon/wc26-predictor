@@ -13,6 +13,7 @@ import FlagChip from '@/components/FlagChip'
 import { WEIGHT_FIELDS, resolveWeights, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { fmtDateTime } from '@/lib/date-format'
 import { normalisePosition, POSITION_ABBR } from '@/lib/teams'
+import { resolveLineupState, type LineupPlayerState, type LineupSubstitution } from '@/lib/lineup-state'
 
 /* ── EditConfirmButton ───────────────────────────────────────────────────── */
 function EditConfirmButton({ saving, onConfirm, label }: { saving: boolean; onConfirm: () => void; label: string }) {
@@ -57,6 +58,21 @@ function FetchLineupButton({ matchId, onDone }: { matchId: string; onDone?: () =
       {busy ? 'Fetching…' : 'Fetch lineup'}
     </Button>
   )
+}
+
+function SyncEventsButton({ matchId }: { matchId: string }) {
+  const [busy, setBusy] = useState(false)
+  async function run() {
+    setBusy(true)
+    try {
+      const res = await fetch('/api/sync-events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ match_id: matchId }) })
+      const json = await res.json()
+      if (!res.ok) toast.error(json.error ?? 'Substitution sync failed')
+      else toast.success(json.written ? `${json.written} substitution${json.written === 1 ? '' : 's'} synced` : 'No verified substitutions found')
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Substitution sync failed') }
+    finally { setBusy(false) }
+  }
+  return <Button size="sm" variant="outline" onClick={run} disabled={busy}>{busy ? 'Refreshing…' : 'Refresh events'}</Button>
 }
 
 /* ── LineupEditor ────────────────────────────────────────────────────────── */
@@ -189,6 +205,51 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
   )
 }
 
+function SubstitutionEditor({ matchId, teamCode }: { matchId: string; teamCode: string }) {
+  const supabase = createClient()
+  const [rows, setRows] = useState<LineupPlayerState[]>([])
+  const [events, setEvents] = useState<LineupSubstitution[]>([])
+  const [outId, setOutId] = useState('')
+  const [inId, setInId] = useState('')
+  const [minute, setMinute] = useState('60')
+  const [saving, setSaving] = useState(false)
+  const load = useCallback(async () => {
+    const [lineups, subs] = await Promise.all([
+      supabase.from('lineups').select('player_id, is_starting, shirt_number, position_label, grid, sort_order, players(name)').eq('match_id', matchId).eq('team_code', teamCode),
+      supabase.from('lineup_substitutions').select('id, team_code, player_out_id, player_in_id, minute, source, created_at').eq('match_id', matchId).eq('team_code', teamCode).order('minute'),
+    ])
+    setRows((lineups.data ?? []) as unknown as LineupPlayerState[])
+    setEvents((subs.data ?? []) as LineupSubstitution[])
+  }, [matchId, supabase, teamCode])
+  useEffect(() => { load() }, [load])
+  const state = resolveLineupState(rows, events, teamCode)
+  const name = (id: number) => rows.find((row) => row.player_id === id)?.players?.name ?? 'Player'
+  async function add() {
+    const playerOut = Number(outId), playerIn = Number(inId), eventMinute = Number(minute)
+    if (!playerOut || !playerIn || playerOut === playerIn || !Number.isInteger(eventMinute) || eventMinute < 1 || eventMinute > 130) { toast.error('Choose a valid outgoing player, incoming player, and minute'); return }
+    setSaving(true)
+    const { error } = await supabase.from('lineup_substitutions').insert({ match_id: matchId, team_code: teamCode, player_out_id: playerOut, player_in_id: playerIn, minute: eventMinute, source: 'manual' })
+    setSaving(false)
+    if (error) { toast.error(error.message); return }
+    setOutId(''); setInId(''); await load(); toast.success('Substitution added')
+  }
+  async function remove(id: string) {
+    const { error } = await supabase.from('lineup_substitutions').delete().eq('id', id)
+    if (error) toast.error(error.message); else { await load(); toast.success('Substitution removed') }
+  }
+  if (!rows.length) return <p className="text-xs text-texts">Save the announced lineup first to record substitutions.</p>
+  return <div className="mt-3 pt-3 border-t border-border/60 space-y-2">
+    <div className="flex items-center justify-between"><p className="text-[10px] font-bold uppercase tracking-wider text-texts">Live substitutions</p><span className="text-[10px] text-texts">Current XI preview: {state.current.length}</span></div>
+    {events.length > 0 && <div className="space-y-1">{events.map((event) => <div key={event.id} className="flex items-center gap-2 text-[11px] rounded-lg bg-surface px-2 py-1.5"><span className="font-bold text-primary">{event.minute}′</span><span className="flex-1 truncate">{name(event.player_out_id)} → {name(event.player_in_id)}</span><span className="text-texts">{event.source}</span>{event.id && <button onClick={() => remove(event.id!)} title="Remove so you can correct this event" className="text-coral font-bold">×</button>}</div>)}</div>}
+    <div className="grid grid-cols-[1fr_1fr_56px_auto] gap-1.5">
+      <select value={outId} onChange={(event) => setOutId(event.target.value)} className="min-w-0 rounded-md border border-border bg-surface px-1 text-[11px]"><option value="">Player out</option>{state.current.map((row) => <option key={row.player_id} value={row.player_id}>{row.players?.name}</option>)}</select>
+      <select value={inId} onChange={(event) => setInId(event.target.value)} className="min-w-0 rounded-md border border-border bg-surface px-1 text-[11px]"><option value="">Player in</option>{state.bench.map((row) => <option key={row.player_id} value={row.player_id}>{row.players?.name}</option>)}</select>
+      <input value={minute} onChange={(event) => setMinute(event.target.value)} inputMode="numeric" aria-label="Minute" className="rounded-md border border-border bg-surface px-1 text-center text-[11px]" />
+      <Button size="sm" variant="outline" onClick={add} disabled={saving}>Add</Button>
+    </div>
+  </div>
+}
+
 interface Match {
   id: string
   match_date: string
@@ -307,22 +368,6 @@ function AdminRow({ m, onSaved }, ref) {
 
       {open && (
         <div className="mt-3 pt-3 border-t border-border/60 space-y-3">
-          {/* Lineup entry */}
-          {['home', 'away'].map((side) => {
-            const team = side === 'home' ? home : away
-            const code = side === 'home' ? m.home_team : m.away_team
-            return (
-              <div key={side}>
-                <label className="text-[11px] font-bold uppercase tracking-wider text-texts flex items-center gap-2">
-                  <FlagChip code={code} w={16} h={11} r={2} /> {team.name} lineup
-                </label>
-                <div className="mt-1.5 bg-surface border border-border rounded-lg p-3">
-                  <LineupEditor matchId={m.id} teamCode={code} playerKey={team.playerKey} />
-                </div>
-              </div>
-            )
-          })}
-
           <div>
             <label className="text-[11px] font-bold uppercase tracking-wider text-texts">First-goal team</label>
             <div className="grid grid-cols-3 gap-2 mt-1.5">
@@ -380,11 +425,31 @@ function AdminRow({ m, onSaved }, ref) {
               </div>
             </div>
           )}
+
+          <div className="pt-1">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-texts mb-2">Lineup management</p>
+            {['home', 'away'].map((side) => {
+              const team = side === 'home' ? home : away
+              const code = side === 'home' ? m.home_team : m.away_team
+              return (
+                <div key={side} className="mb-3">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-texts flex items-center gap-2">
+                    <FlagChip code={code} w={16} h={11} r={2} /> {team.name} lineup
+                  </label>
+                  <div className="mt-1.5 bg-surface border border-border rounded-lg p-3">
+                    <LineupEditor matchId={m.id} teamCode={code} playerKey={team.playerKey} />
+                    <SubstitutionEditor matchId={m.id} teamCode={code} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
       <div className="flex items-center justify-end gap-2 mt-3 flex-wrap">
         <FetchLineupButton matchId={m.id} />
+        <SyncEventsButton matchId={m.id} />
         {hasScore && <Pill tone="green">{m.real_home_score}–{m.real_away_score} (scored)</Pill>}
         {scoringFailed && (
           <Button size="sm" variant="outline" onClick={scoreOnly} disabled={saving}>
@@ -507,6 +572,7 @@ function AdminActions() {
 
   const actions = [
     { key: 'sync', label: 'Sync results + scorers', sub: 'Pull finished scores AND first goalscorer from Kickoffapi, then auto-score', url: '/api/sync-results' },
+    { key: 'events', label: 'Sync live substitutions', sub: 'Refresh verified player changes for live match centres', url: '/api/sync-events' },
     { key: 'injuries', label: 'Sync injuries', sub: 'Flag injured / suspended players from the Kickoffapi feed', url: '/api/sync-injuries' },
     { key: 'snapshot', label: 'Snapshot leaderboard', sub: 'Records current rank positions for movement arrows', url: '/api/snapshot-ranks' },
     { key: 'groups', label: 'Score group predictions', sub: 'Awards points for correct group order picks (all complete groups)', url: '/api/score-groups' },
@@ -517,8 +583,8 @@ function AdminActions() {
   return (
     <Card className="p-4">
       <SectionHeader title="Tournament actions" sub="Run these after results are in." />
-      <div className="grid grid-cols-3 gap-2 mt-3 mb-4">
-        {(['results', 'lineups', 'injuries'] as const).map((kind) => {
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 mb-4">
+        {(['results', 'lineups', 'events', 'injuries'] as const).map((kind) => {
           const run = health[kind]
           const tone = run?.status === 'success' ? 'text-primary' : run?.status === 'partial' ? 'text-gold' : run?.status === 'failed' ? 'text-error' : 'text-texts'
           return (

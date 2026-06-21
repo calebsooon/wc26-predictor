@@ -65,6 +65,10 @@ export interface KEvent {
   teamId: number
   playerId: number | null
   playerName: string | null
+  assistId?: number | null
+  assistName?: string | null
+  player?: { id: number | null; name: string | null } | null
+  assist?: { id: number | null; name: string | null } | null
   type: string        // 'Goal' | 'Card' | 'subst'
   detail: string      // 'Normal Goal' | 'Penalty' | 'Own Goal' | ...
 }

@@ -446,7 +446,7 @@ flowchart LR
     ScoreTournament["score-tournament"]
     SnapshotRanks["snapshot-ranks"]
     RescoreAll["rescore-all"]
-    LiveSync["fetch-lineup\nsync-results\nsync-injuries"]
+    LiveSync["fetch-lineup\nsync-results\nsync-events\nsync-injuries"]
     GoldenBoot["golden-boot"]
     Calendar["calendar\niCal feed"]
     API --> ScoreMatch & ScoreGroups & ScoreTournament & SnapshotRanks & RescoreAll & LiveSync & GoldenBoot & Calendar
@@ -460,7 +460,7 @@ flowchart LR
 
   subgraph Scripts["🏠  Residential Scripts"]
     direction TB
-    DataLive["npm run data:live\nresults · lineups · injuries · Golden Boot"]
+    DataLive["npm run data:live\nresults · lineups · substitutions · injuries · Golden Boot"]
   end
 
   subgraph Data["🗄️  Supabase"]
@@ -542,6 +542,7 @@ app/
     rescore-all/            Full recompute of all scored predictions
     fetch-lineup/           Import confirmed XI + formation (admin)
     sync-results/           Pull scores + first scorer, then auto-score (admin)
+    sync-events/            Refresh verified in-match substitutions (admin)
     sync-injuries/          Refresh injury / suspension flags (admin)
     golden-boot/            Serve top scorers / assists from cache
     calendar/[token]/       Per-user iCalendar fixture feed
@@ -577,6 +578,7 @@ scripts/
   sync-results.ts           Residential: pull finished scores + scorers, re-score predictions
   sync-lineups.ts           Residential: pull confirmed XI + formations
   sync-injuries.ts          Residential: pull injury / suspension flags
+  sync-events.ts            Residential: pull verified substitutions into the live XI
   sync-golden-boot.ts       Residential: pull top scorers / assists into Supabase cache
   grant-admin.ts            Bootstrap the first organizer account
   setup-check.ts            Schema, connectivity, and launch-readiness check
@@ -662,10 +664,11 @@ npm run data:fill-photos # Optional — gap-fills remaining missing photos via K
 Live match data is fetched from Kickoffapi. Because Kickoffapi sits behind Cloudflare, server-side calls from Vercel or GitHub Actions are blocked by an IP challenge. Live data is refreshed by running scripts **from your local machine**, which then writes to Supabase — the app reads from Supabase:
 
 ```bash
-npm run data:live        # run all four: results → lineups → injuries → Golden Boot
+npm run data:live        # run all five: results → lineups → substitutions → injuries → Golden Boot
 # or individually:
 npm run data:results     # finished scores + first scorer; re-scores predictions
 npm run data:lineups     # confirmed XI + formations (published ~75 min before kickoff)
+npm run data:events      # verified substitutions for live match centres
 npm run data:injuries    # injury / suspension flags
 npm run data:golden-boot # top scorers and assists
 ```
