@@ -1,39 +1,52 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { teamNameToCode } from '@/lib/team-match'
 
-// Reads Golden Boot data from the live_cache table (populated by the residential
-// scripts/sync-golden-boot.ts, since Vercel can't reach Kickoffapi directly).
+// The daily sync stores FIFA's published ranked table. Keeping that in our DB
+// makes the app fast and avoids exposing a third-party request to clients.
 export const dynamic = 'force-dynamic'
 
-interface KStat { teamId: number; goals: number | null; assists: number | null; photo: string | null; player: { name: string } | null }
-interface KTeam { id: number; name: string }
-interface Cached { scorers: KStat[]; assists: KStat[]; teams: KTeam[] }
+interface GoldenBootStat {
+  player_name: string
+  photo_url: string | null
+  goals: number
+  assists: number
+  minutes_played: number
+  fifa_rank: number | null
+  fifa_assist_rank: number | null
+  fifa_assist_order: number | null
+  team_code: string
+  updated_at: string
+  players: { photo_url: string | null } | { photo_url: string | null }[] | null
+}
 
 export async function GET() {
   const supabase = await createServerSupabaseClient()
-  const { data: row, error } = await supabase
-    .from('live_cache').select('data, updated_at').eq('key', 'golden_boot').maybeSingle()
+  const { data, error } = await supabase
+    .from('golden_boot_stats')
+    .select('player_name, photo_url, goals, assists, minutes_played, fifa_rank, fifa_assist_rank, fifa_assist_order, team_code, updated_at, players(photo_url)')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!row) return NextResponse.json({ scorers: [], assists: [], updatedAt: null })
 
-  const cached = (row as { data: Cached; updated_at: string }).data
-  const codeByTeamId = new Map<number, string | null>()
-  for (const t of cached.teams ?? []) codeByTeamId.set(t.id, teamNameToCode(t.name))
-
-  const shape = (rows: KStat[], primary: 'goals' | 'assists') => (rows ?? [])
-    .map((r) => ({
-      name: r.player?.name ?? '',
-      photo: r.photo ?? null,
-      goals: r.goals ?? 0,
-      assists: r.assists ?? 0,
-      code: codeByTeamId.get(r.teamId) ?? null,
+  const rows = (data ?? []) as GoldenBootStat[]
+  const playerPhoto = (player: GoldenBootStat['players']) =>
+    Array.isArray(player) ? player[0]?.photo_url : player?.photo_url
+  const storedPhoto = (photo: string | null | undefined) =>
+    photo?.includes('.supabase.co/storage/v1/object/public/') ? photo : null
+  const shape = (primary: 'goals' | 'assists') => rows
+    .map((row) => ({
+      name: row.player_name,
+      photo: storedPhoto(playerPhoto(row.players)) ?? storedPhoto(row.photo_url),
+      goals: row.goals,
+      assists: row.assists,
+      minutes: row.minutes_played,
+      rank: primary === 'goals' ? row.fifa_rank : row.fifa_assist_rank,
+      order: primary === 'goals' ? row.fifa_rank : row.fifa_assist_order,
+      code: row.team_code,
     }))
-    .sort((a, b) => b[primary] - a[primary] || b[primary === 'goals' ? 'assists' : 'goals'] - a[primary === 'goals' ? 'assists' : 'goals'] || a.name.localeCompare(b.name))
+    .sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name))
 
   return NextResponse.json({
-    scorers: shape(cached.scorers, 'goals'),
-    assists: shape(cached.assists, 'assists'),
-    updatedAt: (row as { updated_at: string }).updated_at,
-  })
+    scorers: shape('goals'),
+    assists: shape('assists'),
+    updatedAt: rows.reduce<string | null>((latest, row) => !latest || row.updated_at > latest ? row.updated_at : latest, null),
+  }, { headers: { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=600' } })
 }

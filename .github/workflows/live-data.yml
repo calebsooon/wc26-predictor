@@ -1,54 +1,22 @@
-name: Live data sync
+name: Tournament reminders
 
-# Manual trigger for the live-data sync endpoints. Requires two repo secrets:
+# Manual trigger for the reminder endpoint. Requires two repo secrets:
 #   APP_URL    — your deployed URL (e.g. https://matchday.app)
 #   CRON_SECRET — matches the app's CRON_SECRET env var
 #
-# NOTE: these endpoints call Kickoffapi from Vercel, which is blocked by
-# Cloudflare on datacenter IPs. If your provider allowlists server traffic
-# this workflow will work automatically. Otherwise use the residential
-# `npm run data:live` scripts locally — they reach the API directly.
+# FIFA match data is intentionally refreshed from a trusted local machine with
+# `npm run data:fifa:daily`; this workflow must not mix in legacy provider data.
 on:
   workflow_dispatch: {}
 
 jobs:
-  sync:
+  reminders:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch lineups for imminent matches
-        continue-on-error: true
-        run: |
-          curl --fail-with-body --retry 2 --max-time 25 -sS -X GET "$APP_URL/api/fetch-lineup" \
-            -H "Authorization: Bearer $CRON_SECRET"
-        env:
-          APP_URL: ${{ secrets.APP_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-
-      - name: Sync finished results + first scorer
-        continue-on-error: true
-        run: |
-          curl --fail-with-body --retry 2 --max-time 45 -sS -X GET "$APP_URL/api/sync-results" \
-            -H "Authorization: Bearer $CRON_SECRET"
-        env:
-          APP_URL: ${{ secrets.APP_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-
       - name: Send prediction reminders for imminent matches
         continue-on-error: true
         run: |
           curl --fail-with-body --retry 2 --max-time 30 -sS -X GET "$APP_URL/api/cron/kickoff-reminders" \
-            -H "Authorization: Bearer $CRON_SECRET"
-        env:
-          APP_URL: ${{ secrets.APP_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-
-  injuries:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Refresh injuries
-        continue-on-error: true
-        run: |
-          curl --fail-with-body --retry 2 --max-time 45 -sS -X GET "$APP_URL/api/sync-injuries" \
             -H "Authorization: Bearer $CRON_SECRET"
         env:
           APP_URL: ${{ secrets.APP_URL }}

@@ -17,9 +17,10 @@ import { getActiveLeague } from '@/lib/league'
 import { PlayerCardPicker, type PlayerForPicker } from '@/components/PlayerCardPicker'
 import { fmtDateTime } from '@/lib/date-format'
 import { AddMatchToCalendar } from '@/components/AddMatchToCalendar'
-import { FormationPitch } from '@/components/FormationPitch'
-import { SquadPanel } from '@/components/MatchModal'
+import { MatchLineups } from '@/components/MatchLineups'
+import { LeagueRead } from '@/components/LeagueRead'
 import { TeamLink } from '@/components/TeamLink'
+import { MatchFacts, type StoredPlayerStats, type StoredTeamStats } from '@/components/MatchFacts'
 
 interface OtherPred extends MatchBreakdown {
   user_id: string
@@ -55,12 +56,14 @@ export default function MatchDetailPage() {
   const [gdManual, setGdManual] = useState(false)
   const [bttsManual, setBttsManual] = useState(false)
   const [players, setPlayers] = useState<PlayerForPicker[]>([])
+  const [teamStats, setTeamStats] = useState<StoredTeamStats[]>([])
+  const [playerStats, setPlayerStats] = useState<StoredPlayerStats[]>([])
   const [others, setOthers] = useState<OtherPred[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
-  const [lineupTab, setLineupTab] = useState<'home' | 'away'>('home')
+  const [revealPredictions, setRevealPredictions] = useState(false)
   // Reactive lock: recalculate every second so form locks at kickoff even if page stays open
   const [secsLeft, setSecsLeft] = useState<number | null>(null)
   const matchDate = match?.match_date ?? null
@@ -89,16 +92,21 @@ export default function MatchDetailPage() {
       setMatch(dbm)
 
       const home = getTeam(dbm.home_team), away = getTeam(dbm.away_team)
-      const { data: pl } = await supabase
-        .from('players')
-        .select('id, name, team_name, jersey_number, position')
-        .in('team_name', [home.playerKey, away.playerKey])
-        .order('jersey_number', { ascending: true, nullsFirst: false })
+      const [{ data: pl }, { data: matchTeamStats }, { data: matchPlayerStats }] = await Promise.all([
+        supabase.from('players')
+          .select('id, name, team_name, jersey_number, position')
+          .in('team_name', [home.playerKey, away.playerKey])
+          .order('jersey_number', { ascending: true, nullsFirst: false }),
+        supabase.from('match_team_stats').select('team_code, stats').eq('match_id', id),
+        supabase.from('match_player_stats').select('player_id, team_code, stats').eq('match_id', id),
+      ])
       type PlRow = { id: number; name: string; team_name: string; jersey_number: number | null; position: string | null }
       setPlayers((pl ?? []).map((p) => {
         const { id, name, team_name, jersey_number, position } = p as PlRow
         return { id, name, jersey_number, position: position ?? null, team_code: team_name === home.playerKey ? dbm.home_team : dbm.away_team }
       }))
+      setTeamStats((matchTeamStats ?? []) as unknown as StoredTeamStats[])
+      setPlayerStats((matchPlayerStats ?? []) as unknown as StoredPlayerStats[])
 
       const { data: mine } = await supabase
         .from('predictions')
@@ -114,9 +122,10 @@ export default function MatchDetailPage() {
         if (p.pred_btts != null) { setPredBtts(p.pred_btts as boolean); setBttsManual(true) }
       }
 
-      const { weights: leagueWeights, allowGdManual: gdManualAllowed, memberIds } = await getActiveLeague(supabase, user.id)
+      const { league, weights: leagueWeights, allowGdManual: gdManualAllowed, memberIds } = await getActiveLeague(supabase, user.id)
       setWeights(leagueWeights)
       setAllowGdManual(gdManualAllowed)
+      setRevealPredictions(league?.reveal_predictions === true)
       // Fetch picks for this match scoped to league members.
       // Profiles fetched separately — the embedded join (profiles(username,avatar_url))
       // can fail silently on some Supabase plans, returning null data with no error shown.
@@ -170,6 +179,16 @@ export default function MatchDetailPage() {
 
   const home = getTeam(match.home_team), away = getTeam(match.away_team)
   const scored = match.real_home_score !== null && match.real_away_score !== null
+  const fifaMeta = (match as { fifa_metadata?: Record<string, unknown> }).fifa_metadata
+  const fifaScore = fifaMeta?.score as { home?: number | null; away?: number | null } | undefined
+  const displayHomeScore = match.real_home_score ?? fifaScore?.home ?? null
+  const displayAwayScore = match.real_away_score ?? fifaScore?.away ?? null
+  const hasLiveScore = displayHomeScore !== null && displayAwayScore !== null
+  const penaltyHome = fifaMeta?.penaltyHome != null ? Number(fifaMeta.penaltyHome) : null
+  const penaltyAway = fifaMeta?.penaltyAway != null ? Number(fifaMeta.penaltyAway) : null
+  const hasPenalties = penaltyHome != null && penaltyAway != null
+  const homeFormation = (match as { home_formation?: string | null }).home_formation ?? null
+  const awayFormation = (match as { away_formation?: string | null }).away_formation ?? null
   // secsLeft updates every second — form locks at kickoff even if user keeps the page open
   const locked = scored || match.is_locked || (secsLeft !== null ? secsLeft <= 0 : new Date(match.match_date) <= new Date())
   const knockout = !match.group_name
@@ -208,6 +227,7 @@ export default function MatchDetailPage() {
         <div className="flex items-center justify-center gap-2 mb-5">
           <Pill tone={knockout ? 'gold' : 'default'}>{knockout ? (match.round_name ?? 'Knockout') : `Group ${match.group_name ?? ''}`.trim()}</Pill>
           {scored && <Pill tone="green">Final</Pill>}
+          {!scored && hasLiveScore && <Pill tone="gold">Live</Pill>}
         </div>
         <div className="flex items-center justify-between">
           <TeamLink code={match.home_team} className="flex-1 flex flex-col items-center gap-2.5 hover:opacity-75">
@@ -215,10 +235,14 @@ export default function MatchDetailPage() {
             <span className="font-extrabold text-textp text-center leading-tight">{home.name}</span>
           </TeamLink>
           <div className="px-3 text-center shrink-0">
-            {scored
-              ? <ScoreDisplay a={match.real_home_score} b={match.real_away_score} size="text-4xl" />
+            {hasLiveScore
+              ? <>
+                  <ScoreDisplay a={displayHomeScore} b={displayAwayScore} size="text-4xl" />
+                  {hasPenalties && <div className="text-[11px] text-texts font-bold mt-0.5">({penaltyHome}–{penaltyAway} pens)</div>}
+                </>
               : <div className="text-3xl font-black text-texts">VS</div>}
             <div className="text-[11px] text-texts font-bold mt-1.5">{fmtDateTime(match.match_date)}</div>
+            {(homeFormation || awayFormation) && <div className="text-[10px] text-texts/50 font-bold mt-0.5 tabular-nums">{homeFormation ?? '?'} · {awayFormation ?? '?'}</div>}
           </div>
           <TeamLink code={match.away_team} className="flex-1 flex flex-col items-center gap-2.5 hover:opacity-75">
             <FlagChip code={match.away_team} w={60} h={40} r={8} />
@@ -248,48 +272,33 @@ export default function MatchDetailPage() {
         )}
       </Card>
 
-      {/* Confirmed lineups — renders only once a lineup has been fetched */}
-      <FormationPitch
+      {((locked || revealPredictions) && others.length > 0) && (
+        <LeagueRead
+          homeName={home.name} awayName={away.name} homeCode={match.home_team} awayCode={match.away_team}
+          picks={others} userId={userId} playerNames={new Map(players.map((player) => [player.id, player.name]))}
+          actual={{ home: match.real_home_score, away: match.real_away_score, firstScorerId: (match as { first_goal_player_id?: number | null }).first_goal_player_id ?? null }}
+        />
+      )}
+
+      <MatchLineups
         matchId={match.id}
         homeCode={match.home_team}
         awayCode={match.away_team}
         homeFormation={(match as { home_formation?: string | null }).home_formation ?? null}
         awayFormation={(match as { away_formation?: string | null }).away_formation ?? null}
+        homeScore={displayHomeScore}
+        awayScore={displayAwayScore}
+        scoreLabel={scored ? 'Final score' : locked ? 'Live match' : 'Pre-match'}
       />
 
-      {/* consensus bar — visible once match kicks off */}
-      {locked && others.length > 0 && (
-        <ConsensusBar
-          homeTeam={home.name}
-          awayTeam={away.name}
-          homeName={match.home_team}
-          awayName={match.away_team}
-          others={others}
-        />
-      )}
-
-      {/* lineups */}
-      <Card className="overflow-hidden">
-        <div className="flex border-b border-border">
-          {(['home', 'away'] as const).map((side) => {
-            const t = side === 'home' ? home : away
-            const active = lineupTab === side
-            return (
-              <button key={side} onClick={() => setLineupTab(side)}
-                className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${active ? 'border-b-2 border-primary text-textp bg-card' : 'text-texts hover:text-textp bg-surface'}`}>
-                <FlagChip code={side === 'home' ? match.home_team : match.away_team} w={20} h={14} r={3} />
-                {t.name}
-              </button>
-            )
-          })}
-        </div>
-        <div className="p-5">
-          <SquadPanel
-            code={lineupTab === 'home' ? match.home_team : match.away_team}
-            matchId={match.id}
-          />
-        </div>
-      </Card>
+      <MatchFacts
+        homeCode={match.home_team}
+        awayCode={match.away_team}
+        metadata={(match as { fifa_metadata?: unknown }).fifa_metadata}
+        teamStats={teamStats}
+        playerStats={playerStats}
+        playerNames={new Map(players.map((player) => [player.id, player.name]))}
+      />
 
       {/* prediction entry */}
       {!locked && (
@@ -528,57 +537,5 @@ export default function MatchDetailPage() {
         </Card>
       )}
     </div>
-  )
-}
-
-function ConsensusBar({
-  homeTeam, awayTeam, homeName, awayName, others,
-}: {
-  homeTeam: string
-  awayTeam: string
-  homeName: string
-  awayName: string
-  others: OtherPred[]
-}) {
-  const total = others.filter((o) => o.pred_home != null && o.pred_away != null).length
-  if (total === 0) return null
-
-  const counts = { home: 0, draw: 0, away: 0 }
-  for (const o of others) {
-    if (o.pred_home == null || o.pred_away == null) continue
-    if (o.pred_home > o.pred_away) counts.home++
-    else if (o.pred_home === o.pred_away) counts.draw++
-    else counts.away++
-  }
-
-  const pct = (n: number) => Math.round((n / total) * 100)
-
-  const bars: { label: string; code: string; count: number; color: string }[] = [
-    { label: homeTeam, code: homeName, count: counts.home, color: 'rgb(var(--primary))' },
-    { label: 'Draw', code: 'draw', count: counts.draw, color: 'rgb(var(--texts))' },
-    { label: awayTeam, code: awayName, count: counts.away, color: 'rgb(var(--gold))' },
-  ]
-  const max = Math.max(...bars.map((b) => b.count), 1)
-
-  return (
-    <Card className="p-5">
-      <SectionHeader title="League consensus" sub={`Based on ${total} pick${total !== 1 ? 's' : ''} in your league`} />
-      <div className="mt-3 space-y-2.5">
-        {bars.map((bar) => (
-          <div key={bar.code} className="flex items-center gap-3">
-            <span className="text-[12px] font-bold text-textp w-24 shrink-0 truncate">{bar.label}</span>
-            <div className="flex-1 h-5 bg-surface rounded-full overflow-hidden border border-border/60">
-              <div
-                className="h-full rounded-full transition-all duration-700"
-                style={{ width: `${(bar.count / max) * 100}%`, background: bar.color }}
-              />
-            </div>
-            <span className="text-[12px] font-extrabold tabular-nums text-textp w-10 text-right">
-              {pct(bar.count)}%
-            </span>
-          </div>
-        ))}
-      </div>
-    </Card>
   )
 }

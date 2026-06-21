@@ -50,9 +50,33 @@ const nextConfig = {
         pathname: '/**',
       },
       {
-        // Golden Boot headshots come straight from the Kickoffapi CDN.
+        // Older Golden Boot cache entries may still use the Kickoffapi CDN.
         protocol: 'https',
         hostname: 'cdn.kickoffapi.com',
+        pathname: '/**',
+      },
+      {
+        // FIFA's published Golden Boot table supplies its player headshots here.
+        protocol: 'https',
+        hostname: 'digitalhub.fifa.com',
+        pathname: '/transform/**',
+      },
+      {
+        // FIFA GameDay team logos served from their S3-backed CDN.
+        protocol: 'https',
+        hostname: '*.s3.eu-west-1.amazonaws.com',
+        pathname: '/**',
+      },
+      {
+        // FIFA GameDay player/team media (alternate CDN path).
+        protocol: 'https',
+        hostname: 'cxm-api.fifa.com',
+        pathname: '/**',
+      },
+      {
+        // FIFA public picture API — national team flags/crests by 3-letter code.
+        protocol: 'https',
+        hostname: 'api.fifa.com',
         pathname: '/**',
       },
     ],

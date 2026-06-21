@@ -13,6 +13,7 @@ import FlagChip from '@/components/FlagChip'
 import { WEIGHT_FIELDS, resolveWeights, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { fmtDateTime } from '@/lib/date-format'
 import { normalisePosition, POSITION_ABBR } from '@/lib/teams'
+import { resolveLineupState, type LineupPlayerState, type LineupSubstitution } from '@/lib/lineup-state'
 
 /* ── EditConfirmButton ───────────────────────────────────────────────────── */
 function EditConfirmButton({ saving, onConfirm, label }: { saving: boolean; onConfirm: () => void; label: string }) {
@@ -35,34 +36,25 @@ function EditConfirmButton({ saving, onConfirm, label }: { saving: boolean; onCo
   )
 }
 
-/* ── FetchLineupButton — pulls confirmed XI + formation from Kickoffapi ─────── */
-function FetchLineupButton({ matchId, onDone }: { matchId: string; onDone?: () => void }) {
-  const [busy, setBusy] = useState(false)
-  async function run() {
-    setBusy(true)
-    try {
-      const res = await fetch('/api/fetch-lineup', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ match_id: matchId }),
-      })
-      const j = await res.json()
-      if (!res.ok) { toast.error(j.error ?? 'Lineup fetch failed'); return }
-      toast.success(`Lineup saved — ${j.formations?.home ?? '?'} vs ${j.formations?.away ?? '?'} (${j.written} players${j.unmatched?.length ? `, ${j.unmatched.length} unmatched` : ''})`)
-      onDone?.()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Lineup fetch failed')
-    } finally { setBusy(false) }
-  }
-  return (
-    <Button size="sm" variant="outline" onClick={run} disabled={busy}>
-      {busy ? 'Fetching…' : 'Fetch lineup'}
-    </Button>
-  )
-}
-
 /* ── LineupEditor ────────────────────────────────────────────────────────── */
 const POS_OPTIONS = ['GK', 'RB', 'RWB', 'CB', 'LB', 'LWB', 'CDM', 'DM', 'CM', 'RM', 'LM', 'CAM', 'AM', 'RW', 'LW', 'CF', 'ST', 'SS']
+const PITCH_ROWS = [{ value: '0', label: 'GK' }, { value: '1', label: 'Def' }, { value: '2', label: 'Mid' }, { value: '3', label: 'Fwd' }]
+const PITCH_LANES = [{ value: '1', label: 'Far L' }, { value: '2', label: 'Left' }, { value: '3', label: 'Centre' }, { value: '4', label: 'Right' }, { value: '5', label: 'Far R' }]
 
-interface LineupEntry { playerId: number; name: string; jersey: number | null; status: 'out' | 'starter' | 'sub'; posLabel: string }
+interface LineupEntry { playerId: number; name: string; jersey: number | null; status: 'out' | 'starter' | 'sub'; posLabel: string; grid: string | null }
+
+function defaultGrid(position: string) {
+  const pos = position.toUpperCase()
+  if (pos === 'GK') return '0:3'
+  if (['RB', 'RWB'].includes(pos)) return '1:5'
+  if (['LB', 'LWB'].includes(pos)) return '1:1'
+  if (pos === 'CB') return '1:3'
+  if (['DM', 'CDM'].includes(pos)) return '2:3'
+  if (['RM', 'RW'].includes(pos)) return '2:5'
+  if (['LM', 'LW'].includes(pos)) return '2:1'
+  if (['CAM', 'AM', 'CM'].includes(pos)) return '2:3'
+  return '3:3'
+}
 
 function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamCode: string; playerKey: string }) {
   const supabase = createClient()
@@ -76,10 +68,10 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
       setLoading(true)
       const [{ data: players }, { data: lineup }] = await Promise.all([
         supabase.from('players').select('id, name, jersey_number, position').eq('team_name', playerKey).order('jersey_number', { nullsFirst: false }),
-        supabase.from('lineups').select('player_id, is_starting, position_label, shirt_number').eq('match_id', matchId).eq('team_code', teamCode),
+        supabase.from('lineups').select('player_id, is_starting, position_label, shirt_number, grid').eq('match_id', matchId).eq('team_code', teamCode),
       ])
-      const lineupMap = new Map((lineup ?? []).map((l: { player_id: number; is_starting: boolean; position_label: string | null; shirt_number: number | null }) =>
-        [l.player_id, { is_starting: l.is_starting, posLabel: l.position_label ?? '', jersey: l.shirt_number }]
+      const lineupMap = new Map((lineup ?? []).map((l: { player_id: number; is_starting: boolean; position_label: string | null; shirt_number: number | null; grid: string | null }) =>
+        [l.player_id, { is_starting: l.is_starting, posLabel: l.position_label ?? '', jersey: l.shirt_number, grid: l.grid }]
       ))
       setEntries((players ?? []).filter((p: { id: number; name: string; jersey_number: number | null; position: string | null }) =>
         normalisePosition(p.position) !== 'Coach'
@@ -89,6 +81,7 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
           playerId: p.id, name: p.name, jersey: p.jersey_number,
           status: l ? (l.is_starting ? 'starter' : 'sub') : 'out',
           posLabel: l?.posLabel ?? POSITION_ABBR[normalisePosition(p.position ?? '')] ?? '',
+          grid: l?.grid ?? null,
         }
       }))
       setLoading(false)
@@ -109,7 +102,7 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
       const rows = selected.map((e, i) => ({
         match_id: matchId, team_code: teamCode, player_id: e.playerId,
         is_starting: e.status === 'starter', shirt_number: e.jersey,
-        position_label: e.posLabel || null, sort_order: i,
+        position_label: e.posLabel || null, grid: e.status === 'starter' ? (e.grid ?? defaultGrid(e.posLabel)) : null, sort_order: i, source: 'manual',
       }))
       const { error } = await supabase.from('lineups').insert(rows)
       if (error) { toast.error(error.message); setSaving(false); return }
@@ -144,6 +137,7 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
           )
         })}
       </div>
+      {tab === 'starter' && <p className="text-[10px] text-texts">Set each starter&apos;s row and lane to place left/right centre-backs, midfielders, and wide players accurately on the match pitch.</p>}
 
       <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
         {filtered.length === 0 && <p className="text-sm text-texts py-3 text-center">None</p>}
@@ -161,8 +155,16 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
                 {POS_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             )}
+            {e.status === 'starter' && <>
+              <select value={e.grid?.split(':')[0] ?? defaultGrid(e.posLabel).split(':')[0]} onChange={(ev) => update(e.playerId, { grid: `${ev.target.value}:${e.grid?.split(':')[1] ?? defaultGrid(e.posLabel).split(':')[1]}` })} className="h-7 rounded-md border border-border bg-surface px-1 text-[10px] text-textp" aria-label={`${e.name} pitch row`}>
+                {PITCH_ROWS.map((row) => <option key={row.value} value={row.value}>{row.label}</option>)}
+              </select>
+              <select value={e.grid?.split(':')[1] ?? defaultGrid(e.posLabel).split(':')[1]} onChange={(ev) => update(e.playerId, { grid: `${e.grid?.split(':')[0] ?? defaultGrid(e.posLabel).split(':')[0]}:${ev.target.value}` })} className="h-7 rounded-md border border-border bg-surface px-1 text-[10px] text-textp" aria-label={`${e.name} pitch lane`}>
+                {PITCH_LANES.map((lane) => <option key={lane.value} value={lane.value}>{lane.label}</option>)}
+              </select>
+            </>}
             <div className="flex gap-1 shrink-0">
-              <button onClick={() => update(e.playerId, { status: 'starter' })}
+              <button onClick={() => update(e.playerId, { status: 'starter', grid: e.grid ?? defaultGrid(e.posLabel) })}
                 className={`px-2 py-1 rounded text-[10.5px] font-bold border transition-all ${e.status === 'starter' ? 'bg-primary/15 border-primary/40 text-primary' : 'border-border text-texts hover:text-textp'}`}>
                 XI
               </button>
@@ -187,6 +189,51 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
       </div>
     </div>
   )
+}
+
+function SubstitutionEditor({ matchId, teamCode }: { matchId: string; teamCode: string }) {
+  const supabase = createClient()
+  const [rows, setRows] = useState<LineupPlayerState[]>([])
+  const [events, setEvents] = useState<LineupSubstitution[]>([])
+  const [outId, setOutId] = useState('')
+  const [inId, setInId] = useState('')
+  const [minute, setMinute] = useState('60')
+  const [saving, setSaving] = useState(false)
+  const load = useCallback(async () => {
+    const [lineups, subs] = await Promise.all([
+      supabase.from('lineups').select('player_id, is_starting, shirt_number, position_label, grid, sort_order, players(name)').eq('match_id', matchId).eq('team_code', teamCode),
+      supabase.from('lineup_substitutions').select('id, team_code, player_out_id, player_in_id, minute, source, created_at').eq('match_id', matchId).eq('team_code', teamCode).order('minute'),
+    ])
+    setRows((lineups.data ?? []) as unknown as LineupPlayerState[])
+    setEvents((subs.data ?? []) as LineupSubstitution[])
+  }, [matchId, supabase, teamCode])
+  useEffect(() => { load() }, [load])
+  const state = resolveLineupState(rows, events, teamCode)
+  const name = (id: number) => rows.find((row) => row.player_id === id)?.players?.name ?? 'Player'
+  async function add() {
+    const playerOut = Number(outId), playerIn = Number(inId), eventMinute = Number(minute)
+    if (!playerOut || !playerIn || playerOut === playerIn || !Number.isInteger(eventMinute) || eventMinute < 1 || eventMinute > 130) { toast.error('Choose a valid outgoing player, incoming player, and minute'); return }
+    setSaving(true)
+    const { error } = await supabase.from('lineup_substitutions').insert({ match_id: matchId, team_code: teamCode, player_out_id: playerOut, player_in_id: playerIn, minute: eventMinute, source: 'manual' })
+    setSaving(false)
+    if (error) { toast.error(error.message); return }
+    setOutId(''); setInId(''); await load(); toast.success('Substitution added')
+  }
+  async function remove(id: string) {
+    const { error } = await supabase.from('lineup_substitutions').delete().eq('id', id)
+    if (error) toast.error(error.message); else { await load(); toast.success('Substitution removed') }
+  }
+  if (!rows.length) return <p className="text-xs text-texts">Save the announced lineup first to record substitutions.</p>
+  return <div className="mt-3 pt-3 border-t border-border/60 space-y-2">
+    <div className="flex items-center justify-between"><p className="text-[10px] font-bold uppercase tracking-wider text-texts">Live substitutions</p><span className="text-[10px] text-texts">Current XI preview: {state.current.length}</span></div>
+    {events.length > 0 && <div className="space-y-1">{events.map((event) => <div key={event.id} className="flex items-center gap-2 text-[11px] rounded-lg bg-surface px-2 py-1.5"><span className="font-bold text-primary">{event.minute}′</span><span className="flex-1 truncate">{name(event.player_out_id)} → {name(event.player_in_id)}</span><span className="text-texts">{event.source}</span>{event.id && <button onClick={() => remove(event.id!)} title="Remove so you can correct this event" className="text-coral font-bold">×</button>}</div>)}</div>}
+    <div className="grid grid-cols-[1fr_1fr_56px_auto] gap-1.5">
+      <select value={outId} onChange={(event) => setOutId(event.target.value)} className="min-w-0 rounded-md border border-border bg-surface px-1 text-[11px]"><option value="">Player out</option>{state.current.map((row) => <option key={row.player_id} value={row.player_id}>{row.players?.name}</option>)}</select>
+      <select value={inId} onChange={(event) => setInId(event.target.value)} className="min-w-0 rounded-md border border-border bg-surface px-1 text-[11px]"><option value="">Player in</option>{state.bench.map((row) => <option key={row.player_id} value={row.player_id}>{row.players?.name}</option>)}</select>
+      <input value={minute} onChange={(event) => setMinute(event.target.value)} inputMode="numeric" aria-label="Minute" className="rounded-md border border-border bg-surface px-1 text-center text-[11px]" />
+      <Button size="sm" variant="outline" onClick={add} disabled={saving}>Add</Button>
+    </div>
+  </div>
 }
 
 interface Match {
@@ -307,22 +354,6 @@ function AdminRow({ m, onSaved }, ref) {
 
       {open && (
         <div className="mt-3 pt-3 border-t border-border/60 space-y-3">
-          {/* Lineup entry */}
-          {['home', 'away'].map((side) => {
-            const team = side === 'home' ? home : away
-            const code = side === 'home' ? m.home_team : m.away_team
-            return (
-              <div key={side}>
-                <label className="text-[11px] font-bold uppercase tracking-wider text-texts flex items-center gap-2">
-                  <FlagChip code={code} w={16} h={11} r={2} /> {team.name} lineup
-                </label>
-                <div className="mt-1.5 bg-surface border border-border rounded-lg p-3">
-                  <LineupEditor matchId={m.id} teamCode={code} playerKey={team.playerKey} />
-                </div>
-              </div>
-            )
-          })}
-
           <div>
             <label className="text-[11px] font-bold uppercase tracking-wider text-texts">First-goal team</label>
             <div className="grid grid-cols-3 gap-2 mt-1.5">
@@ -380,11 +411,30 @@ function AdminRow({ m, onSaved }, ref) {
               </div>
             </div>
           )}
+
+          <div className="pt-1">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-texts mb-2">Lineup management</p>
+            {['home', 'away'].map((side) => {
+              const team = side === 'home' ? home : away
+              const code = side === 'home' ? m.home_team : m.away_team
+              return (
+                <div key={side} className="mb-3">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-texts flex items-center gap-2">
+                    <FlagChip code={code} w={16} h={11} r={2} /> {team.name} lineup
+                  </label>
+                  <div className="mt-1.5 bg-surface border border-border rounded-lg p-3">
+                    <LineupEditor matchId={m.id} teamCode={code} playerKey={team.playerKey} />
+                    <SubstitutionEditor matchId={m.id} teamCode={code} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
       <div className="flex items-center justify-end gap-2 mt-3 flex-wrap">
-        <FetchLineupButton matchId={m.id} />
+        <span className="mr-auto text-[10px] text-texts">FIFA updates run locally with <code>npm run data:fifa:matches</code>.</span>
         {hasScore && <Pill tone="green">{m.real_home_score}–{m.real_away_score} (scored)</Pill>}
         {scoringFailed && (
           <Button size="sm" variant="outline" onClick={scoreOnly} disabled={saving}>
@@ -474,6 +524,99 @@ function QuickImport({ matches, onDone }: { matches: Match[]; onDone: (updated: 
   )
 }
 
+type FifaSyncSummary = {
+  mapped: number
+  due: number
+  completeLineups: number
+  completeStats: number
+  missingLineups: number
+  missingStats: number
+  lastUpdated: string | null
+}
+
+function FifaSyncDashboard() {
+  const supabase = useMemo(() => createClient(), [])
+  const [summary, setSummary] = useState<FifaSyncSummary | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const [matchesResult, lineupsResult, statsResult] = await Promise.all([
+      supabase.from('matches').select('id, match_date, fifa_event_id, fifa_updated_at'),
+      supabase.from('lineups').select('match_id'),
+      supabase.from('match_team_stats').select('match_id'),
+    ])
+    if (matchesResult.error || lineupsResult.error || statsResult.error) {
+      toast.error(matchesResult.error?.message ?? lineupsResult.error?.message ?? statsResult.error?.message ?? 'Could not load FIFA sync status')
+      setLoading(false)
+      return
+    }
+    const matches = matchesResult.data ?? []
+    const lineups = new Map<string, number>()
+    const statPacks = new Map<string, number>()
+    for (const row of lineupsResult.data ?? []) lineups.set(row.match_id, (lineups.get(row.match_id) ?? 0) + 1)
+    for (const row of statsResult.data ?? []) statPacks.set(row.match_id, (statPacks.get(row.match_id) ?? 0) + 1)
+    const known = matches.filter((match) => match.fifa_event_id != null)
+    const due = known.filter((match) => new Date(match.match_date).getTime() <= Date.now())
+    const completeLineups = due.filter((match) => (lineups.get(match.id) ?? 0) >= 20).length
+    const completeStats = due.filter((match) => (statPacks.get(match.id) ?? 0) >= 2).length
+    const updated = known.map((match) => match.fifa_updated_at).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null
+    setSummary({
+      mapped: known.length,
+      due: due.length,
+      completeLineups,
+      completeStats,
+      missingLineups: Math.max(0, due.length - completeLineups),
+      missingStats: Math.max(0, due.length - completeStats),
+      lastUpdated: updated,
+    })
+    setLoading(false)
+  }, [supabase])
+
+  useEffect(() => { void load() }, [load])
+
+  async function copy(command: string) {
+    try {
+      await navigator.clipboard.writeText(command)
+      toast.success('Command copied')
+    } catch {
+      toast.error('Could not copy command')
+    }
+  }
+
+  const commands = [
+    { label: 'Daily refresh', command: 'npm run data:fifa:daily', sub: 'Nearby matches + Golden Boot' },
+    { label: 'Fixtures only', command: 'npm run data:fifa:fixtures', sub: 'All FIFA IDs, times, status, and venue data' },
+    { label: 'Full backfill', command: 'npm run data:fifa:backfill', sub: 'All published team sheets and stat packs' },
+  ]
+
+  return <Card className="p-4">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <SectionHeader title="FIFA sync cockpit" sub="Database health for the local FIFA importer. No provider call is made here." />
+      <Button size="sm" variant="outline" onClick={() => void load()} disabled={loading}>{loading ? 'Checking…' : 'Refresh status'}</Button>
+    </div>
+    {loading || !summary ? <Skeleton className="mt-3 h-24 rounded-xl" /> : <>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <SyncMetric label="Fixtures mapped" value={`${summary.mapped}/104`} tone={summary.mapped >= 72 ? 'primary' : 'gold'} />
+        <SyncMetric label="Last FIFA update" value={summary.lastUpdated ? fmtDateTime(summary.lastUpdated) : 'Never'} />
+        <SyncMetric label="Started with XI" value={`${summary.completeLineups}/${summary.due}`} tone={summary.missingLineups ? 'gold' : 'primary'} />
+        <SyncMetric label="Started with stats" value={`${summary.completeStats}/${summary.due}`} tone={summary.missingStats ? 'gold' : 'primary'} />
+      </div>
+      <p className="mt-2 text-[10px] text-texts">Missing counts only include fixtures that have started. Future fixtures do not receive an XI until FIFA publishes one.</p>
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        {commands.map((item) => <button key={item.command} onClick={() => void copy(item.command)} className="rounded-xl border border-border bg-surface p-3 text-left transition hover:border-primary/45 hover:bg-primary/[0.04]">
+          <p className="text-xs font-bold text-textp">{item.label}</p><p className="mt-0.5 text-[10px] text-texts">{item.sub}</p><code className="mt-2 block truncate text-[10px] font-bold text-primary">{item.command}</code>
+        </button>)}
+      </div>
+    </>}
+  </Card>
+}
+
+function SyncMetric({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'primary' | 'gold' }) {
+  const colour = tone === 'primary' ? 'text-primary' : tone === 'gold' ? 'text-gold' : 'text-textp'
+  return <div className="rounded-xl border border-border bg-surface px-3 py-2.5"><p className="text-[9px] font-bold uppercase tracking-wider text-texts">{label}</p><p className={`mt-1 truncate text-sm font-extrabold tabular-nums ${colour}`} title={value}>{value}</p></div>
+}
+
 function AdminActions() {
   const [busy, setBusy] = useState<string | null>(null)
   const [health, setHealth] = useState<Record<string, { status: string; finished_at: string | null; details: Record<string, unknown> }>>({})
@@ -507,6 +650,7 @@ function AdminActions() {
 
   const actions = [
     { key: 'sync', label: 'Sync results + scorers', sub: 'Pull finished scores AND first goalscorer from Kickoffapi, then auto-score', url: '/api/sync-results' },
+    { key: 'events', label: 'Sync live substitutions', sub: 'Refresh verified player changes for live match centres', url: '/api/sync-events' },
     { key: 'injuries', label: 'Sync injuries', sub: 'Flag injured / suspended players from the Kickoffapi feed', url: '/api/sync-injuries' },
     { key: 'snapshot', label: 'Snapshot leaderboard', sub: 'Records current rank positions for movement arrows', url: '/api/snapshot-ranks' },
     { key: 'groups', label: 'Score group predictions', sub: 'Awards points for correct group order picks (all complete groups)', url: '/api/score-groups' },
@@ -517,8 +661,8 @@ function AdminActions() {
   return (
     <Card className="p-4">
       <SectionHeader title="Tournament actions" sub="Run these after results are in." />
-      <div className="grid grid-cols-3 gap-2 mt-3 mb-4">
-        {(['results', 'lineups', 'injuries'] as const).map((kind) => {
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 mb-4">
+        {(['results', 'lineups', 'events', 'injuries'] as const).map((kind) => {
           const run = health[kind]
           const tone = run?.status === 'success' ? 'text-primary' : run?.status === 'partial' ? 'text-gold' : run?.status === 'failed' ? 'text-error' : 'text-texts'
           return (
@@ -1233,6 +1377,7 @@ export default function AdminPage() {
     <div className="space-y-5">
       <PageHeader eyebrow="Admin" title="Admin console" sub="League setup, results entry, and tournament actions." />
       <LeagueAdmin />
+      <FifaSyncDashboard />
       <AdminActions />
       <BracketResultsEditor />
       <div className="flex items-center justify-between gap-3">

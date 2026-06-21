@@ -50,7 +50,8 @@
 | ![](https://img.shields.io/badge/PRIZES-d97706?style=flat-square) | **Zero-sum prize pool.** Per-GW and overall payouts settle automatically from a shared pot |
 | ![](https://img.shields.io/badge/REALTIME-7c3aed?style=flat-square) | **Live leaderboard.** Supabase Realtime pushes updates the moment a result lands |
 | ![](https://img.shields.io/badge/LEAGUES-0891b2?style=flat-square) | **Multi-league.** Private leagues with join codes; isolated standings per group of friends |
-| ![](https://img.shields.io/badge/DATA-ea580c?style=flat-square) | **Live squad data.** 48-nation rosters · headshots · confirmed lineups · Golden Boot · injuries |
+| ![](https://img.shields.io/badge/DATA-ea580c?style=flat-square) | **Live squad data.** FIFA-cached 48-nation rosters · full-kit player images · team stats · confirmed lineups · Golden Boot · injuries |
+| ![](https://img.shields.io/badge/RECAPS-be185d?style=flat-square) | **Gameweek stories.** Dynamic recaps, League Pulse, rank movement, xG upsets, and private share cards |
 | ![](https://img.shields.io/badge/CALENDAR-0284c7?style=flat-square) | **iCal feed.** Auto-updating per user; works in Google, Apple, Outlook, and Notion |
 | ![](https://img.shields.io/badge/PWA-4f46e5?style=flat-square) | **Installable.** iOS, Android, and desktop; offline shell with Workbox |
 | ![](https://img.shields.io/badge/A11Y-db2777?style=flat-square) | **Colour-blind mode.** Okabe–Ito CVD-safe palette, scoped to chart or whole app; DB-synced |
@@ -200,7 +201,8 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | Consensus reveal | After kickoff, every member's full prediction for that match is revealed |
 | Prediction wall | See the whole league's pick distribution per match |
 | Calendar export | Subscribe to or download fixtures as an iCalendar feed — auto-updating, timezone-aware, with a configurable reminder; works in Google, Apple, Outlook, and Notion |
-| Lineups &amp; formation | Confirmed starting XI and manager formation rendered on a positional pitch once published |
+| League Pulse | Reveal-safe crowd distributions, top scorelines, BTTS / goals read, scorer podium, and your majority / minority context |
+| Match Centre | Expandable broadcast-style pitch with live score ribbon, team colours, announced-vs-current XI, unused benches, and match timeline |
 
 </details>
 
@@ -211,12 +213,14 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 | Feature | Detail |
 | :--- | :--- |
-| Live lineups | Confirmed XI, substitutes, shirt numbers, and formation pulled from Kickoffapi |
-| Results &amp; first scorer | Final scores and the opening goalscorer fetched from match events, then scored automatically |
+| FIFA Match Centre | Official fixtures, results, venue, officials, weather, team sheets, substitutions, and match stats cached into Supabase |
+| Live lineups | Confirmed XI, bench, shirt numbers, formation, and verified substitutions rendered on a positional pitch |
+| Match facts | Venue, officials, weather, attendance, score comparison, xG, and complete player match-stat grids |
 | Injury flags | Out/suspended players flagged across squad views |
-| Golden Boot | Tournament top scorers and assists, with headshots and nation flags; data cached in Supabase |
+| FIFA team centre | 48 team cards, confederation filters, form, fixtures, tournament stats, and full-kit squad cards — all served from Supabase |
+| Golden Boot | FIFA-published tournament scorers and assists, cached in Supabase with FIFA’s official ordering |
 | Player enrichment | Headshots, clubs, and dates of birth sourced from Wikidata; self-hosted in Supabase Storage |
-| Residential sync | Live data is pulled via local `npm run data:*` scripts (Kickoffapi blocks datacenter IPs); the app reads from Supabase |
+| Local sync | FIFA is read by manual local `npm run data:fifa:*` imports; every page reads only cached Supabase data |
 
 </details>
 
@@ -229,6 +233,8 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | :--- | :--- |
 | Live leaderboard | Supabase Realtime; rank arrows ▲▼, point totals, prize column |
 | Per-GW standings | Switch between overall and any individual gameweek |
+| Gameweek recaps | Dynamic leader, climber, exact-score, consensus, prize, and xG storylines — private to the active league |
+| Private sharing | Copy a formatted recap or generate a branded image / native share-sheet card without publishing league data |
 | Head-to-head | Full H2H stats, win/draw/loss record, side-by-side points race chart |
 | Achievement badges | Auto-calculated (Scoreline Sniper, Golden Boot Guru, Hot Hand, …) |
 | Activity feed | Live league event stream on the dashboard |
@@ -258,10 +264,9 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 | Feature | Detail |
 | :--- | :--- |
-| Result entry | Score and first scorer per match; locks prediction input for all players |
-| Fetch lineup | One-click confirmed lineup and formation import per match |
-| Sync results + scorers | Pull finished scores and the first goalscorer, then auto-score every prediction |
-| Sync injuries | Refresh injury and suspension flags across the squad data |
+| Result entry | Score, first goal, first scorer, knockout winner, save, and rescore controls come first in every match card |
+| Manual team sheets | Independently edit announced XI, bench, position, pitch row / lane, and verified in-match substitutions |
+| FIFA sync cockpit | Shows FIFA fixture coverage, freshness, started-match lineup/stat coverage, missing-data counts, and copyable sync commands |
 | Rank snapshots | Captured automatically after scoring for movement arrows |
 | Rescore all | Full recompute — use after any rule or data correction |
 
@@ -275,7 +280,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | Feature | Detail |
 | :--- | :--- |
 | PWA | Installable on iOS, Android, and desktop; offline shell |
-| 48-team squads | Full 26-man rosters for all WC2026 nations, searchable by team |
+| Teams centre | 48 FIFA-backed nation cards with confederation filters, form, fixtures, team leaders, and detailed squad profiles |
 | Multi-league | Admin-created leagues with unique join codes; independent standings |
 | Invite links | Shareable `?code=` links that pre-fill the join form |
 | Mobile-first | Fully responsive; all pages optimised for PWA and phone use |
@@ -293,16 +298,17 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | `/login` | Email / password auth |
 | `/dashboard` | Rank, stats, hero match, form strip, mini-leaderboard, prize outlook |
 | `/predictions` | All fixtures with filters; quick-predict bottom sheet |
-| `/match/[id]` | Full prediction form, consensus reveal, prediction wall |
+| `/match/[id]` | Prediction form, League Pulse, Match Centre, match facts, and prediction wall |
 | `/groups` | Group finishing order predictor (all 12 groups) |
 | `/bracket` | Full knockout bracket and tournament picks |
 | `/leaderboard` | Live standings, per-GW view, rank movement, CSV export |
 | `/h2h` | Head-to-head compare — pick any two members |
-| `/squads` | 48-nation squad browser — headshots, clubs, ages, injury flags, scorer picks |
+| `/squads` | Teams centre — FIFA squads, form, fixtures, tournament leaders, and player cards |
 | `/golden-boot` | Tournament top scorers and assists |
+| `/recap?gw=<1–8>` | Private gameweek story, rank movement, match moments, and share actions |
 | `/profile` | Stats, accuracy, rank chart, badges, bracket and group picks |
 | `/rules` | Scoring rules reference |
-| `/admin` | Result entry and all scoring actions |
+| `/admin` | FIFA sync cockpit, result entry, lineup positioning, substitutions, and scoring actions |
 
 </details>
 
@@ -398,10 +404,10 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | ![Supabase](https://img.shields.io/badge/-Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=000) | **Database** | Supabase Postgres with Row Level Security — prediction visibility scoped by kickoff time and league membership |
 | ![Supabase](https://img.shields.io/badge/-Auth-3ECF8E?style=flat-square&logo=supabase&logoColor=000) | **Auth** | Supabase Auth — email/password; `middleware.ts` guards every route except `/login` |
 | ![Supabase](https://img.shields.io/badge/-Realtime-3ECF8E?style=flat-square&logo=supabase&logoColor=000) | **Realtime** | Supabase Realtime — leaderboard updates push to all clients the moment a result is scored |
-| ![Supabase](https://img.shields.io/badge/-Storage-3ECF8E?style=flat-square&logo=supabase&logoColor=000) | **Storage** | Supabase Storage — `avatars` bucket for profile photos; `player-photos` for self-hosted headshots |
+| ![Supabase](https://img.shields.io/badge/-Storage-3ECF8E?style=flat-square&logo=supabase&logoColor=000) | **Storage** | Supabase Storage — avatars plus a cached `fifa-media` library for player images, flags, and team artwork |
 | ![PWA](https://img.shields.io/badge/-PWA-5A0FC8?style=flat-square&logo=pwa) | **PWA** | `@ducanh2912/next-pwa` with Workbox service worker, offline shell, and app badge |
 | ![Vercel](https://img.shields.io/badge/-Vercel-000?style=flat-square&logo=vercel) | **Hosting** | Vercel — auto-deploys on every push to `main` |
-| ![Postgres](https://img.shields.io/badge/-Postgres-4169E1?style=flat-square&logo=postgresql&logoColor=white) | **Live data** | Kickoffapi for fixtures, lineups, events, injuries, scorers; Wikidata for bios and photos |
+| ![FIFA](https://img.shields.io/badge/-FIFA-326295?style=flat-square) | **Tournament data** | FIFA GameDay schedule, team sheets, match stats, media, and official Golden Boot ordering; imported locally and cached in Supabase |
 | ![Google Calendar](https://img.shields.io/badge/-iCalendar-4285F4?style=flat-square&logo=googlecalendar&logoColor=white) | **Calendar** | RFC 5545 iCalendar feeds — auto-updating, timezone-aware; works in Google, Apple, Outlook, Notion |
 | | **Accessibility** | Colour-blind-safe palette mode (Okabe–Ito), DB-backed and synced across devices |
 | | **Design** | Schibsted Grotesk typeface, token-driven colour scheme, custom SVG charts — no chart library |
@@ -446,21 +452,21 @@ flowchart LR
     ScoreTournament["score-tournament"]
     SnapshotRanks["snapshot-ranks"]
     RescoreAll["rescore-all"]
-    LiveSync["fetch-lineup\nsync-results\nsync-injuries"]
+    MatchCentre["recap\nteams\ngolden-boot\ncalendar"]
     GoldenBoot["golden-boot"]
     Calendar["calendar\niCal feed"]
-    API --> ScoreMatch & ScoreGroups & ScoreTournament & SnapshotRanks & RescoreAll & LiveSync & GoldenBoot & Calendar
+    API --> ScoreMatch & ScoreGroups & ScoreTournament & SnapshotRanks & RescoreAll & MatchCentre & GoldenBoot & Calendar
   end
 
   subgraph External["🌐  External APIs"]
     direction TB
-    Kickoff["Kickoffapi\nlineups · events · scorers · injuries"]
-    Wikidata["Wikidata\nplayer bios · photos"]
+    FIFA["FIFA GameDay\nfixtures · team sheets · stats · media"]
+    FIFAStats["FIFA published tables\nGolden Boot · assists"]
   end
 
   subgraph Scripts["🏠  Residential Scripts"]
     direction TB
-    DataLive["npm run data:live\nresults · lineups · injuries · Golden Boot"]
+    DataLive["npm run data:fifa:*\nfixtures · team sheets · stats · Golden Boot"]
   end
 
   subgraph Data["🗄️  Supabase"]
@@ -468,8 +474,8 @@ flowchart LR
     Postgres["Postgres + RLS"]
     Auth["Auth"]
     Realtime["Realtime"]
-    Storage["Storage\navatars · player-photos"]
-    LiveCache["live_cache\nKickoffapi snapshot"]
+    Storage["Storage\navatars · fifa-media"]
+    FIFAStore["FIFA cache\nteams · players · match stats · Golden Boot"]
   end
 
   subgraph Domain["📐  Shared Domain Logic"]
@@ -482,9 +488,9 @@ flowchart LR
   Client -->|"supabase-js — RLS-guarded reads/writes"| Data
   Client -->|"admin POST"| Server
   Server -->|"validated writes"| Data
-  Scripts -->|"fetch via residential IP"| External
-  Scripts -->|"service role upsert"| LiveCache
-  LiveCache --- Postgres
+  Scripts -->|"fetch via local machine"| External
+  Scripts -->|"service role upsert"| FIFAStore
+  FIFAStore --- Postgres
   Realtime -. "live push — no page reload" .-> Client
   Domain -. "imported by" .-> Client & Server
 
@@ -500,9 +506,9 @@ flowchart LR
   class Browser,Pages,Components,ClientLib client
   class PWA pwa
   class SW worker
-  class API,ScoreMatch,ScoreGroups,ScoreTournament,SnapshotRanks,RescoreAll,LiveSync,GoldenBoot,Calendar server
-  class Kickoff,Wikidata,DataLive worker
-  class Postgres,Auth,Realtime,Storage,LiveCache data
+  class API,ScoreMatch,ScoreGroups,ScoreTournament,SnapshotRanks,RescoreAll,MatchCentre,GoldenBoot,Calendar server
+  class FIFA,FIFAStats,DataLive worker
+  class Postgres,Auth,Realtime,Storage,FIFAStore data
   class Scoring,Prizes,Leaderboard domain
 ```
 
@@ -513,7 +519,7 @@ flowchart LR
 3. `lib/leaderboard.ts` aggregates scored predictions — shared between the dashboard mini-table and `/leaderboard`
 4. `lib/prizes.ts` derives the prize snapshot from aggregated standings
 5. Supabase Realtime pushes `predictions` UPDATE events to all connected clients — standings update instantly with no page reload
-6. Live data (lineups, results, injuries, Golden Boot) is fetched from Kickoffapi via residential `npm run data:*` scripts and cached in Supabase; the app reads from Supabase, not from the provider directly
+6. FIFA GameDay and FIFA’s published tables are fetched by local `npm run data:fifa:*` scripts. The importer writes fixtures, team sheets, substitutions, media, team/player match stats, and Golden Boot rows to Supabase; page views never call FIFA.
 
 <details>
 <summary>Project structure</summary>
@@ -524,26 +530,26 @@ app/
   login/                    Email/password auth
   dashboard/                Rank, stats, hero match, form strip, prize outlook, activity feed
   predictions/              Fixtures list with filters and quick-predict bottom sheet
-  match/[id]/               Full prediction form, consensus reveal, prediction wall
+  match/[id]/               Prediction form, League Pulse, Match Centre, and match facts
   groups/                   Group order predictor (all 12 groups)
   bracket/                  Knockout bracket and tournament picks
   leaderboard/              Live standings, per-GW view, rank arrows, CSV export
   h2h/                      Head-to-head compare with stats and points race chart
-  squads/                   48-nation browser — photos, clubs, ages, injuries, scorer picks
+  squads/                   FIFA Teams centre — form, fixtures, team leaders, and squad cards
   golden-boot/              Tournament top scorers and assists
+  recap/                    Private gameweek recap and share actions
   profile/                  Stats, accuracy, rank chart tabs, badges, avatar crop
   rules/                    Scoring rules reference
-  admin/                    Result entry and scoring actions (is_admin guard)
+  admin/                    FIFA sync cockpit, results, lineup positioning, and scoring (is_admin guard)
   api/
     score-match/            Score one match and trigger Realtime
     score-groups/           Score group finishing predictions
     score-tournament/       Score bracket predictions
     snapshot-ranks/         Capture rank snapshot
     rescore-all/            Full recompute of all scored predictions
-    fetch-lineup/           Import confirmed XI + formation (admin)
-    sync-results/           Pull scores + first scorer, then auto-score (admin)
-    sync-injuries/          Refresh injury / suspension flags (admin)
     golden-boot/            Serve top scorers / assists from cache
+    recap/                  Active-league-scoped gameweek recap data
+    teams/                  Cached FIFA team list and team-detail data
     calendar/[token]/       Per-user iCalendar fixture feed
 
 components/
@@ -562,7 +568,9 @@ lib/
   normalize.ts              Universal ASCII name folding (Turkish, Nordic, Polish, …)
   league.ts                 getMyLeagues, isMoneyLeague, multi-league helpers
   teams.ts                  48 WC2026 teams with code, name, flag, and playerKey
-  kickoff.ts                Kickoffapi client — fixtures, lineups, events
+  gameweek-recap.ts         Dynamic recap, match-story, headline, and share-text builder
+  league-read.ts            Reveal-safe League Pulse distributions and personal context
+  lineup-state.ts           Pure announced-XI and verified-substitution resolver
   team-match.ts             External team/player name → our codes and roster matching
   ics.ts                    RFC 5545 iCalendar builder for the fixture feed
   supabase-browser.ts       Browser Supabase client (anon key)
@@ -573,15 +581,15 @@ scripts/
   fetch-players.ts          Pulls WC2026 squads from football-data.org
   fetch-wikidata-players.ts Enriches players with photos, clubs, and DOBs from Wikidata
   cache-player-photos.ts    Downloads Wikimedia photos and re-hosts in Supabase Storage
-  fill-missing-photos.ts    Gap-fills remaining missing photos from Kickoffapi CDN
-  sync-results.ts           Residential: pull finished scores + scorers, re-score predictions
-  sync-lineups.ts           Residential: pull confirmed XI + formations
-  sync-injuries.ts          Residential: pull injury / suspension flags
-  sync-golden-boot.ts       Residential: pull top scorers / assists into Supabase cache
+  fill-missing-photos.ts    Optional legacy gap-fill for remaining player photos
+  sync-golden-boot.ts       Cache FIFA’s official scorer / assist table into Supabase
+  sync-fifa-teams.ts        Cache FIFA team, roster, player-stat, flag, and full-kit media data
+  sync-fifa-matches.ts      Cache FIFA fixtures, results, team sheets, substitutions, and match stats
+  cache-team-crests.ts      Cache FIFA team artwork in Supabase Storage
   grant-admin.ts            Bootstrap the first organizer account
   setup-check.ts            Schema, connectivity, and launch-readiness check
 .github/workflows/
-  live-data.yml             Manual GitHub Action that pings the sync endpoints
+  live-data.yml             Manual GitHub Action for prediction reminders only
 middleware.ts               Redirects unauthenticated users to /login for all routes
 ```
 
@@ -614,9 +622,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>   # server-only — never commit
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
-# Optional — live data sync (run from your local machine; see Live data below)
-KICKOFF_API_KEY=<kickoffapi-key>
-FOOTBALL_API_TOKEN=<football-data.org-key>          # only needed for data:players
+# Optional — legacy fallback / enrichment only
+KICKOFF_API_KEY=<kickoffapi-key>                    # only for legacy fallback scripts and photo gap-filling
+FOOTBALL_API_TOKEN=<football-data.org-key>          # only for legacy roster seeding
 
 # Optional — GitHub Actions manual sync trigger
 CRON_SECRET=<random-string>                         # server-only — never commit
@@ -648,29 +656,45 @@ ADMIN_EMAIL=you@example.com npm run bootstrap:admin
 ADMIN_EMAIL=you@example.com npm run setup:check
 ```
 
-### ![](https://img.shields.io/badge/05-16a34a?style=flat-square) Populate squad data
+### ![](https://img.shields.io/badge/05-16a34a?style=flat-square) Populate the FIFA team cache
 
 ```bash
-npm run data:players     # Required — seeds the 48-nation rosters from football-data.org
-npm run data:enrich      # Optional — adds clubs, DOBs, and photos from Wikidata
-npm run data:photos      # Optional — self-hosts Wikimedia photos in Supabase Storage
-npm run data:fill-photos # Optional — gap-fills remaining missing photos via Kickoffapi CDN
+npm run data:fifa-teams  # Required — 48 squads, team/player stats, flags, and cached full-kit images
+npm run data:team-crests # Optional — cache FIFA team artwork in fifa-media
 ```
 
-### ![](https://img.shields.io/badge/06-16a34a?style=flat-square) Live data (lineups, results, injuries, Golden Boot)
+<details>
+<summary>Legacy enrichment commands</summary>
 
-Live match data is fetched from Kickoffapi. Because Kickoffapi sits behind Cloudflare, server-side calls from Vercel or GitHub Actions are blocked by an IP challenge. Live data is refreshed by running scripts **from your local machine**, which then writes to Supabase — the app reads from Supabase:
+<br/>
 
 ```bash
-npm run data:live        # run all four: results → lineups → injuries → Golden Boot
-# or individually:
-npm run data:results     # finished scores + first scorer; re-scores predictions
-npm run data:lineups     # confirmed XI + formations (published ~75 min before kickoff)
-npm run data:injuries    # injury / suspension flags
-npm run data:golden-boot # top scorers and assists
+npm run data:players     # Historical football-data.org roster seed
+npm run data:enrich      # Wikidata clubs, DOBs, and photos
+npm run data:photos      # Re-host Wikimedia photos in Supabase Storage
+npm run data:fill-photos # Optional final photo gap-fill
 ```
 
-Run these after matches finish (or before kickoff for lineups). The admin result-entry form in `/admin` is always available as a manual fallback.
+</details>
+
+### ![](https://img.shields.io/badge/06-16a34a?style=flat-square) FIFA match-centre sync
+
+Match data is imported from FIFA GameDay by scripts run **from your local machine**. The import stores the official fixture schedule, results, venue and referee details, confirmed team sheets, substitutions, and rich team/player match stats in Supabase. Page loads never call FIFA.
+
+```bash
+npm run data:fifa-teams     # one-time / occasional: 48 squads, player images, and team stats
+npm run data:team-crests    # optional: cache FIFA team artwork in fifa-media
+npm run data:fifa:fixtures  # all 104 fixture IDs, schedule, status, result, venue metadata
+npm run data:fifa:lineups   # nearby published team sheets and verified substitutions
+npm run data:fifa:stats     # nearby team and player match-stat packs
+npm run data:fifa:backfill  # one-time: every published lineup, substitution, and stat pack
+npm run data:fifa:daily     # daily: nearby match-centre updates + FIFA Golden Boot
+npm run data:fifa:matches   # one incremental nearby-match refresh (without Golden Boot)
+MATCH_ID=<uuid> npm run data:fifa:matches # one selected match, ideal after a correction
+npm run data:live           # alias for data:fifa:daily
+```
+
+Run `npm run data:fifa-teams` after the official FIFA team centre changes (daily during the tournament is plenty); it only downloads media whose FIFA timestamp changed. Run `npm run data:fifa:backfill` once after applying the FIFA Match Centre migration, then use `npm run data:fifa:daily` each day and around matches. Admin result entry and manual lineup positioning remain the correction path when FIFA has not published a field yet.
 
 ### ![](https://img.shields.io/badge/07-16a34a?style=flat-square) Verify and run
 

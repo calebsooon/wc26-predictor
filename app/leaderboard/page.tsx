@@ -458,6 +458,13 @@ export default function LeaderboardPage() {
               </div>
             </div>
             <button
+              onClick={() => { if (tab !== 'all') window.location.assign(`/recap?gw=${tab}`) }}
+              disabled={tab === 'all'}
+              className="shrink-0 text-[12px] font-bold text-texts hover:text-textp disabled:opacity-35 px-3 py-1.5 rounded-lg border border-border hover:border-texts/40 transition-colors"
+            >
+              Recap
+            </button>
+            <button
               onClick={() => downloadCSV(board, gwLabel, isMoney)}
               className="shrink-0 flex items-center gap-1.5 text-[12px] font-bold text-texts hover:text-textp px-3 py-1.5 rounded-lg border border-border hover:border-texts/40 transition-colors"
             >

@@ -41,7 +41,7 @@ const SIDEBAR: NavItem[] = [
   { href: '/leaderboard', label: 'Leaderboard', icon: TrophyIcon,  section: 'Standings' },
   { href: '/h2h',         label: 'Compare',     icon: ChartIcon,   section: 'Standings' },
   { href: '/golden-boot', label: 'Golden Boot', icon: TrophyIcon,  section: 'Standings' },
-  { href: '/squads',      label: 'Squads',      icon: UsersIcon,   section: 'Reference' },
+  { href: '/squads',      label: 'Teams',       icon: UsersIcon,   section: 'Reference' },
   { href: '/faq',         label: 'FAQ',         icon: HelpIcon,    section: 'Reference' },
   { href: '/profile',     label: 'Profile',     icon: UserIcon,    section: 'You' },
   { href: '/install',     label: 'Get the app', icon: InstallIcon, section: 'You' },

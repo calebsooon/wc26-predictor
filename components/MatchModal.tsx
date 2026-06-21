@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam, normalisePosition, POSITION_ORDER, POSITION_ABBR } from '@/lib/teams'
 import { fmtDateLong, getTimeZoneShortLabel } from '@/lib/date-format'
+import { MatchLineups } from '@/components/MatchLineups'
 
 export interface ModalMatch {
   id: string
@@ -15,6 +16,8 @@ export interface ModalMatch {
   is_locked: boolean
   group_name: string | null
   round_name?: string
+  home_formation?: string | null
+  away_formation?: string | null
 }
 
 interface Player { id: number; name: string; position: string | null; jersey_number: number | null; nationality: string | null }
@@ -112,7 +115,6 @@ export function SquadPanel({ code, matchId }: { code: string; matchId: string })
 export default function MatchModal({ match, onClose }: { match: ModalMatch; onClose: () => void }) {
   const overlayRef = useRef<HTMLDivElement>(null)
   const home = getTeam(match.home_team), away = getTeam(match.away_team)
-  const [tab, setTab] = useState<'home' | 'away'>('home')
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
@@ -151,22 +153,9 @@ export default function MatchModal({ match, onClose }: { match: ModalMatch; onCl
         </div>
 
         {!isTBC ? (
-          <>
-            <div className="flex border-b border-border shrink-0">
-              {(['home', 'away'] as const).map((side) => {
-                const t = side === 'home' ? home : away
-                return (
-                  <button key={side} onClick={() => setTab(side)}
-                    className={`flex-1 py-3 text-sm font-bold transition-colors flex items-center justify-center gap-2 ${tab === side ? 'border-b-2 border-primary text-textp' : 'text-texts hover:text-textp'}`}>
-                    <span>{t.flag}</span><span>{t.name}</span>
-                  </button>
-                )
-              })}
-            </div>
-            <div className="flex-1 overflow-y-auto px-5 py-4">
-              <SquadPanel code={tab === 'home' ? match.home_team : match.away_team} matchId={match.id} />
-            </div>
-          </>
+          <div className="flex-1 overflow-y-auto p-4">
+            <MatchLineups matchId={match.id} homeCode={match.home_team} awayCode={match.away_team} homeFormation={match.home_formation ?? null} awayFormation={match.away_formation ?? null} homeScore={match.real_home_score} awayScore={match.real_away_score} scoreLabel={hasScore ? 'Final score' : match.is_locked ? 'Live match' : 'Pre-match'} />
+          </div>
         ) : (
           <div className="px-5 py-8 text-center text-texts text-sm">Teams will be confirmed after the group stage.</div>
         )}

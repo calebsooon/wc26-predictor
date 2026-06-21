@@ -19,10 +19,19 @@
     "data:photos": "tsx --env-file=.env.local scripts/cache-player-photos.ts",
     "data:fill-photos": "tsx --env-file=.env.local scripts/fill-missing-photos.ts",
     "data:golden-boot": "tsx --env-file=.env.local scripts/sync-golden-boot.ts",
+    "data:fifa-teams": "tsx --env-file=.env.local scripts/sync-fifa-teams.ts",
+    "data:team-crests": "tsx --env-file=.env.local scripts/cache-team-crests.ts",
+    "data:fifa:fixtures": "FIFA_SYNC_MODE=fixtures tsx --env-file=.env.local scripts/sync-fifa-matches.ts",
+    "data:fifa:lineups": "FIFA_SYNC_MODE=lineups tsx --env-file=.env.local scripts/sync-fifa-matches.ts",
+    "data:fifa:stats": "FIFA_SYNC_MODE=stats tsx --env-file=.env.local scripts/sync-fifa-matches.ts",
+    "data:fifa:matches": "FIFA_SYNC_MODE=all tsx --env-file=.env.local scripts/sync-fifa-matches.ts",
+    "data:fifa:backfill": "ALL=1 FIFA_SYNC_MODE=all tsx --env-file=.env.local scripts/sync-fifa-matches.ts",
+    "data:fifa:daily": "npm run data:fifa:matches && npm run data:golden-boot",
     "data:lineups": "tsx --env-file=.env.local scripts/sync-lineups.ts",
     "data:results": "tsx --env-file=.env.local scripts/sync-results.ts",
     "data:injuries": "tsx --env-file=.env.local scripts/sync-injuries.ts",
-    "data:live": "npm run data:results && npm run data:lineups && npm run data:injuries && npm run data:golden-boot"
+    "data:events": "tsx --env-file=.env.local scripts/sync-events.ts",
+    "data:live": "npm run data:fifa:daily"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",

@@ -37,7 +37,7 @@ const documentedEnv = new Set(
   Array.from(readFileSync(join(root, '.env.example'), 'utf8').matchAll(/^#?\s*([A-Z][A-Z0-9_]*)=/gm), (match) => match[1] ?? ''),
 )
 const commandOnlyEnv = new Set([
-  'ADMIN_EMAIL', 'ALL', 'DRY_RUN', 'LIMIT', 'MATCH_ID', 'NODE_ENV', 'ONLY_MISSING',
+  'ADMIN_EMAIL', 'ALL', 'DRY_RUN', 'FIFA_SYNC_MODE', 'LIMIT', 'MATCH_ID', 'NODE_ENV', 'ONLY_MISSING', 'SKIP_IMAGES',
   'SUPABASE_RLS_TEST',
 ])
 for (const key of envRefs) {

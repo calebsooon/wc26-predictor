@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export type SyncKind = 'lineups' | 'results' | 'injuries'
+export type SyncKind = 'lineups' | 'results' | 'injuries' | 'events'
 export type SyncTrigger = 'admin' | 'cron'
 export type SyncStatus = 'success' | 'partial' | 'failed'
 
