@@ -1,3 +1,6 @@
+'use client'
+
+import { useMemo, useState } from 'react'
 import { Card, SectionHeader } from '@/components/ui'
 import FlagChip from '@/components/FlagChip'
 
@@ -24,8 +27,11 @@ function stat(stats: Record<string, unknown> | undefined, key: string) {
 }
 function format(value: number | null, key?: string) {
   if (value == null) return '–'
+  if (key === 'total_distance') return `${(value >= 1000 ? value / 1000 : value).toFixed(2)} km`
+  if (key?.includes('speed')) return `${value.toFixed(2)} km/h`
   if (key === 'possession' && value <= 1) return `${Math.round(value * 100)}%`
   if (key === 'possession') return `${Math.round(value)}%`
+  if (key && /rate|percentage|accuracy|conversion/.test(key)) return `${value.toFixed(1).replace(/\.0$/, '')}%`
   if (key === 'xg') return value.toFixed(2)
   return Number.isInteger(value) ? String(value) : value.toFixed(2)
 }
@@ -77,12 +83,18 @@ function PlayerGrid({ code, playerStats, playerNames }: { code: string; playerSt
 export function MatchFacts({ homeCode, awayCode, metadata, teamStats, playerStats, playerNames }: {
   homeCode: string; awayCode: string; metadata: unknown; teamStats: StoredTeamStats[]; playerStats: StoredPlayerStats[]; playerNames: Map<number, string>
 }) {
+  const [advanced, setAdvanced] = useState(false)
   const meta = (metadata && typeof metadata === 'object' ? metadata : {}) as Metadata
   const home = teamStats.find((row) => row.team_code === homeCode)?.stats
   const away = teamStats.find((row) => row.team_code === awayCode)?.stats
   const hasStats = Boolean(home || away)
   const hasPlayerStats = playerStats.some((row) => row.team_code === homeCode || row.team_code === awayCode)
   const candidates = METRICS.filter(([key]) => stat(home, key) != null || stat(away, key) != null)
+  const extraMetrics = useMemo(() => Array.from(new Set([...Object.keys(home ?? {}), ...Object.keys(away ?? {})]))
+    .filter((key) => !METRICS.some(([base]) => base === key) && ((stat(home, key) ?? 0) > 0 || (stat(away, key) ?? 0) > 0))
+    .sort((a, b) => label(a).localeCompare(label(b)))
+    .map((key) => [key, label(key)] as const), [away, home])
+  const visibleCandidates = advanced ? [...candidates, ...extraMetrics] : candidates
   const location = [meta.venue, meta.city].filter(Boolean).join(' · ')
   const conditions = [
     meta.weather?.temperature != null ? `${format(meta.weather.temperature)}°C` : null,
@@ -105,11 +117,11 @@ export function MatchFacts({ homeCode, awayCode, metadata, teamStats, playerStat
     </Card>}
 
     {(hasStats || hasPlayerStats) && <Card className="p-4 sm:p-5">
-      <SectionHeader title="Match stats" sub="Verified tournament stats" />
+      <div className="flex items-start justify-between gap-3"><SectionHeader title="Match stats" sub="Verified tournament stats" />{extraMetrics.length > 0 && <button onClick={() => setAdvanced((value) => !value)} className="shrink-0 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-[11px] font-bold text-texts hover:text-textp">{advanced ? 'Essentials' : `More (${extraMetrics.length})`}</button>}</div>
       {hasStats && <>
         <div className="mt-3 flex items-center justify-between px-0.5 text-xs font-extrabold text-textp"><span className="flex items-center gap-1.5"><FlagChip code={homeCode} w={18} h={12} r={2} />{homeCode}</span><span className="flex items-center gap-1.5">{awayCode}<FlagChip code={awayCode} w={18} h={12} r={2} /></span></div>
         <div className="mt-2 space-y-2.5">
-          {candidates.map(([key, metric]) => {
+          {visibleCandidates.map(([key, metric]) => {
             const homeValue = stat(home, key), awayValue = stat(away, key)
             const total = Math.max((homeValue ?? 0) + (awayValue ?? 0), 1)
             const homeWidth = Math.max(8, ((homeValue ?? 0) / total) * 100)

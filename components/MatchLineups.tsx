@@ -73,8 +73,8 @@ function positions(rows: LineupPlayerState[], home: boolean) {
         player,
         x: (idx + 1) / (all.length + 1) * 100,
         y: home
-          ? 91 - (n > 1 ? bandIndex / (n - 1) * 39 : 0)
-          : 9 + (n > 1 ? bandIndex / (n - 1) * 39 : 0),
+          ? 87 - (n > 1 ? bandIndex / (n - 1) * 34 : 0)
+          : 13 + (n > 1 ? bandIndex / (n - 1) * 34 : 0),
       }))
   )
 }
@@ -105,11 +105,12 @@ function kitGrad(teamCode: string, gk: boolean): { grad: string; badge: string; 
 
 /* ── Player token — no circle, just bust + nameplate ── */
 function PlayerToken({
-  player, x, y, teamCode, entered, goals, yellows,
+  player, x, y, teamCode, entered, goals, yellows, onSelect,
 }: {
   player: LineupPlayerState; x: number; y: number
   teamCode: string; entered?: boolean
   goals: Set<string>; yellows: Set<string>
+  onSelect?: (player: LineupPlayerState) => void
 }) {
   const photo = player.players?.photo_url
   const gk = isGK(player.position_label)
@@ -120,12 +121,15 @@ function PlayerToken({
   // Token width is % of the pitch container so it scales on both mobile and desktop.
   // At 13% and 5 players across (spacing ~16.7%), there's ~3.7% gap — readable without cramping.
   return (
-    <motion.div
+    <motion.button
+      type="button"
+      onClick={() => onSelect?.(player)}
+      aria-label={`Open ${player.players?.name ?? 'player'}`}
       layout
       initial={{ opacity: 0, scale: 0.75, y: 5 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 340, damping: 26 }}
-      className="absolute -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center pointer-events-none"
+      className="absolute -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center text-left transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 rounded-md"
       style={{ left: `${x}%`, top: `${y}%`, width: '13%' }}
     >
       {/* Figure — 76% of token width, 4:5 aspect ratio */}
@@ -190,7 +194,7 @@ function PlayerToken({
       {gk && (
         <div className="mt-0.5 rounded-full" style={{ width: 5, height: 5, background: badge, boxShadow: '0 0 0 1.5px rgba(0,0,0,0.4)' }} />
       )}
-    </motion.div>
+    </motion.button>
   )
 }
 
@@ -217,6 +221,7 @@ function Pitch({
   homePlayers, awayPlayers, homeCode, awayCode,
   homeFormation, awayFormation,
   homeScore, awayScore, goalScorers, yellows,
+  onSelect,
   style,
 }: {
   homePlayers: ReturnType<typeof positions>
@@ -225,13 +230,14 @@ function Pitch({
   homeFormation: string | null; awayFormation: string | null
   homeScore: number | null; awayScore: number | null
   goalScorers: Set<string>; yellows: Set<string>
+  onSelect?: (player: LineupPlayerState, teamCode: string) => void
   style?: React.CSSProperties
 }) {
   return (
     <div
       className="relative overflow-hidden rounded-[16px]"
-      style={{
-        aspectRatio: '10 / 14',
+        style={{
+        aspectRatio: '10 / 15.5',
         border: '1px solid rgba(255,255,255,0.08)',
         background: 'linear-gradient(180deg, #0e7a45 0%, #0a6038 100%)',
         boxShadow: 'inset 0 2px 30px rgba(0,0,0,0.35), 0 18px 40px -22px rgba(0,0,0,0.8)',
@@ -268,10 +274,10 @@ function Pitch({
 
       {/* Players */}
       {awayPlayers.map(({ player, x, y }) => (
-        <PlayerToken key={`a-${player.player_id}`} player={player} x={x} y={y} teamCode={awayCode} goals={goalScorers} yellows={yellows} />
+        <PlayerToken key={`a-${player.player_id}`} player={player} x={x} y={y} teamCode={awayCode} goals={goalScorers} yellows={yellows} onSelect={(selected) => onSelect?.(selected, awayCode)} />
       ))}
       {homePlayers.map(({ player, x, y }) => (
-        <PlayerToken key={`h-${player.player_id}`} player={player} x={x} y={y} teamCode={homeCode} goals={goalScorers} yellows={yellows} />
+        <PlayerToken key={`h-${player.player_id}`} player={player} x={x} y={y} teamCode={homeCode} goals={goalScorers} yellows={yellows} onSelect={(selected) => onSelect?.(selected, homeCode)} />
       ))}
     </div>
   )
@@ -439,6 +445,8 @@ export function MatchLineups({
   const [rows, setRows] = useState<Row[] | null>(null)
   const [subs, setSubs] = useState<LineupSubstitution[]>([])
   const [events, setEvents] = useState<MatchEvent[]>([])
+  const [focusPitch, setFocusPitch] = useState(false)
+  const [selectedPlayer, setSelectedPlayer] = useState<{ player: LineupPlayerState; teamCode: string } | null>(null)
   const channelId = useRef(`match-lineups-${matchId}-${Math.random().toString(36).slice(2, 8)}`)
 
   const load = useCallback(() => {
@@ -487,12 +495,13 @@ export function MatchLineups({
     homeFormation, awayFormation,
     homeScore, awayScore,
     goalScorers, yellows: yellowCards,
+    onSelect: (player: LineupPlayerState, teamCode: string) => setSelectedPlayer({ player, teamCode }),
   }
 
   return (
     <div className="space-y-4">
       {/* Formation header */}
-      <div className="flex items-center justify-between text-[11px] font-bold">
+      <div className="flex items-center justify-between gap-3 text-[11px] font-bold">
         <span className="flex items-center gap-1.5">
           <FlagChip code={homeCode} w={16} h={11} r={2} />
           <span className="text-textp">{getTeam(homeCode).name}</span>
@@ -503,6 +512,7 @@ export function MatchLineups({
           <span className="text-textp">{getTeam(awayCode).name}</span>
           <FlagChip code={awayCode} w={16} h={11} r={2} />
         </span>
+        <button onClick={() => setFocusPitch(true)} className="shrink-0 rounded-lg border border-border bg-surface px-2 py-1 text-[10px] font-bold text-texts hover:text-textp" title="Open a larger pitch view">Focus pitch ↗</button>
       </div>
 
       {/* ── Desktop: pitch centred + subs 2-col below ── */}
@@ -512,9 +522,9 @@ export function MatchLineups({
           <Pitch
             {...pitchProps}
             style={{
-              height: 'min(68vh, 560px)',
+              height: 'min(78vh, 720px)',
               width: 'auto',
-              aspectRatio: '10 / 14',
+              aspectRatio: '10 / 15.5',
             }}
           />
         </div>
@@ -532,7 +542,7 @@ export function MatchLineups({
 
       {/* ── Mobile: full-width pitch + compact subs below ── */}
       <div className="sm:hidden space-y-3">
-        <Pitch {...pitchProps} />
+        <Pitch {...pitchProps} style={{ minHeight: 570 }} />
 
         {hasEvents && (
           <Timeline events={events} subs={[...home.applied, ...away.applied]} rows={rows} homeCode={homeCode} />
@@ -565,6 +575,16 @@ export function MatchLineups({
           ))}
         </div>
       </div>
+
+      {focusPitch && <div className="fixed inset-0 z-[80] grid place-items-center bg-black/80 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="Focused match pitch"><div className="relative flex h-full max-h-[900px] w-full max-w-2xl flex-col rounded-2xl border border-border bg-card p-3 shadow-2xl"><div className="mb-2 flex items-center justify-between"><span className="text-xs font-extrabold text-textp">Match centre · focus view</span><button onClick={() => setFocusPitch(false)} className="h-8 rounded-lg border border-border px-2.5 text-xs font-bold text-texts hover:text-textp">Close</button></div><div className="min-h-0 flex-1 flex justify-center"><Pitch {...pitchProps} style={{ height: '100%', maxHeight: 'calc(100vh - 130px)', width: 'auto', aspectRatio: '10 / 15.5' }} /></div></div></div>}
+      {selectedPlayer && <PlayerSheet player={selectedPlayer.player} teamCode={selectedPlayer.teamCode} onClose={() => setSelectedPlayer(null)} goals={goalScorers.has(String(selectedPlayer.player.player_id))} yellow={yellowCards.has(String(selectedPlayer.player.player_id))} />}
     </div>
   )
 }
+
+function PlayerSheet({ player, teamCode, onClose, goals, yellow }: { player: LineupPlayerState; teamCode: string; onClose: () => void; goals: boolean; yellow: boolean }) {
+  const team = getTeam(teamCode)
+  return <div className="fixed inset-0 z-[85] flex items-end justify-center bg-black/50 p-3 sm:items-center" role="dialog" aria-modal="true" aria-label={`${player.players?.name ?? 'Player'} details`}><button className="absolute inset-0" aria-label="Close player details" onClick={onClose} /><div className="relative w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-2xl"><div className="flex items-start gap-4"><div className="h-20 w-16 shrink-0 overflow-hidden rounded-xl bg-surface2">{player.players?.photo_url ? <Image src={player.players.photo_url} alt="" width={64} height={80} className="h-full w-full object-contain object-bottom" /> : <div className="grid h-full place-items-center text-xl font-black text-texts">{player.shirt_number ?? '–'}</div>}</div><div className="min-w-0 flex-1"><p className="text-[10px] font-bold uppercase tracking-wider text-texts">{team.name}</p><h3 className="mt-1 truncate text-lg font-black text-textp">{player.players?.name ?? 'Player'}</h3><p className="mt-1 text-xs text-texts">#{player.shirt_number ?? '—'} · {player.position_label ?? 'Position pending'}</p></div><button onClick={onClose} className="text-texts hover:text-textp">×</button></div><div className="mt-4 grid grid-cols-3 gap-2 text-center"><PlayerFact label="Status" value="Current XI" /><PlayerFact label="Goal" value={goals ? 'Yes' : '—'} /><PlayerFact label="Card" value={yellow ? 'Yellow' : '—'} /></div><a href={`/squads?team=${teamCode}`} className="mt-4 block rounded-xl bg-primary px-3 py-2.5 text-center text-xs font-extrabold text-[#04210F]">Open {team.code} team centre</a></div></div>
+}
+
+function PlayerFact({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border border-border bg-surface px-2 py-2"><p className="text-[9px] font-bold uppercase tracking-wider text-texts">{label}</p><p className="mt-1 text-xs font-extrabold text-textp">{value}</p></div> }

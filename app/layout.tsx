@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Hanken_Grotesk, Schibsted_Grotesk } from "next/font/google";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
+import Telemetry from "@/components/Telemetry";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
 
@@ -81,6 +82,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="MatchDay" />
       </head>
       <body className={`${hankenGrotesk.variable} ${schibstedGrotesk.variable} antialiased min-h-screen bg-bg text-textp`}>
+        <Telemetry />
         <AppShell>{children}</AppShell>
       </body>
     </html>

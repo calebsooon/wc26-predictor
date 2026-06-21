@@ -16,7 +16,7 @@ try { new URL(url) } catch {
 }
 
 const supabase = createClient(url, serviceKey, { auth: { persistSession: false } })
-const tables = ['profiles', 'matches', 'leagues', 'players', 'sync_runs'] as const
+const tables = ['profiles', 'matches', 'leagues', 'players', 'sync_runs', 'match_participants', 'fifa_raw_snapshots'] as const
 let failed = false
 
 for (const table of tables) {

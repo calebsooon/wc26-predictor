@@ -16,6 +16,12 @@ export async function GET(request: Request) {
 
   const { data: profile } = await supabase.from('profiles').select('active_league_id').eq('id', user.id).maybeSingle()
   let leagueId = profile?.active_league_id ?? null
+  if (leagueId) {
+    const { data: activeMembership } = await supabase.from('league_members').select('league_id').eq('league_id', leagueId).eq('user_id', user.id).maybeSingle()
+    // An old active_league_id must never turn a recap endpoint into a cross-
+    // league lookup. Fall back to a real membership if the user left it.
+    if (!activeMembership) leagueId = null
+  }
   if (!leagueId) {
     const { data: membership } = await supabase.from('league_members').select('league_id').eq('user_id', user.id).limit(1).maybeSingle()
     leagueId = membership?.league_id ?? null
@@ -50,5 +56,5 @@ export async function GET(request: Request) {
     weights: resolveWeights((league as League | null)?.scoring),
     matchStats: (matchStats ?? []) as RecapMatchStat[],
   })
-  return NextResponse.json({ recap, money: isMoneyLeague(league as League | null) }, { headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' } })
+  return NextResponse.json({ recap, money: isMoneyLeague(league as League | null) }, { headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120', Vary: 'Cookie' } })
 }

@@ -135,13 +135,13 @@ export function buildGameweekRecap({
   const exactStory = stories.find((story) => story.kind === 'exact_calls')
   const xgMissStory = stories.find((story) => story.kind === 'xg_miss')
   const headline = consensusStory
-    ? `${consensusStory.match.home_team}–${consensusStory.match.away_team} stunned the league`
+    ? `Nobody saw ${consensusStory.match.home_team}–${consensusStory.match.away_team} coming`
     : xgMissStory
-      ? `${xgMissStory.match.home_team}–${xgMissStory.match.away_team} defied the xG`
+      ? `${xgMissStory.match.home_team}–${xgMissStory.match.away_team} defied the numbers`
       : climber
-        ? `${climber.row.name} climbs ${climber.movement} place${climber.movement === 1 ? '' : 's'}`
+        ? `${climber.row.name} storms up ${climber.movement} place${climber.movement === 1 ? '' : 's'}`
         : leader
-          ? `${leader.name} leads GW${gameweek} with ${leader.pts} points`
+          ? `${leader.name} owns GW${gameweek} with ${leader.pts} points`
           : `The story of gameweek ${gameweek}`
   const moment = consensusStory
     ? { kind: 'consensus_miss' as const, title: 'Moment of the week', body: `${consensusStory.value}% of the league missed ${consensusStory.match.home_team} ${consensusStory.match.real_home_score}–${consensusStory.match.real_away_score} ${consensusStory.match.away_team}.` }
@@ -154,19 +154,22 @@ export function buildGameweekRecap({
           : climber
             ? { kind: 'climber' as const, title: 'Moment of the week', body: `${climber.row.name} gained ${climber.movement} place${climber.movement === 1 ? '' : 's'} on the overall table.` }
             : null
-  const podium = standings.slice(0, 3).map((row, index) => `${index + 1}. ${row.name} — ${row.pts} pts`).join('\n')
+  const podium = standings.slice(0, 3).map((row, index) => `${index + 1}. ${row.name} — ${row.pts} pts${(row.exact ?? 0) ? ` · ${row.exact} exact` : ''}`).join('\n')
+  const personal = standings.find((row) => row.id === userId) ?? null
+  const personalRank = personal ? standings.findIndex((row) => row.id === personal.id) + 1 : null
   const shareText = [
-    `🏆 MATCHDAY · GAMEWEEK ${gameweek} RECAP`,
+    `🏆 MATCHDAY · GW${gameweek} PRIVATE LEAGUE RECAP`,
     '',
-    headline,
+    `“${headline}”`,
     moment?.body ?? '',
     '',
-    '📊 GAMEWEEK TABLE',
+    '📊 PODIUM',
     podium || 'No scores settled yet',
     climber ? `📈 Biggest climber: ${climber.row.name} (+${climber.movement})` : '',
     sniper ? `🎯 Scoreline sniper: ${sniper.name} (${sniper.exact} exact)` : '',
+    personal && personalRank ? `🙋 My week: #${personalRank} · ${personal.pts} pts${personal.exact ? ` · ${personal.exact} exact` : ''}` : '',
     '',
-    '#MatchDay',
+    'Private league recap · #MatchDay',
   ].filter(Boolean).join('\n')
   return {
     gameweek,

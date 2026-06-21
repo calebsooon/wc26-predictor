@@ -3,16 +3,14 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic'
 
-const playerStatKeys = [
-  'goals', 'assists', 'total_competition_minutes_played', 'matches_played',
-  'passes', 'passes_completed', 'passing_accuracy_rate', 'attempt_at_goal', 'attempt_at_goal_on_target',
-  'xg', 'crosses', 'crosses_completed', 'take_ons_completed', 'total_distance', 'avg_speed', 'top_speed',
-  'sprints', 'forced_turnovers', 'linebreaks_attempted', 'linebreaks_attempted_completed',
-  'goalkeeper_saves', 'goalkeeper_save_percentage', 'clean_sheets', 'yellow_cards', 'red_cards',
-]
-
 function compactStats(stats: Record<string, unknown> | null) {
-  return Object.fromEntries(playerStatKeys.map((key) => [key, stats?.[key] ?? 0]))
+  // FIFA's stat catalogue grows during the tournament. Keep numeric values
+  // rather than maintaining a brittle allow-list that silently turns new
+  // metrics (for example tackles/interceptions) into zero in the UI.
+  return Object.fromEntries(Object.entries(stats ?? {}).flatMap(([key, value]) => {
+    const number = typeof value === 'number' ? value : Number(value)
+    return Number.isFinite(number) ? [[key, number]] : []
+  }))
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ code: string }> }) {

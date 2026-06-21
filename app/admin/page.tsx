@@ -525,52 +525,33 @@ function QuickImport({ matches, onDone }: { matches: Match[]; onDone: (updated: 
 
 type FifaSyncSummary = {
   mapped: number
-  due: number
+  started: number
   completeLineups: number
   completeStats: number
-  missingLineups: number
-  missingStats: number
-  lastUpdated: string | null
+  missingLineups: Array<{ id: string; home_team: string; away_team: string }>
+  missingStats: Array<{ id: string; home_team: string; away_team: string }>
+  latestSourceUpdate: string | null
+  ageMinutes: number | null
+  latest: Record<string, { status: string; finished_at: string | null; records_read?: number; records_written?: number; error_summary?: string | null; scope?: string | null }>
 }
 
 function FifaSyncDashboard() {
-  const supabase = useMemo(() => createClient(), [])
   const [summary, setSummary] = useState<FifaSyncSummary | null>(null)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [matchesResult, lineupsResult, statsResult] = await Promise.all([
-      supabase.from('matches').select('id, match_date, fifa_event_id, fifa_updated_at'),
-      supabase.from('lineups').select('match_id'),
-      supabase.from('match_team_stats').select('match_id'),
-    ])
-    if (matchesResult.error || lineupsResult.error || statsResult.error) {
-      toast.error(matchesResult.error?.message ?? lineupsResult.error?.message ?? statsResult.error?.message ?? 'Could not load FIFA sync status')
+    try {
+      const response = await fetch('/api/admin/fifa-health', { cache: 'no-store' })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error ?? 'Could not load FIFA sync status')
+      setSummary(payload as FifaSyncSummary)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not load FIFA sync status')
+    } finally {
       setLoading(false)
-      return
     }
-    const matches = matchesResult.data ?? []
-    const lineups = new Map<string, number>()
-    const statPacks = new Map<string, number>()
-    for (const row of lineupsResult.data ?? []) lineups.set(row.match_id, (lineups.get(row.match_id) ?? 0) + 1)
-    for (const row of statsResult.data ?? []) statPacks.set(row.match_id, (statPacks.get(row.match_id) ?? 0) + 1)
-    const known = matches.filter((match) => match.fifa_event_id != null)
-    const due = known.filter((match) => new Date(match.match_date).getTime() <= Date.now())
-    const completeLineups = due.filter((match) => (lineups.get(match.id) ?? 0) >= 20).length
-    const completeStats = due.filter((match) => (statPacks.get(match.id) ?? 0) >= 2).length
-    const updated = known.map((match) => match.fifa_updated_at).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null
-    setSummary({
-      mapped: known.length,
-      due: due.length,
-      completeLineups,
-      completeStats,
-      missingLineups: Math.max(0, due.length - completeLineups),
-      missingStats: Math.max(0, due.length - completeStats),
-      lastUpdated: updated,
-    })
-    setLoading(false)
-  }, [supabase])
+  }, [])
 
   useEffect(() => { void load() }, [load])
 
@@ -597,11 +578,25 @@ function FifaSyncDashboard() {
     {loading || !summary ? <Skeleton className="mt-3 h-24 rounded-xl" /> : <>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <SyncMetric label="Fixtures mapped" value={`${summary.mapped}/104`} tone={summary.mapped >= 72 ? 'primary' : 'gold'} />
-        <SyncMetric label="Last FIFA update" value={summary.lastUpdated ? fmtDateTime(summary.lastUpdated) : 'Never'} />
-        <SyncMetric label="Started with XI" value={`${summary.completeLineups}/${summary.due}`} tone={summary.missingLineups ? 'gold' : 'primary'} />
-        <SyncMetric label="Started with stats" value={`${summary.completeStats}/${summary.due}`} tone={summary.missingStats ? 'gold' : 'primary'} />
+        <SyncMetric label="Last FIFA update" value={summary.latestSourceUpdate ? fmtDateTime(summary.latestSourceUpdate) : 'Never'} tone={summary.ageMinutes != null && summary.ageMinutes > 720 ? 'gold' : 'default'} />
+        <SyncMetric label="Started with XI" value={`${summary.completeLineups}/${summary.started}`} tone={summary.missingLineups.length ? 'gold' : 'primary'} />
+        <SyncMetric label="Started with stats" value={`${summary.completeStats}/${summary.started}`} tone={summary.missingStats.length ? 'gold' : 'primary'} />
       </div>
-      <p className="mt-2 text-[10px] text-texts">Missing counts only include fixtures that have started. Future fixtures do not receive an XI until FIFA publishes one.</p>
+      <p className="mt-2 text-[10px] text-texts">{summary.ageMinutes == null ? 'No official source timestamp yet.' : `Source freshness: ${summary.ageMinutes < 60 ? `${summary.ageMinutes} min ago` : `${Math.floor(summary.ageMinutes / 60)}h ago`}.`} Missing counts only include fixtures that have started.</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <SyncGap title="Lineup coverage" matches={summary.missingLineups} command="FIFA_SYNC_MODE=lineups MATCH_ID=" onCopy={copy} />
+        <SyncGap title="Stat coverage" matches={summary.missingStats} command="FIFA_SYNC_MODE=stats MATCH_ID=" onCopy={copy} />
+      </div>
+      <div className="mt-3 rounded-xl border border-border bg-surface px-3 py-2.5">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-texts">Latest import runs</p>
+        <div className="mt-2 grid gap-1.5 sm:grid-cols-3">
+          {(['fifa_matches', 'fifa_teams', 'golden_boot'] as const).map((kind) => {
+            const run = summary.latest[kind]
+            const tone = run?.status === 'success' ? 'text-primary' : run?.status === 'failed' ? 'text-error' : run?.status === 'partial' ? 'text-gold' : 'text-texts'
+            return <div key={kind} className="min-w-0"><p className="text-[10px] font-bold uppercase text-texts">{kind.replace('_', ' ')}</p><p className={`mt-0.5 truncate text-[11px] font-bold ${tone}`}>{run ? `${run.status} · ${run.records_written ?? 0} writes` : 'Not run'}</p>{run?.error_summary && <p className="mt-0.5 truncate text-[10px] text-error" title={run.error_summary}>{run.error_summary}</p>}</div>
+          })}
+        </div>
+      </div>
       <div className="mt-4 grid gap-2 sm:grid-cols-3">
         {commands.map((item) => <button key={item.command} onClick={() => void copy(item.command)} className="rounded-xl border border-border bg-surface p-3 text-left transition hover:border-primary/45 hover:bg-primary/[0.04]">
           <p className="text-xs font-bold text-textp">{item.label}</p><p className="mt-0.5 text-[10px] text-texts">{item.sub}</p><code className="mt-2 block truncate text-[10px] font-bold text-primary">{item.command}</code>
@@ -609,6 +604,10 @@ function FifaSyncDashboard() {
       </div>
     </>}
   </Card>
+}
+
+function SyncGap({ title, matches, command, onCopy }: { title: string; matches: Array<{ id: string; home_team: string; away_team: string }>; command: string; onCopy: (command: string) => Promise<void> }) {
+  return <div className="rounded-xl border border-border bg-surface p-3"><div className="flex items-center justify-between gap-2"><p className="text-xs font-bold text-textp">{title}</p><Pill tone={matches.length ? 'gold' : 'green'}>{matches.length ? `${matches.length} missing` : 'Complete'}</Pill></div>{matches.length ? <div className="mt-2 space-y-1.5">{matches.slice(0, 3).map((match) => <button key={match.id} onClick={() => void onCopy(`${command}${match.id} npm run data:fifa:match`)} className="block w-full truncate text-left text-[10px] font-semibold text-primary hover:underline" title="Copy a targeted refresh command">{match.home_team} v {match.away_team} · copy refresh</button>)}</div> : <p className="mt-1.5 text-[10px] text-texts">Every started match is covered.</p>}</div>
 }
 
 function SyncMetric({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'primary' | 'gold' }) {

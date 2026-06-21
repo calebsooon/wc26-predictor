@@ -31,34 +31,46 @@ interface Profile {
 
 type NavItem = { href: string; label: string; icon: (p: { size?: number; className?: string }) => JSX.Element; admin?: boolean; section?: string }
 
-// Grouped for the desktop sidebar (section label shown when it changes). Order
-// here is also the order used by the mobile drawer and command palette.
+// The shell is deliberately task-oriented: play the fixtures, follow your
+// league, then explore the tournament. Utility links live with the account,
+// rather than competing with matchday actions in the primary rail.
 const SIDEBAR: NavItem[] = [
   { href: '/dashboard',   label: 'Home',        icon: HomeIcon },
   { href: '/predictions', label: 'Fixtures',    icon: CalIcon,     section: 'Play' },
   { href: '/groups',      label: 'Groups',      icon: GridIcon,    section: 'Play' },
   { href: '/bracket',     label: 'Bracket',     icon: TreeIcon,    section: 'Play' },
-  { href: '/leaderboard', label: 'Leaderboard', icon: TrophyIcon,  section: 'Standings' },
-  { href: '/h2h',         label: 'Compare',     icon: ChartIcon,   section: 'Standings' },
-  { href: '/golden-boot', label: 'Golden Boot', icon: TrophyIcon,  section: 'Standings' },
-  { href: '/squads',      label: 'Teams',       icon: UsersIcon,   section: 'Reference' },
-  { href: '/faq',         label: 'FAQ',         icon: HelpIcon,    section: 'Reference' },
-  { href: '/profile',     label: 'Profile',     icon: UserIcon,    section: 'You' },
-  { href: '/install',     label: 'Get the app', icon: InstallIcon, section: 'You' },
-  { href: '/admin',       label: 'Admin',       icon: ShieldIcon, admin: true, section: 'Admin' },
+  { href: '/leaderboard', label: 'Leaderboard', icon: TrophyIcon,  section: 'League' },
+  { href: '/recap',       label: 'Recap',       icon: ChartIcon,   section: 'League' },
+  { href: '/h2h',         label: 'Compare',     icon: ChartIcon,   section: 'League' },
+  { href: '/squads',      label: 'Teams',       icon: UsersIcon,   section: 'Tournament' },
+  { href: '/golden-boot', label: 'Golden Boot', icon: TrophyIcon,  section: 'Tournament' },
+  { href: '/admin',       label: 'Admin',       icon: ShieldIcon, admin: true, section: 'Operations' },
+]
+
+const UTILITY: NavItem[] = [
+  { href: '/profile',     label: 'Profile',     icon: UserIcon },
+  { href: '/install',     label: 'Get the app', icon: InstallIcon },
+  { href: '/faq',         label: 'FAQ',         icon: HelpIcon },
 ]
 
 const BOTTOM: NavItem[] = [
   { href: '/dashboard',   label: 'Home',     icon: HomeIcon },
   { href: '/predictions', label: 'Fixtures', icon: CalIcon },
-  { href: '/leaderboard', label: 'Ranks',    icon: TrophyIcon },
+  { href: '/leaderboard', label: 'League',   icon: TrophyIcon },
 ]
+
+type MatchdayPulse = {
+  missingPicks: number
+  liveMatches: number
+  gameweek: number | null
+  recapReady: boolean
+}
 
 // Routes that render WITHOUT the app shell (own full-bleed layout)
 const BARE = ['/', '/login', '/auth', '/privacy', '/terms']
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
   const pathname = usePathname()
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -66,6 +78,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [leaguesReady, setLeaguesReady] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const [activeLeagueId, setActiveLeagueId] = useState<string | null>(null)
+  const [collapsed, setCollapsed] = useState(false)
+  const [matchday, setMatchday] = useState<MatchdayPulse | null>(null)
+
+  useEffect(() => {
+    try { setCollapsed(window.localStorage.getItem('matchday:sidebar-collapsed') === 'true') } catch {}
+  }, [])
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((value) => {
+      const next = !value
+      try { window.localStorage.setItem('matchday:sidebar-collapsed', String(next)) } catch {}
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -157,11 +183,60 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setMoreOpen(false)
   }, [pathname])
 
+  // One cached, compact read powers the navigation status; it does not make a
+  // provider request and avoids refetching whenever the user moves between
+  // pages in the shell.
+  useEffect(() => {
+    if (!profile || !activeLeague) { setMatchday(null); return }
+    let cancelled = false
+    async function loadPulse() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        const cacheKey = `matchday:navigation-pulse:${user.id}`
+        const cached = sessionStorage.getItem(cacheKey)
+        if (cached) {
+          const parsed = JSON.parse(cached) as { at: number; value: MatchdayPulse }
+          if (Date.now() - parsed.at < 45_000) { if (!cancelled) setMatchday(parsed.value); return }
+        }
+        const [{ data: matches, error: matchesError }, { data: picks, error: picksError }] = await Promise.all([
+          supabase.from('matches').select('id, match_date, gw_number, real_home_score, real_away_score, fifa_status'),
+          supabase.from('predictions').select('match_id, pred_home, pred_away').eq('user_id', user.id),
+        ])
+        if (matchesError || picksError) return
+        const predicted = new Set((picks ?? []).filter((pick) => pick.pred_home != null && pick.pred_away != null).map((pick) => pick.match_id))
+        const now = Date.now()
+        const liveMatches = (matches ?? []).filter((match) => {
+          const kickoff = new Date(match.match_date).getTime()
+          return match.real_home_score == null && (/live|in.?progress|half/i.test(match.fifa_status ?? '') || (kickoff <= now && kickoff > now - 4 * 3600_000))
+        })
+        const relevant = (matches ?? []).filter((match) => match.gw_number != null)
+        const inProgress = relevant.filter((match) => match.real_home_score == null && new Date(match.match_date).getTime() <= now)
+        const next = relevant.filter((match) => match.real_home_score == null && new Date(match.match_date).getTime() > now).sort((a, b) => +new Date(a.match_date) - +new Date(b.match_date))[0]
+        const latestScored = relevant.filter((match) => match.real_home_score != null).map((match) => match.gw_number ?? 0)
+        const gameweek = inProgress[0]?.gw_number ?? next?.gw_number ?? (latestScored.length ? Math.max(...latestScored) : null)
+        const weekMatches = gameweek ? relevant.filter((match) => match.gw_number === gameweek) : []
+        const value = {
+          missingPicks: (matches ?? []).filter((match) => match.real_home_score == null && new Date(match.match_date).getTime() > now && !predicted.has(match.id)).length,
+          liveMatches: liveMatches.length,
+          gameweek,
+          recapReady: weekMatches.length > 0 && weekMatches.every((match) => match.real_home_score != null),
+        }
+        sessionStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), value }))
+        if (!cancelled) setMatchday(value)
+      } catch { /* Navigation stays useful if this optional signal cannot load. */ }
+    }
+    void loadPulse()
+    return () => { cancelled = true }
+  }, [activeLeague, profile, supabase])
+
   if (isBare) return <MotionConfig reducedMotion="user">{children}<Toaster position="bottom-center" richColors /></MotionConfig>
 
   const items = SIDEBAR.filter((it) => !it.admin || profile?.is_admin)
+  const utilityItems = UTILITY
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
-  const mobileItems = [...items, { href: '/join', label: 'Join League', icon: TrophyIcon }]
+  const mobileItems = [...items, ...utilityItems, { href: '/join', label: 'Join League', icon: TrophyIcon }]
+  const openCommandPalette = () => window.dispatchEvent(new Event('matchday:open-command-palette'))
 
   async function logout() {
     await supabase.auth.signOut()
@@ -172,63 +247,73 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <MotionConfig reducedMotion="user">
     <ActiveLeagueProvider value={providerValue}>
     <div className="min-h-screen bg-bg text-textp" style={accentStyle}>
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-60 border-r border-border bg-surface z-30">
-        <Link href="/dashboard" className="h-16 flex items-center gap-2.5 px-5 border-b border-border">
-          <Logo />
-          <span className="font-extrabold tracking-tight">MATCHDAY</span>
-        </Link>
-        {activeLeague && (
-          <div className="px-3 pt-3">
-            <LeagueSwitcher leagues={myLeagues} active={activeLeague} onSwitch={switchLeague} />
+      {/* Desktop sidebar: a compactable matchday control rail. */}
+      <aside className={`hidden lg:flex flex-col fixed inset-y-0 left-0 border-r border-border bg-surface z-30 transition-[width] duration-200 ${collapsed ? 'w-[76px]' : 'w-60'}`}>
+        <div className={`h-16 flex items-center border-b border-border ${collapsed ? 'justify-center px-2' : 'gap-2.5 px-5'}`}>
+          <Link href="/dashboard" aria-label="MatchDay home" className={`flex items-center ${collapsed ? '' : 'gap-2.5'}`}>
+            <Logo />
+            {!collapsed && <span className="font-extrabold tracking-tight">MATCHDAY</span>}
+          </Link>
+          {!collapsed && <button onClick={toggleCollapsed} className="ml-auto h-7 w-7 rounded-lg text-texts hover:bg-surface2 hover:text-textp" title="Collapse sidebar" aria-label="Collapse sidebar">‹</button>}
+        </div>
+        {collapsed ? (
+          <div className="px-3 pt-3"><button onClick={toggleCollapsed} className="grid h-10 w-full place-items-center rounded-xl border border-border bg-card text-texts hover:text-textp" title="Expand sidebar" aria-label="Expand sidebar">›</button></div>
+        ) : activeLeague && (
+          <div className="px-3 pt-3"><LeagueSwitcher leagues={myLeagues} active={activeLeague} onSwitch={switchLeague} /></div>
+        )}
+        {matchday && (
+          <div className={collapsed ? 'px-3 pt-3' : 'px-3 pt-3'}>
+            <Link href={matchday.liveMatches ? '/predictions?status=live' : matchday.missingPicks ? '/predictions' : matchday.recapReady && matchday.gameweek ? `/recap?gw=${matchday.gameweek}` : '/dashboard'} title={collapsed ? `${matchday.liveMatches} live · ${matchday.missingPicks} picks due` : undefined} className={`block rounded-xl border transition hover:border-primary/50 ${collapsed ? 'p-2.5 text-center border-border bg-card' : 'border-primary/25 bg-primary/[0.07] p-3'}`}>
+              {collapsed ? <span className={`mx-auto block h-2.5 w-2.5 rounded-full ${matchday.liveMatches ? 'bg-coral animate-pulse' : matchday.missingPicks ? 'bg-gold' : 'bg-primary'}`} /> : <>
+                <div className="flex items-center justify-between gap-2"><span className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-primary">Matchday</span>{matchday.liveMatches > 0 && <span className="inline-flex items-center gap-1 text-[10px] font-bold text-coral"><span className="h-1.5 w-1.5 rounded-full bg-coral animate-pulse" />Live</span>}</div>
+                <p className="mt-1 text-xs font-bold text-textp">{matchday.liveMatches ? `${matchday.liveMatches} match${matchday.liveMatches !== 1 ? 'es' : ''} live now` : matchday.missingPicks ? `${matchday.missingPicks} pick${matchday.missingPicks !== 1 ? 's' : ''} still open` : matchday.recapReady ? `${matchday.gameweek ? `GW${matchday.gameweek} ` : ''}recap ready` : 'You are caught up'}</p>
+              </>}
+            </Link>
           </div>
         )}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto no-scrollbar">
+        {!collapsed && <button onClick={openCommandPalette} className="mx-3 mt-3 flex h-9 items-center gap-2 rounded-xl border border-border bg-card px-3 text-left text-xs font-semibold text-texts transition hover:border-texts/40 hover:text-textp"><span className="text-base leading-none">⌕</span><span className="flex-1">Jump to…</span><kbd className="rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] font-bold">⌘ K</kbd></button>}
+        <nav className={`flex-1 ${collapsed ? 'p-3 space-y-2' : 'p-3 space-y-1'} overflow-y-auto no-scrollbar`}>
           {items.map((it, i) => {
             const Ic = it.icon
             const active = isActive(it.href)
-            const showSection = it.section && it.section !== items[i - 1]?.section
+            const showSection = !collapsed && it.section && it.section !== items[i - 1]?.section
+            const recapBadge = it.href === '/recap' && matchday?.recapReady
+            const fixtureBadge = it.href === '/predictions' && (matchday?.missingPicks ?? 0) > 0
             return (
               <Fragment key={it.href}>
-                {showSection && (
-                  <div className="px-3 pt-3 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-faint">{it.section}</div>
-                )}
-                <Link
-                  href={it.href}
-                  className={`w-full flex items-center gap-3 h-11 px-3 rounded-xl font-bold text-sm transition-all border ${active ? 'bg-accent/[0.10] border-accent/[0.22] text-accent' : 'text-texts hover:text-textp hover:bg-surface2 border-transparent'}`}
-                >
-                  <Ic size={20} className={active ? 'text-accent' : ''} />
-                  <span className="flex-1">{it.label}</span>
-                  {it.admin && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gold/15 text-gold">ADMIN</span>}
+                {showSection && <div className="px-3 pt-3 pb-1 text-[10px] font-extrabold uppercase tracking-wider text-faint">{it.section}</div>}
+                <Link href={it.href} title={collapsed ? it.label : undefined} className={`w-full flex items-center ${collapsed ? 'justify-center h-10 px-2' : 'gap-3 h-11 px-3'} rounded-xl font-bold text-sm transition-all border ${active ? 'bg-accent/[0.10] border-accent/[0.22] text-accent' : 'text-texts hover:text-textp hover:bg-surface2 border-transparent'}`}>
+                  <span className="relative"><Ic size={20} className={active ? 'text-accent' : ''} />{collapsed && (recapBadge || fixtureBadge) && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-gold ring-2 ring-surface" />}</span>
+                  {!collapsed && <><span className="flex-1">{it.label}</span>{it.admin ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gold/15 text-gold">ADMIN</span> : recapBadge ? <span className="text-[9px] font-bold text-primary">NEW</span> : fixtureBadge ? <span className="grid min-w-5 h-5 place-items-center rounded-full bg-gold/15 px-1 text-[10px] text-gold">{matchday?.missingPicks}</span> : null}</>}
                 </Link>
               </Fragment>
             )
           })}
         </nav>
-        <div className="p-3 border-t border-border">
-          <button onClick={logout} className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-card transition-colors">
-            <Avatar name={profile?.username ?? '?'} src={profile?.avatar_url} size={36} />
-            <div className="flex-1 text-left min-w-0">
-              <div className="font-bold text-sm truncate">{profile?.username ?? 'Sign in'}</div>
-              <div className="text-[11px] text-texts">Log out</div>
-            </div>
-            <ChevDown size={14} className="text-texts -rotate-90" />
+        <div className={`border-t border-border ${collapsed ? 'p-3 space-y-2' : 'p-3 space-y-1'}`}>
+          {!collapsed && utilityItems.map((it) => { const Ic = it.icon; return <Link key={it.href} href={it.href} className="flex h-9 items-center gap-3 rounded-xl px-3 text-xs font-bold text-texts hover:bg-surface2 hover:text-textp"><Ic size={17} />{it.label}</Link> })}
+          <button onClick={logout} title={collapsed ? 'Log out' : undefined} className={`w-full flex items-center ${collapsed ? 'justify-center p-2' : 'gap-3 p-2.5'} rounded-xl hover:bg-card transition-colors`}>
+            <Avatar name={profile?.username ?? '?'} src={profile?.avatar_url} size={collapsed ? 32 : 36} />
+            {!collapsed && <><div className="flex-1 text-left min-w-0"><div className="font-bold text-sm truncate">{profile?.username ?? 'Sign in'}</div><div className="text-[11px] text-texts">Log out</div></div><ChevDown size={14} className="text-texts -rotate-90" /></>}
           </button>
         </div>
       </aside>
 
       {/* Main column */}
-      <div className="lg:pl-60">
+      <div className={`transition-[padding] duration-200 ${collapsed ? 'lg:pl-[76px]' : 'lg:pl-60'}`}>
         <header className="sticky top-0 z-20 h-16 border-b border-border bg-bg/90 backdrop-blur-md">
           <div className="h-full max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between">
             <Link href="/dashboard" className="flex items-center gap-2 lg:hidden">
               <Logo size={26} />
               <span className="font-extrabold tracking-tight text-sm">MATCHDAY</span>
             </Link>
-            <div className="hidden lg:flex items-center gap-3.5">
+            <div className="hidden lg:flex items-center gap-3.5 min-w-0">
               <span className="text-xs font-bold uppercase tracking-wider text-texts whitespace-nowrap">World Cup 2026</span>
+              {matchday?.gameweek && <span className="h-5 border-l border-border" />}
+              {matchday?.gameweek && <span className="text-xs font-bold text-textp whitespace-nowrap">GW{matchday.gameweek}{matchday.liveMatches ? ` · ${matchday.liveMatches} live` : ''}</span>}
             </div>
             <div className="flex items-center gap-2 sm:gap-2.5">
+              <button onClick={openCommandPalette} className="hidden lg:flex h-9 items-center gap-2 rounded-xl border border-border bg-surface px-3 text-xs font-bold text-texts hover:text-textp hover:border-texts/40" aria-label="Open command palette"><span>⌕</span><kbd className="text-[10px]">⌘ K</kbd></button>
               {activeLeague && (
                 <div className="lg:hidden">
                   <LeagueSwitcher leagues={myLeagues} active={activeLeague} onSwitch={switchLeague} compact />
@@ -313,6 +398,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <LeagueSwitcher leagues={myLeagues} active={activeLeague} onSwitch={switchLeague} />
                   </div>
                 )}
+                {matchday && <Link href={matchday.missingPicks ? '/predictions' : matchday.recapReady && matchday.gameweek ? `/recap?gw=${matchday.gameweek}` : '/dashboard'} onClick={() => setMoreOpen(false)} className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/[0.07] px-3 py-2.5"><div><p className="text-[10px] font-bold uppercase tracking-wider text-primary">Matchday</p><p className="mt-0.5 text-xs font-bold text-textp">{matchday.liveMatches ? `${matchday.liveMatches} live now` : matchday.missingPicks ? `${matchday.missingPicks} picks to make` : matchday.recapReady ? 'Recap ready' : 'All caught up'}</p></div><span className="text-primary">→</span></Link>}
               </div>
               <div className="p-3 grid grid-cols-2 gap-2 overflow-y-auto max-h-[60vh]">
                 {mobileItems.map((it) => {
@@ -337,7 +423,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <Toaster position="bottom-center" richColors />
       <CommandPalette
         commands={[
+          { id: 'action:predict', label: 'Make your next prediction', hint: 'Action', run: () => router.push('/predictions') },
+          ...(matchday?.recapReady && matchday.gameweek ? [{ id: `action:recap:${matchday.gameweek}`, label: `Open GW${matchday.gameweek} recap`, hint: 'Action', run: () => router.push(`/recap?gw=${matchday.gameweek}`) }] : []),
           ...items.map((it) => ({ id: `nav:${it.href}`, label: it.label, hint: 'Page', run: () => router.push(it.href) })),
+          ...utilityItems.map((it) => ({ id: `utility:${it.href}`, label: it.label, hint: 'Utility', run: () => router.push(it.href) })),
           ...myLeagues.map((l) => ({ id: `lg:${l.id}`, label: `Switch to ${l.name}`, hint: 'League', run: () => switchLeague(l.id) })),
         ]}
       />

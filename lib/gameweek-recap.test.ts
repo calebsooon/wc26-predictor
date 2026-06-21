@@ -17,4 +17,16 @@ describe('buildGameweekRecap', () => {
     expect(recap.leader?.name).toBe('Ben')
     expect(recap.stories).not.toHaveLength(0)
   })
+
+  it('creates a copy-ready private recap with podium, movement, and personal context', () => {
+    const recap = buildGameweekRecap({ gameweek: 2, matches, profiles, userId: 'a', weights: DEFAULT_WEIGHTS, predictions: [
+      { user_id: 'a', match_id: 'old', pred_home: 1, pred_away: 0, ...hit },
+      { user_id: 'a', match_id: 'now', pred_home: 2, pred_away: 1, ...hit },
+      { user_id: 'b', match_id: 'now', pred_home: 0, pred_away: 0, points_awarded: 0 },
+    ] })
+    expect(recap.shareText).toContain('PRIVATE LEAGUE RECAP')
+    expect(recap.shareText).toContain('PODIUM')
+    expect(recap.shareText).toContain('My week:')
+    expect(recap.headline.length).toBeGreaterThan(10)
+  })
 })
