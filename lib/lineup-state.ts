@@ -5,7 +5,7 @@ export interface LineupPlayerState {
   position_label: string | null
   grid: string | null
   sort_order: number
-  players: { name: string } | null
+  players: { name: string; photo_url?: string | null } | null
 }
 
 export interface LineupSubstitution {

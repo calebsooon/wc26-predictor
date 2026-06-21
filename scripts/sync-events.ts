@@ -20,7 +20,7 @@ async function main() {
   const { data, error } = await query
   if (error) throw error
   const result = await syncMatchSubstitutions(service, (data ?? []) as never[])
-  console.log(`Substitutions: ${result.written} synced${result.errors.length ? `; ${result.errors.join('; ')}` : ''}`)
+  console.log(`Substitutions: ${result.written} synced; timeline events: ${result.eventWritten} synced${result.errors.length ? `; ${result.errors.join('; ')}` : ''}`)
 }
 
 main().catch((error) => { console.error(error); process.exit(1) })

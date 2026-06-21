@@ -20,6 +20,7 @@ import { AddMatchToCalendar } from '@/components/AddMatchToCalendar'
 import { MatchLineups } from '@/components/MatchLineups'
 import { LeagueRead } from '@/components/LeagueRead'
 import { TeamLink } from '@/components/TeamLink'
+import { MatchFacts, type StoredPlayerStats, type StoredTeamStats } from '@/components/MatchFacts'
 
 interface OtherPred extends MatchBreakdown {
   user_id: string
@@ -55,6 +56,8 @@ export default function MatchDetailPage() {
   const [gdManual, setGdManual] = useState(false)
   const [bttsManual, setBttsManual] = useState(false)
   const [players, setPlayers] = useState<PlayerForPicker[]>([])
+  const [teamStats, setTeamStats] = useState<StoredTeamStats[]>([])
+  const [playerStats, setPlayerStats] = useState<StoredPlayerStats[]>([])
   const [others, setOthers] = useState<OtherPred[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -89,16 +92,21 @@ export default function MatchDetailPage() {
       setMatch(dbm)
 
       const home = getTeam(dbm.home_team), away = getTeam(dbm.away_team)
-      const { data: pl } = await supabase
-        .from('players')
-        .select('id, name, team_name, jersey_number, position')
-        .in('team_name', [home.playerKey, away.playerKey])
-        .order('jersey_number', { ascending: true, nullsFirst: false })
+      const [{ data: pl }, { data: matchTeamStats }, { data: matchPlayerStats }] = await Promise.all([
+        supabase.from('players')
+          .select('id, name, team_name, jersey_number, position')
+          .in('team_name', [home.playerKey, away.playerKey])
+          .order('jersey_number', { ascending: true, nullsFirst: false }),
+        supabase.from('match_team_stats').select('team_code, stats').eq('match_id', id),
+        supabase.from('match_player_stats').select('player_id, team_code, stats').eq('match_id', id),
+      ])
       type PlRow = { id: number; name: string; team_name: string; jersey_number: number | null; position: string | null }
       setPlayers((pl ?? []).map((p) => {
         const { id, name, team_name, jersey_number, position } = p as PlRow
         return { id, name, jersey_number, position: position ?? null, team_code: team_name === home.playerKey ? dbm.home_team : dbm.away_team }
       }))
+      setTeamStats((matchTeamStats ?? []) as unknown as StoredTeamStats[])
+      setPlayerStats((matchPlayerStats ?? []) as unknown as StoredPlayerStats[])
 
       const { data: mine } = await supabase
         .from('predictions')
@@ -171,6 +179,10 @@ export default function MatchDetailPage() {
 
   const home = getTeam(match.home_team), away = getTeam(match.away_team)
   const scored = match.real_home_score !== null && match.real_away_score !== null
+  const fifaScore = (match as { fifa_metadata?: { score?: { home?: number | null; away?: number | null } } }).fifa_metadata?.score
+  const displayHomeScore = match.real_home_score ?? fifaScore?.home ?? null
+  const displayAwayScore = match.real_away_score ?? fifaScore?.away ?? null
+  const hasLiveScore = displayHomeScore !== null && displayAwayScore !== null
   // secsLeft updates every second — form locks at kickoff even if user keeps the page open
   const locked = scored || match.is_locked || (secsLeft !== null ? secsLeft <= 0 : new Date(match.match_date) <= new Date())
   const knockout = !match.group_name
@@ -209,6 +221,7 @@ export default function MatchDetailPage() {
         <div className="flex items-center justify-center gap-2 mb-5">
           <Pill tone={knockout ? 'gold' : 'default'}>{knockout ? (match.round_name ?? 'Knockout') : `Group ${match.group_name ?? ''}`.trim()}</Pill>
           {scored && <Pill tone="green">Final</Pill>}
+          {!scored && hasLiveScore && <Pill tone="gold">Live</Pill>}
         </div>
         <div className="flex items-center justify-between">
           <TeamLink code={match.home_team} className="flex-1 flex flex-col items-center gap-2.5 hover:opacity-75">
@@ -216,8 +229,8 @@ export default function MatchDetailPage() {
             <span className="font-extrabold text-textp text-center leading-tight">{home.name}</span>
           </TeamLink>
           <div className="px-3 text-center shrink-0">
-            {scored
-              ? <ScoreDisplay a={match.real_home_score} b={match.real_away_score} size="text-4xl" />
+            {hasLiveScore
+              ? <ScoreDisplay a={displayHomeScore} b={displayAwayScore} size="text-4xl" />
               : <div className="text-3xl font-black text-texts">VS</div>}
             <div className="text-[11px] text-texts font-bold mt-1.5">{fmtDateTime(match.match_date)}</div>
           </div>
@@ -253,6 +266,7 @@ export default function MatchDetailPage() {
         <LeagueRead
           homeName={home.name} awayName={away.name} homeCode={match.home_team} awayCode={match.away_team}
           picks={others} userId={userId} playerNames={new Map(players.map((player) => [player.id, player.name]))}
+          actual={{ home: match.real_home_score, away: match.real_away_score, firstScorerId: (match as { first_goal_player_id?: number | null }).first_goal_player_id ?? null }}
         />
       )}
 
@@ -262,6 +276,18 @@ export default function MatchDetailPage() {
         awayCode={match.away_team}
         homeFormation={(match as { home_formation?: string | null }).home_formation ?? null}
         awayFormation={(match as { away_formation?: string | null }).away_formation ?? null}
+        homeScore={displayHomeScore}
+        awayScore={displayAwayScore}
+        scoreLabel={scored ? 'Final score' : locked ? 'Live match' : 'Pre-match'}
+      />
+
+      <MatchFacts
+        homeCode={match.home_team}
+        awayCode={match.away_team}
+        metadata={(match as { fifa_metadata?: unknown }).fifa_metadata}
+        teamStats={teamStats}
+        playerStats={playerStats}
+        playerNames={new Map(players.map((player) => [player.id, player.name]))}
       />
 
       {/* prediction entry */}
