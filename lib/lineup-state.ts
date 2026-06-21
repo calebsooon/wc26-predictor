@@ -14,7 +14,7 @@ export interface LineupSubstitution {
   player_out_id: number
   player_in_id: number
   minute: number
-  source?: 'kickoff' | 'manual'
+  source?: 'kickoff' | 'fifa' | 'manual'
   created_at?: string
 }
 

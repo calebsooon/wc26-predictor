@@ -524,6 +524,99 @@ function QuickImport({ matches, onDone }: { matches: Match[]; onDone: (updated: 
   )
 }
 
+type FifaSyncSummary = {
+  mapped: number
+  due: number
+  completeLineups: number
+  completeStats: number
+  missingLineups: number
+  missingStats: number
+  lastUpdated: string | null
+}
+
+function FifaSyncDashboard() {
+  const supabase = useMemo(() => createClient(), [])
+  const [summary, setSummary] = useState<FifaSyncSummary | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const [matchesResult, lineupsResult, statsResult] = await Promise.all([
+      supabase.from('matches').select('id, match_date, fifa_event_id, fifa_updated_at'),
+      supabase.from('lineups').select('match_id'),
+      supabase.from('match_team_stats').select('match_id'),
+    ])
+    if (matchesResult.error || lineupsResult.error || statsResult.error) {
+      toast.error(matchesResult.error?.message ?? lineupsResult.error?.message ?? statsResult.error?.message ?? 'Could not load FIFA sync status')
+      setLoading(false)
+      return
+    }
+    const matches = matchesResult.data ?? []
+    const lineups = new Map<string, number>()
+    const statPacks = new Map<string, number>()
+    for (const row of lineupsResult.data ?? []) lineups.set(row.match_id, (lineups.get(row.match_id) ?? 0) + 1)
+    for (const row of statsResult.data ?? []) statPacks.set(row.match_id, (statPacks.get(row.match_id) ?? 0) + 1)
+    const known = matches.filter((match) => match.fifa_event_id != null)
+    const due = known.filter((match) => new Date(match.match_date).getTime() <= Date.now())
+    const completeLineups = due.filter((match) => (lineups.get(match.id) ?? 0) >= 20).length
+    const completeStats = due.filter((match) => (statPacks.get(match.id) ?? 0) >= 2).length
+    const updated = known.map((match) => match.fifa_updated_at).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null
+    setSummary({
+      mapped: known.length,
+      due: due.length,
+      completeLineups,
+      completeStats,
+      missingLineups: Math.max(0, due.length - completeLineups),
+      missingStats: Math.max(0, due.length - completeStats),
+      lastUpdated: updated,
+    })
+    setLoading(false)
+  }, [supabase])
+
+  useEffect(() => { void load() }, [load])
+
+  async function copy(command: string) {
+    try {
+      await navigator.clipboard.writeText(command)
+      toast.success('Command copied')
+    } catch {
+      toast.error('Could not copy command')
+    }
+  }
+
+  const commands = [
+    { label: 'Daily refresh', command: 'npm run data:fifa:daily', sub: 'Nearby matches + Golden Boot' },
+    { label: 'Fixtures only', command: 'npm run data:fifa:fixtures', sub: 'All FIFA IDs, times, status, and venue data' },
+    { label: 'Full backfill', command: 'npm run data:fifa:backfill', sub: 'All published team sheets and stat packs' },
+  ]
+
+  return <Card className="p-4">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <SectionHeader title="FIFA sync cockpit" sub="Database health for the local FIFA importer. No provider call is made here." />
+      <Button size="sm" variant="outline" onClick={() => void load()} disabled={loading}>{loading ? 'Checking…' : 'Refresh status'}</Button>
+    </div>
+    {loading || !summary ? <Skeleton className="mt-3 h-24 rounded-xl" /> : <>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <SyncMetric label="Fixtures mapped" value={`${summary.mapped}/104`} tone={summary.mapped >= 72 ? 'primary' : 'gold'} />
+        <SyncMetric label="Last FIFA update" value={summary.lastUpdated ? fmtDateTime(summary.lastUpdated) : 'Never'} />
+        <SyncMetric label="Started with XI" value={`${summary.completeLineups}/${summary.due}`} tone={summary.missingLineups ? 'gold' : 'primary'} />
+        <SyncMetric label="Started with stats" value={`${summary.completeStats}/${summary.due}`} tone={summary.missingStats ? 'gold' : 'primary'} />
+      </div>
+      <p className="mt-2 text-[10px] text-texts">Missing counts only include fixtures that have started. Future fixtures do not receive an XI until FIFA publishes one.</p>
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        {commands.map((item) => <button key={item.command} onClick={() => void copy(item.command)} className="rounded-xl border border-border bg-surface p-3 text-left transition hover:border-primary/45 hover:bg-primary/[0.04]">
+          <p className="text-xs font-bold text-textp">{item.label}</p><p className="mt-0.5 text-[10px] text-texts">{item.sub}</p><code className="mt-2 block truncate text-[10px] font-bold text-primary">{item.command}</code>
+        </button>)}
+      </div>
+    </>}
+  </Card>
+}
+
+function SyncMetric({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'primary' | 'gold' }) {
+  const colour = tone === 'primary' ? 'text-primary' : tone === 'gold' ? 'text-gold' : 'text-textp'
+  return <div className="rounded-xl border border-border bg-surface px-3 py-2.5"><p className="text-[9px] font-bold uppercase tracking-wider text-texts">{label}</p><p className={`mt-1 truncate text-sm font-extrabold tabular-nums ${colour}`} title={value}>{value}</p></div>
+}
+
 function AdminActions() {
   const [busy, setBusy] = useState<string | null>(null)
   const [health, setHealth] = useState<Record<string, { status: string; finished_at: string | null; details: Record<string, unknown> }>>({})
@@ -1284,6 +1377,7 @@ export default function AdminPage() {
     <div className="space-y-5">
       <PageHeader eyebrow="Admin" title="Admin console" sub="League setup, results entry, and tournament actions." />
       <LeagueAdmin />
+      <FifaSyncDashboard />
       <AdminActions />
       <BracketResultsEditor />
       <div className="flex items-center justify-between gap-3">
