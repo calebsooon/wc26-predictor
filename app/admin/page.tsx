@@ -434,7 +434,6 @@ function AdminRow({ m, onSaved }, ref) {
       )}
 
       <div className="flex items-center justify-end gap-2 mt-3 flex-wrap">
-        <span className="mr-auto text-[10px] text-texts">FIFA updates run locally with <code>npm run data:fifa:matches</code>.</span>
         {hasScore && <Pill tone="green">{m.real_home_score}–{m.real_away_score} (scored)</Pill>}
         {scoringFailed && (
           <Button size="sm" variant="outline" onClick={scoreOnly} disabled={saving}>
@@ -1379,7 +1378,6 @@ export default function AdminPage() {
       <LeagueAdmin />
       <FifaSyncDashboard />
       <AdminActions />
-      <BracketResultsEditor />
       <div className="flex items-center justify-between gap-3">
         <SectionHeader title="Results entry" sub="Saving a result locks the match and recalculates points." />
         {filter !== 'done' && pendingCount > 0 && (
@@ -1400,6 +1398,7 @@ export default function AdminPage() {
           />
         ))}
       </div>
+      <BracketResultsEditor />
     </div>
   )
 }

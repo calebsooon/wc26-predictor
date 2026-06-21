@@ -548,11 +548,11 @@ export default function LeaderboardPage() {
                   gap: 14,
                 }}>
                   <span style={{ width: 22, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'center', flexShrink: 0 }}>#</span>
-                  {hasSnapshots && <span style={{ width: 10, flexShrink: 0 }} />}
+                  {hasSnapshots && <span className="hidden sm:block" style={{ width: 18, flexShrink: 0 }} />}
                   <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))' }}>Player</span>
                   <span className="hidden sm:block" style={{ width: 90, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'center', flexShrink: 0 }}>Exact</span>
                   <span style={{ width: 60, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'right', flexShrink: 0 }}>{tab === 'all' ? 'Points' : 'GW Pts'}</span>
-                  {isMoney && <span className="hidden sm:block" style={{ width: 60, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'right', flexShrink: 0 }}>Prize</span>}
+                  {isMoney && <span className="hidden sm:block" style={{ width: 64, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'right', flexShrink: 0 }}>Prize</span>}
                 </div>
 
                 <div style={{ padding: '4px' }}>
@@ -596,9 +596,9 @@ export default function LeaderboardPage() {
                           {place}
                         </span>
 
-                        {/* Delta */}
+                        {/* Delta — hidden on mobile */}
                         {hasSnapshots && (
-                          <span style={{
+                          <span className="hidden sm:inline" style={{
                             minWidth: 18,
                             fontSize: 13,
                             fontWeight: 700,
@@ -657,23 +657,27 @@ export default function LeaderboardPage() {
                           {p.exact ?? 0}
                         </span>
 
-                        {/* Points */}
-                        <span style={{
-                          width: 60,
-                          fontSize: 16,
-                          fontWeight: 800,
-                          textAlign: 'right',
-                          fontFamily: 'Schibsted Grotesk, sans-serif',
-                          color: 'rgb(var(--textp))',
-                          flexShrink: 0,
-                        }}>
-                          {p.pts}
-                        </span>
+                        {/* Points — on mobile, also shows prize underneath */}
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <div style={{
+                            fontSize: 16,
+                            fontWeight: 800,
+                            fontFamily: 'Schibsted Grotesk, sans-serif',
+                            color: 'rgb(var(--textp))',
+                          }}>
+                            {p.pts}
+                          </div>
+                          {isMoney && prizeLabel && (
+                            <div className="sm:hidden" style={{ fontSize: 10.5, fontWeight: 700, color: prizeColor, marginTop: 1 }}>
+                              {prizeLabel}
+                            </div>
+                          )}
+                        </div>
 
-                        {/* Prize — hidden on mobile */}
+                        {/* Prize — desktop only */}
                         {isMoney && (
                           <span className="hidden sm:block" style={{
-                            width: 60,
+                            width: 64,
                             textAlign: 'right',
                             fontSize: 13,
                             fontWeight: 700,

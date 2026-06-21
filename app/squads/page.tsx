@@ -117,10 +117,12 @@ function TeamProfile({ detail, onBack }: { detail: TeamDetail; onBack: () => voi
   const wins = matches.filter(completed).filter((match) => resultFor(match, team.code) === 'W').length
   const draws = matches.filter(completed).filter((match) => resultFor(match, team.code) === 'D').length
   const losses = matches.filter(completed).filter((match) => resultFor(match, team.code) === 'L').length
-  const leaders = (key: string) => [...players].sort((a, b) => stat(b.stats, key) - stat(a.stats, key))[0]
+  const squadGroup = (player: TeamPlayer) => player.position === 'Goalkeeper' || (player.position === 'Unknown' && player.jersey_number != null && GOALKEEPER_NUMBERS.has(player.jersey_number)) ? 'Goalkeeper' : player.position === 'Unknown' || !player.position ? 'Unclassified' : player.position
+  const activePlayers = players.filter((p) => stat(p.stats, 'total_competition_minutes_played') > 0)
+  const leaders = (key: string) => [...activePlayers].sort((a, b) => stat(b.stats, key) - stat(a.stats, key))[0]
+  const leadersGK = (key: string) => [...activePlayers].filter((p) => squadGroup(p) === 'Goalkeeper').sort((a, b) => stat(b.stats, key) - stat(a.stats, key))[0]
   const passAccuracy = stat(team.stats, 'passes') ? Math.round(stat(team.stats, 'passes_completed') / stat(team.stats, 'passes') * 100) : 0
   const filteredMatches = matches.filter((match) => match.home_team === team.code || match.away_team === team.code)
-  const squadGroup = (player: TeamPlayer) => player.position === 'Goalkeeper' || (player.position === 'Unknown' && player.jersey_number != null && GOALKEEPER_NUMBERS.has(player.jersey_number)) ? 'Goalkeeper' : player.position === 'Unknown' || !player.position ? 'Unclassified' : player.position
   const positionPlayers = [...players].sort((a, b) => (POSITION_ORDER[squadGroup(a)] ?? 99) - (POSITION_ORDER[squadGroup(b)] ?? 99) || (a.jersey_number ?? 99) - (b.jersey_number ?? 99))
   const teamExtraMetrics = [
     ['Possession', stat(team.stats, 'possession'), '%'], ['xG', displayStat(stat(team.stats, 'xg')), ''], ['Corners', stat(team.stats, 'corners'), ''], ['Crosses', stat(team.stats, 'crosses'), ''],
@@ -133,7 +135,7 @@ function TeamProfile({ detail, onBack }: { detail: TeamDetail; onBack: () => voi
     attacking: [['Most shots on target', 'attempt_at_goal_on_target', '', 0], ['Most crosses', 'crosses_completed', '', 0], ['Most take-ons', 'take_ons_completed', '', 0], ['Most xG', 'xg', '', 2]],
     progression: [['Most passes', 'passes', '', 0], ['Best pass completion', 'passing_accuracy_rate', '%', 2], ['Most line breaks', 'linebreaks_attempted_completed', '', 0], ['Most forced turnovers', 'forced_turnovers', '', 0]],
     physical: [['Most sprints', 'sprints', '', 0], ['Top speed', 'top_speed', ' km/h', 2], ['Most distance', 'total_distance', ' km', 2], ['Most minutes', 'total_competition_minutes_played', '', 0]],
-    defending: [['Most forced turnovers', 'forced_turnovers', '', 0], ['Most line breaks', 'linebreaks_attempted_completed', '', 0], ['Most clean sheets', 'clean_sheets', '', 0], ['Fewest cards', 'yellow_cards', '', 0]],
+    defending: [['Most forced turnovers', 'forced_turnovers', '', 0], ['Most tackles', 'tackles', '', 0], ['Most interceptions', 'interceptions', '', 0], ['Most clean sheets', 'clean_sheets', '', 0]],
     goalkeeping: [['Most saves', 'goalkeeper_saves', '', 0], ['Best save percentage', 'goalkeeper_save_percentage', '%', 2], ['Most clean sheets', 'clean_sheets', '', 0], ['Most minutes', 'total_competition_minutes_played', '', 0]],
   } as const
 
@@ -151,7 +153,33 @@ function TeamProfile({ detail, onBack }: { detail: TeamDetail; onBack: () => voi
     <div className="flex gap-2 border-b border-border overflow-x-auto">{(['overview', 'squad', 'fixtures'] as const).map((name) => <button key={name} onClick={() => setTab(name)} className={`capitalize px-3 pb-3 text-sm font-bold border-b-2 ${tab === name ? 'border-primary text-primary' : 'border-transparent text-texts hover:text-textp'}`}>{name}</button>)}</div>
     {tab === 'overview' && <div className="space-y-6">
       <section><div className="mb-3 flex items-center justify-between gap-3"><h2 className="font-extrabold text-textp">Team stats</h2><button onClick={() => setAdvancedStats((value) => !value)} className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-bold text-texts transition hover:text-textp">{advancedStats ? 'Show essentials' : 'More FIFA stats'}</button></div><div className="grid grid-cols-2 lg:grid-cols-4 gap-3"><Metric label="Record" value={`${wins}-${draws}-${losses}`} hint={`${played} played`} /><Metric label="Goals" value={stat(team.stats, 'goals')} hint={`${stat(team.stats, 'goals_conceded')} conceded`} /><Metric label="Passes" value={stat(team.stats, 'passes').toLocaleString()} hint={`${passAccuracy}% completed`} /><Metric label="Shots on target" value={stat(team.stats, 'attempt_at_goal_on_target')} hint={`${stat(team.stats, 'attempt_at_goal')} attempts`} /></div>{advancedStats && <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">{teamExtraMetrics.map(([label, value, suffix]) => <Metric key={label} label={label} value={`${value}${suffix}`} />)}</div>}</section>
-      <section><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="font-extrabold text-textp">Player stats</h2><select value={playerStatView} onChange={(event) => setPlayerStatView(event.target.value as typeof playerStatView)} className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-bold text-textp outline-none focus:border-primary"><option value="essentials">Essentials</option><option value="attacking">Attacking</option><option value="progression">Progression</option><option value="physical">Physical</option><option value="defending">Defending</option><option value="goalkeeping">Goalkeeping</option></select></div><div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">{playerLeaderViews[playerStatView].map(([label, key, suffix, decimals]) => <Leader key={key} label={label} player={leaders(key)} value={stat(leaders(key)?.stats ?? {}, key)} suffix={suffix} decimals={decimals} />)}</div></section>
+      <section>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-extrabold text-textp">Player stats</h2>
+          <div className="flex gap-1.5 overflow-x-auto">
+            {(['essentials', 'attacking', 'progression', 'physical', 'defending', 'goalkeeping'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setPlayerStatView(v)}
+                className={`h-7 px-3 rounded-xl text-[11.5px] font-bold whitespace-nowrap capitalize border transition ${
+                  playerStatView === v
+                    ? 'border-primary bg-primary/15 text-primary'
+                    : 'border-border bg-surface text-texts hover:text-textp'
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {playerLeaderViews[playerStatView].map(([label, key, suffix, decimals]) => {
+            const leaderFn = playerStatView === 'goalkeeping' ? leadersGK : leaders
+            const p = leaderFn(key)
+            return <Leader key={key} label={label} player={p} value={stat(p?.stats ?? {}, key)} suffix={suffix} decimals={decimals} />
+          })}
+        </div>
+      </section>
       <section><h2 className="font-extrabold text-textp mb-3">Fixtures & form</h2><FixtureStrip code={team.code} matches={filteredMatches} /></section>
     </div>}
     {tab === 'squad' && <div className="space-y-7">{POSITIONS.map((position) => { const group = positionPlayers.filter((player) => squadGroup(player) === position); if (!group.length) return null; const label = position === 'Unclassified' ? 'Other squad members' : `${position}s`; const badge = position === 'Unclassified' ? '—' : POSITION_ABBR[position]; return <section key={position}><div className="flex items-center gap-2 mb-3"><Pill tone="default">{badge}</Pill><h2 className="font-extrabold text-textp">{label}</h2><span className="text-xs text-texts">{group.length}</span>{position === 'Unclassified' && <span className="text-[11px] text-texts">FIFA has not assigned a position yet</span>}</div><div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">{group.map((player) => <Card key={player.fifa_player_id} className="relative overflow-hidden min-h-[272px] p-4 flex flex-col justify-between"><div className="flex justify-between items-start relative z-10"><span className="w-7 h-7 grid place-items-center rounded-lg bg-surface2 text-sm font-extrabold tabular-nums">{player.jersey_number ?? '—'}</span>{player.player.injured && <span className="px-1.5 py-0.5 rounded bg-coral/15 text-coral text-[10px] font-bold">OUT</span>}</div>{player.player.photo_url && <Image src={player.player.photo_url} alt={player.player.name} width={180} height={245} className="absolute inset-x-0 bottom-8 h-[216px] w-full object-contain object-bottom" />}<div className="relative z-10 mt-auto pt-3 bg-gradient-to-t from-card via-card/95"><div className="flex gap-1.5 items-center"><FlagChip code={team.code} w={18} h={12} r={2} />{picks.has(player.player_id) && <span className="text-gold text-xs" title="Your first-scorer pick">★</span>}</div><p className="font-extrabold text-sm text-textp mt-1 truncate">{player.player.name}</p><p className="text-[11px] text-texts">{age(player.player.dob) != null ? `${age(player.player.dob)} years` : 'Age unavailable'} · {position === 'Unclassified' ? 'Position pending' : position}</p>{(player.height_cm || player.weight_kg) && <p className="text-[10px] text-texts/60 mt-px tabular-nums">{[player.height_cm ? `${player.height_cm}cm` : null, player.weight_kg ? `${player.weight_kg}kg` : null].filter(Boolean).join(' · ')}</p>}{stat(player.stats, 'total_competition_minutes_played') > 0 && <p className="text-[10px] font-bold text-primary mt-0.5 tabular-nums">{[stat(player.stats, 'goals') > 0 ? `${stat(player.stats, 'goals')}G` : null, stat(player.stats, 'assists') > 0 ? `${stat(player.stats, 'assists')}A` : null, `${stat(player.stats, 'total_competition_minutes_played')}'`].filter(Boolean).join(' · ')}</p>}</div></Card>)}</div></section>})}</div>}

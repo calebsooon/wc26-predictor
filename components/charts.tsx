@@ -507,9 +507,9 @@ export function RaceCompareChart({
   const n = labels.length
   if (series.length === 0 || n === 0) return null
 
-  const W = 600, LH = 240
-  const padL = 30, padT = 12, padB = 28
-  const padR2 = 70
+  const W = 600, LH = 256
+  const padL = 34, padT = 14, padB = 30
+  const padR2 = 72
 
   const N = series.length
   const dayVals = (i: number) => series.map((s) => s.data[i] ?? 0)
@@ -580,50 +580,76 @@ export function RaceCompareChart({
     placed.push({ y, s })
   }
 
+  const truncName = (name: string, max = 10) => name.length > max ? `${name.slice(0, max)}…` : name
+  const areaBottom = yPos(variant === 'absolute' ? Math.max(0, lo) : variant === 'rank' ? hi : 0)
+
   return (
     <div className="w-full">
-      <svg viewBox={`0 0 ${W} ${LH}`} style={{ width: '100%', height: 240, display: 'block' }}>
+      <svg viewBox={`0 0 ${W} ${LH}`} style={{ width: '100%', height: LH, display: 'block' }}>
+        <defs>
+          {trans.filter((s) => s.id === youId).map((s) => (
+            <linearGradient key={`grad-${s.id}`} id={`you-area-${s.id}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={s.color} stopOpacity={0.18} />
+              <stop offset="100%" stopColor={s.color} stopOpacity={0} />
+            </linearGradient>
+          ))}
+        </defs>
+
         {gridVals.map((v, i) => (
           <g key={i}>
             <line x1={padL} x2={W - padR2} y1={yPos(v)} y2={yPos(v)} stroke="rgb(var(--border))" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-            <text x={padL - 4} y={yPos(v) + 3.5} textAnchor="end" fontSize={9} fill="rgb(var(--faint))" fontFamily="system-ui,sans-serif">{fmt(v)}</text>
+            <text x={padL - 5} y={yPos(v) + 3.5} textAnchor="end" fontSize={9.5} fill="rgb(var(--faint))" fontFamily="Hanken Grotesk,system-ui,sans-serif">{fmt(v)}</text>
           </g>
         ))}
         {showZero && (
-          <line x1={padL} x2={W - padR2} y1={yPos(0)} y2={yPos(0)} stroke="rgb(var(--texts))" strokeWidth={1.4} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" opacity={0.7} />
+          <line x1={padL} x2={W - padR2} y1={yPos(0)} y2={yPos(0)} stroke="rgb(var(--texts))" strokeWidth={1.4} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" opacity={0.6} />
         )}
         {labels.map((lbl, i) => (
-          <text key={i} x={xPos(i)} y={LH - 4} textAnchor="middle" fontSize={9} fill="rgb(var(--faint))" fontFamily="system-ui,sans-serif">{lbl}</text>
+          <text key={i} x={xPos(i)} y={LH - 5} textAnchor="middle" fontSize={9.5} fill="rgb(var(--faint))" fontFamily="Hanken Grotesk,system-ui,sans-serif">{lbl}</text>
         ))}
+
+        {/* Area fill under "you" line */}
+        {trans.filter((s) => s.id === youId).map((s) => {
+          const pts = s.data.map((v, i) => ({ x: xPos(i), y: yPos(v) }))
+          const pathD = smooth(pts)
+          const first = pts[0], last = pts[pts.length - 1]
+          if (!first || !last) return null
+          const areaPath = `${pathD} L${last.x},${areaBottom} L${first.x},${areaBottom} Z`
+          return <path key={`area-${s.id}`} d={areaPath} fill={`url(#you-area-${s.id})`} />
+        })}
+
         {trans.map((s, si) => {
           const isYou = s.id === youId
           const dash = isYou ? 'none' : (DASH_PATTERNS[si % DASH_PATTERNS.length] ?? 'none')
           const pts = s.data.map((v, i) => ({ x: xPos(i), y: yPos(v) }))
           return (
             <g key={s.id}>
-              <path d={smooth(pts)} fill="none" stroke={s.color} strokeWidth={isYou ? 3 : 2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} vectorEffect="non-scaling-stroke" opacity={isYou ? 1 : 0.85} />
+              <path d={smooth(pts)} fill="none" stroke={s.color} strokeWidth={isYou ? 2.5 : 1.75} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} vectorEffect="non-scaling-stroke" opacity={isYou ? 1 : 0.8} />
               {pts.map((p, i) => (
-                <circle key={i} cx={p.x} cy={p.y} r={isYou ? 3.5 : 2.5} fill={s.color} stroke={isYou ? 'rgb(var(--card))' : 'none'} strokeWidth={isYou ? 1.5 : 0} opacity={isYou ? 1 : 0.85} />
+                <circle key={i} cx={p.x} cy={p.y} r={isYou ? 3.5 : 2} fill={s.color} stroke={isYou ? 'rgb(var(--card))' : 'none'} strokeWidth={isYou ? 2 : 0} opacity={isYou ? 1 : 0.7} />
               ))}
             </g>
           )
         })}
+
         {placed.map(({ y, s }) => (
-          <text key={s.id} x={W - padR2 + 6} y={y + 3.5} fontSize={9} fontWeight={s.id === youId ? 700 : 500} fill={s.color} fontFamily="system-ui,sans-serif">
-            {s.name.length > 8 ? s.name.slice(0, 8) : s.name}
+          <text key={s.id} x={W - padR2 + 7} y={y + 3.5} fontSize={9.5} fontWeight={s.id === youId ? 700 : 500} fill={s.color} fontFamily="Hanken Grotesk,system-ui,sans-serif">
+            {truncName(s.name)}
           </text>
         ))}
       </svg>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginTop: 8, paddingLeft: padL }}>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 14px', marginTop: 10, paddingLeft: padL }}>
         {series.map((s, si) => {
           const isYou = s.id === youId
           const dash = isYou ? 'none' : (DASH_PATTERNS[si % DASH_PATTERNS.length] ?? 'none')
           return (
-            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <svg width={18} height={10} style={{ flexShrink: 0 }}>
-                <line x1={0} y1={5} x2={18} y2={5} stroke={s.color} strokeWidth={isYou ? 2.5 : 2} strokeDasharray={dash} strokeLinecap="round" />
+            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <svg width={20} height={10} style={{ flexShrink: 0 }}>
+                <line x1={0} y1={5} x2={20} y2={5} stroke={s.color} strokeWidth={isYou ? 2.5 : 1.75} strokeDasharray={dash} strokeLinecap="round" />
+                {isYou && <circle cx={10} cy={5} r={2.5} fill={s.color} />}
               </svg>
-              <span style={{ fontSize: 11, fontWeight: isYou ? 700 : 500, color: isYou ? 'rgb(var(--textp))' : 'rgb(var(--texts))' }}>{s.name}</span>
+              <span style={{ fontSize: 11, fontWeight: isYou ? 700 : 400, color: isYou ? 'rgb(var(--textp))' : 'rgb(var(--texts))', fontFamily: 'Hanken Grotesk,system-ui,sans-serif' }}>{s.name}</span>
             </div>
           )
         })}
