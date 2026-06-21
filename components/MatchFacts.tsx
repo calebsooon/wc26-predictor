@@ -13,7 +13,7 @@ type Metadata = {
 
 const METRICS = [
   ['goals', 'Goals'], ['attempt_at_goal', 'Shots'], ['attempt_at_goal_on_target', 'On target'],
-  ['possession', 'Possession'], ['passes', 'Passes'], ['passes_completed', 'Passes completed'],
+  ['xg', 'xG'], ['possession', 'Possession'], ['passes', 'Passes'], ['passes_completed', 'Passes completed'],
   ['corners', 'Corners'], ['fouls_against', 'Fouls'],
 ] as const
 
@@ -26,10 +26,52 @@ function format(value: number | null, key?: string) {
   if (value == null) return '–'
   if (key === 'possession' && value <= 1) return `${Math.round(value * 100)}%`
   if (key === 'possession') return `${Math.round(value)}%`
+  if (key === 'xg') return value.toFixed(2)
   return Number.isInteger(value) ? String(value) : value.toFixed(2)
 }
 function label(key: string) {
   return key.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function PlayerGrid({ code, playerStats, playerNames }: { code: string; playerStats: StoredPlayerStats[]; playerNames: Map<number, string> }) {
+  const players = playerStats
+    .filter((row) => row.team_code === code)
+    .map((row) => ({
+      id: row.player_id,
+      name: playerNames.get(row.player_id) ?? `#${row.player_id}`,
+      goals: stat(row.stats, 'goals') ?? 0,
+      assists: stat(row.stats, 'assists') ?? 0,
+      minutes: stat(row.stats, 'total_competition_minutes_played') ?? stat(row.stats, 'minutes_played') ?? 0,
+      shots: stat(row.stats, 'attempt_at_goal_on_target') ?? 0,
+      xg: stat(row.stats, 'xg') ?? 0,
+      saves: stat(row.stats, 'goalkeeper_saves') ?? 0,
+      yellow: (stat(row.stats, 'yellow_cards') ?? 0) > 0,
+      red: (stat(row.stats, 'red_cards') ?? 0) > 0,
+    }))
+    .filter((p) => p.goals > 0 || p.assists > 0 || p.minutes > 0 || p.shots > 0 || p.saves > 0)
+    .sort((a, b) => b.goals - a.goals || b.assists - a.assists || b.shots - a.shots || b.saves - a.saves || b.minutes - a.minutes)
+
+  if (!players.length) return <p className="text-xs text-texts/50 italic px-1">No player stats yet</p>
+
+  return (
+    <div className="space-y-0.5">
+      {players.map((p) => (
+        <div key={p.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 odd:bg-surface/60">
+          <span className="flex-1 truncate text-xs font-semibold text-textp leading-none">{p.name}</span>
+          <div className="flex items-center gap-1.5 shrink-0 text-[10px] tabular-nums font-bold">
+            {p.goals > 0 && <span className="text-primary">{p.goals}G</span>}
+            {p.assists > 0 && <span className="text-blue">{p.assists}A</span>}
+            {p.saves > 0 && <span className="text-gold">{p.saves} sv</span>}
+            {p.shots > 0 && !p.goals && <span className="font-normal text-texts">{p.shots} sh</span>}
+            {p.xg > 0.05 && <span className="font-normal text-texts">{p.xg.toFixed(2)} xG</span>}
+            {p.yellow && <span className="inline-block h-3 w-[7px] rounded-[2px] bg-gold" title="Yellow card" />}
+            {p.red && <span className="inline-block h-3 w-[7px] rounded-[2px] bg-coral" title="Red card" />}
+            {p.minutes > 0 && <span className="font-normal text-texts/50">{`${p.minutes}′`}</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export function MatchFacts({ homeCode, awayCode, metadata, teamStats, playerStats, playerNames }: {
@@ -39,50 +81,53 @@ export function MatchFacts({ homeCode, awayCode, metadata, teamStats, playerStat
   const home = teamStats.find((row) => row.team_code === homeCode)?.stats
   const away = teamStats.find((row) => row.team_code === awayCode)?.stats
   const hasStats = Boolean(home || away)
+  const hasPlayerStats = playerStats.some((row) => row.team_code === homeCode || row.team_code === awayCode)
   const candidates = METRICS.filter(([key]) => stat(home, key) != null || stat(away, key) != null)
-  const leading = (code: string) => playerStats.filter((row) => row.team_code === code).map((row) => {
-    const goals = stat(row.stats, 'goals') ?? 0
-    const assists = stat(row.stats, 'assists') ?? 0
-    const passes = stat(row.stats, 'passes_completed') ?? stat(row.stats, 'passes') ?? 0
-    const saves = stat(row.stats, 'saves') ?? 0
-    const score = goals * 10000 + assists * 1000 + passes + saves
-    const primary = goals ? `${goals} goal${goals === 1 ? '' : 's'}` : assists ? `${assists} assist${assists === 1 ? '' : 's'}` : passes ? `${format(passes)} passes` : saves ? `${format(saves)} saves` : null
-    return { ...row, score, primary }
-  }).filter((row) => row.primary).sort((a, b) => b.score - a.score).slice(0, 2)
-  const leaders = [...leading(homeCode), ...leading(awayCode)]
   const location = [meta.venue, meta.city].filter(Boolean).join(' · ')
+  const conditions = [
+    meta.weather?.temperature != null ? `${format(meta.weather.temperature)}°C` : null,
+    meta.weather?.type ?? null,
+    meta.weather?.windSpeed != null ? `${format(meta.weather.windSpeed)} km/h wind` : null,
+  ].filter(Boolean).join(' · ')
   const hasDetails = Boolean(location || meta.attendance || meta.officials?.length || meta.weather?.temperature != null)
 
-  if (!hasStats && !hasDetails) return null
+  if (!hasStats && !hasDetails && !hasPlayerStats) return null
   return <section className="space-y-3">
     {hasDetails && <Card className="p-4 sm:p-5">
       <SectionHeader title="Match details" sub="Official FIFA match-centre data" />
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         {location && <Fact label="Venue" value={location} />}
         {meta.attendance != null && <Fact label="Attendance" value={meta.attendance.toLocaleString()} />}
-        {meta.weather?.temperature != null && <Fact label="Conditions" value={`${format(meta.weather.temperature)}°C${meta.weather.type ? ` · ${meta.weather.type}` : ''}`} />}
+        {conditions && <Fact label="Conditions" value={conditions} />}
         {meta.matchNumber != null && <Fact label="Match" value={`#${meta.matchNumber}`} />}
         {meta.officials?.[0]?.name && <Fact label={meta.officials[0].role ?? 'Referee'} value={meta.officials[0].name} />}
       </div>
     </Card>}
 
-    {hasStats && <Card className="p-4 sm:p-5">
+    {(hasStats || hasPlayerStats) && <Card className="p-4 sm:p-5">
       <SectionHeader title="Match stats" sub="Verified tournament stats" />
-      <div className="mt-3 flex items-center justify-between px-0.5 text-xs font-extrabold text-textp"><span className="flex items-center gap-1.5"><FlagChip code={homeCode} w={18} h={12} r={2} />{homeCode}</span><span className="flex items-center gap-1.5">{awayCode}<FlagChip code={awayCode} w={18} h={12} r={2} /></span></div>
-      <div className="mt-2 space-y-2.5">
-        {candidates.map(([key, metric]) => {
-          const homeValue = stat(home, key), awayValue = stat(away, key)
-          const total = Math.max((homeValue ?? 0) + (awayValue ?? 0), 1)
-          const homeWidth = Math.max(8, ((homeValue ?? 0) / total) * 100)
-          const awayWidth = Math.max(8, ((awayValue ?? 0) / total) * 100)
-          return <div key={key}>
-            <div className="grid grid-cols-[42px_1fr_42px] items-center gap-2 text-xs"><span className="text-left font-black tabular-nums text-textp">{format(homeValue, key)}</span><span className="text-center text-[10px] font-bold uppercase tracking-wider text-texts">{metric}</span><span className="text-right font-black tabular-nums text-textp">{format(awayValue, key)}</span></div>
-            <div className="mt-1 flex h-1.5 gap-1"><span className="rounded-full bg-primary" style={{ width: `${homeWidth}%` }} /><span className="ml-auto rounded-full bg-blue" style={{ width: `${awayWidth}%` }} /></div>
+      {hasStats && <>
+        <div className="mt-3 flex items-center justify-between px-0.5 text-xs font-extrabold text-textp"><span className="flex items-center gap-1.5"><FlagChip code={homeCode} w={18} h={12} r={2} />{homeCode}</span><span className="flex items-center gap-1.5">{awayCode}<FlagChip code={awayCode} w={18} h={12} r={2} /></span></div>
+        <div className="mt-2 space-y-2.5">
+          {candidates.map(([key, metric]) => {
+            const homeValue = stat(home, key), awayValue = stat(away, key)
+            const total = Math.max((homeValue ?? 0) + (awayValue ?? 0), 1)
+            const homeWidth = Math.max(8, ((homeValue ?? 0) / total) * 100)
+            const awayWidth = Math.max(8, ((awayValue ?? 0) / total) * 100)
+            return <div key={key}>
+              <div className="grid grid-cols-[42px_1fr_42px] items-center gap-2 text-xs"><span className="text-left font-black tabular-nums text-textp">{format(homeValue, key)}</span><span className="text-center text-[10px] font-bold uppercase tracking-wider text-texts">{metric}</span><span className="text-right font-black tabular-nums text-textp">{format(awayValue, key)}</span></div>
+              <div className="mt-1 flex h-1.5 gap-1"><span className="rounded-full bg-primary" style={{ width: `${homeWidth}%` }} /><span className="ml-auto rounded-full bg-blue" style={{ width: `${awayWidth}%` }} /></div>
+            </div>
+          })}
+        </div>
+      </>}
+      {hasPlayerStats && <div className="mt-4 border-t border-border/60 pt-4 grid sm:grid-cols-2 gap-4">
+        {[{ code: homeCode }, { code: awayCode }].map(({ code }) => (
+          <div key={code}>
+            <div className="flex items-center gap-1.5 mb-2"><FlagChip code={code} w={16} h={11} r={2} /><span className="text-[10px] font-bold uppercase tracking-wider text-texts">{code}</span></div>
+            <PlayerGrid code={code} playerStats={playerStats} playerNames={playerNames} />
           </div>
-        })}
-      </div>
-      {leaders.length > 0 && <div className="mt-4 grid gap-2 border-t border-border/60 pt-3 sm:grid-cols-2">
-        {leaders.map((row) => <div key={row.player_id} className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2"><span className="min-w-0 truncate text-xs font-bold text-textp">{playerNames.get(row.player_id) ?? 'Player'}</span><span className="ml-2 shrink-0 text-[10px] font-bold text-primary">{row.primary}</span></div>)}
+        ))}
       </div>}
     </Card>}
   </section>

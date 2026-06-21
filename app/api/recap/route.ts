@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { buildGameweekRecap, type RecapMatch, type RecapPrediction } from '@/lib/gameweek-recap'
+import { buildGameweekRecap, type RecapMatch, type RecapMatchStat, type RecapPrediction } from '@/lib/gameweek-recap'
 import { isMoneyLeague, type League } from '@/lib/league'
 import { resolveWeights } from '@/lib/scoring'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
@@ -32,9 +32,15 @@ export async function GET(request: Request) {
     supabase.from('matches').select('id, gw_number, home_team, away_team, real_home_score, real_away_score').lte('gw_number', gameweek),
   ])
   const matchIds = (matches ?? []).map((match) => match.id)
-  const { data: predictions } = memberIds.length && matchIds.length
-    ? await supabase.from('predictions').select(PRED_COLS).in('user_id', memberIds).in('match_id', matchIds)
-    : { data: [] }
+  const gwMatchIds = (matches ?? []).filter((m) => (m as { gw_number?: number | null }).gw_number === gameweek).map((m) => m.id)
+  const [{ data: predictions }, { data: matchStats }] = await Promise.all([
+    memberIds.length && matchIds.length
+      ? supabase.from('predictions').select(PRED_COLS).in('user_id', memberIds).in('match_id', matchIds)
+      : Promise.resolve({ data: [] }),
+    gwMatchIds.length
+      ? supabase.from('match_team_stats').select('match_id, team_code, stats').in('match_id', gwMatchIds)
+      : Promise.resolve({ data: [] }),
+  ])
   const recap = buildGameweekRecap({
     gameweek,
     matches: (matches ?? []) as RecapMatch[],
@@ -42,6 +48,7 @@ export async function GET(request: Request) {
     profiles: (profiles ?? []) as ProfileLite[],
     userId: user.id,
     weights: resolveWeights((league as League | null)?.scoring),
+    matchStats: (matchStats ?? []) as RecapMatchStat[],
   })
   return NextResponse.json({ recap, money: isMoneyLeague(league as League | null) }, { headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' } })
 }

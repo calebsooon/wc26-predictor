@@ -179,10 +179,16 @@ export default function MatchDetailPage() {
 
   const home = getTeam(match.home_team), away = getTeam(match.away_team)
   const scored = match.real_home_score !== null && match.real_away_score !== null
-  const fifaScore = (match as { fifa_metadata?: { score?: { home?: number | null; away?: number | null } } }).fifa_metadata?.score
+  const fifaMeta = (match as { fifa_metadata?: Record<string, unknown> }).fifa_metadata
+  const fifaScore = fifaMeta?.score as { home?: number | null; away?: number | null } | undefined
   const displayHomeScore = match.real_home_score ?? fifaScore?.home ?? null
   const displayAwayScore = match.real_away_score ?? fifaScore?.away ?? null
   const hasLiveScore = displayHomeScore !== null && displayAwayScore !== null
+  const penaltyHome = fifaMeta?.penaltyHome != null ? Number(fifaMeta.penaltyHome) : null
+  const penaltyAway = fifaMeta?.penaltyAway != null ? Number(fifaMeta.penaltyAway) : null
+  const hasPenalties = penaltyHome != null && penaltyAway != null
+  const homeFormation = (match as { home_formation?: string | null }).home_formation ?? null
+  const awayFormation = (match as { away_formation?: string | null }).away_formation ?? null
   // secsLeft updates every second — form locks at kickoff even if user keeps the page open
   const locked = scored || match.is_locked || (secsLeft !== null ? secsLeft <= 0 : new Date(match.match_date) <= new Date())
   const knockout = !match.group_name
@@ -230,9 +236,13 @@ export default function MatchDetailPage() {
           </TeamLink>
           <div className="px-3 text-center shrink-0">
             {hasLiveScore
-              ? <ScoreDisplay a={displayHomeScore} b={displayAwayScore} size="text-4xl" />
+              ? <>
+                  <ScoreDisplay a={displayHomeScore} b={displayAwayScore} size="text-4xl" />
+                  {hasPenalties && <div className="text-[11px] text-texts font-bold mt-0.5">({penaltyHome}–{penaltyAway} pens)</div>}
+                </>
               : <div className="text-3xl font-black text-texts">VS</div>}
             <div className="text-[11px] text-texts font-bold mt-1.5">{fmtDateTime(match.match_date)}</div>
+            {(homeFormation || awayFormation) && <div className="text-[10px] text-texts/50 font-bold mt-0.5 tabular-nums">{homeFormation ?? '?'} · {awayFormation ?? '?'}</div>}
           </div>
           <TeamLink code={match.away_team} className="flex-1 flex flex-col items-center gap-2.5 hover:opacity-75">
             <FlagChip code={match.away_team} w={60} h={40} r={8} />
