@@ -214,7 +214,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | Live lineups | Confirmed XI, substitutes, shirt numbers, and formation pulled from Kickoffapi |
 | Results &amp; first scorer | Final scores and the opening goalscorer fetched from match events, then scored automatically |
 | Injury flags | Out/suspended players flagged across squad views |
-| Golden Boot | Tournament top scorers and assists, with headshots and nation flags; data cached in Supabase |
+| Golden Boot | Tournament top scorers and assists, derived from finished match events and stored in Supabase |
 | Player enrichment | Headshots, clubs, and dates of birth sourced from Wikidata; self-hosted in Supabase Storage |
 | Residential sync | Live data is pulled via local `npm run data:*` scripts (Kickoffapi blocks datacenter IPs); the app reads from Supabase |
 

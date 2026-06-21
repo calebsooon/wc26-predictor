@@ -1,39 +1,37 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { teamNameToCode } from '@/lib/team-match'
 
-// Reads Golden Boot data from the live_cache table (populated by the residential
-// scripts/sync-golden-boot.ts, since Vercel can't reach Kickoffapi directly).
+// Reads MatchDay-owned standings derived from fixture events by the residential
+// sync script. The app never trusts the provider's top-scorer aggregate table.
 export const dynamic = 'force-dynamic'
 
-interface KStat { teamId: number; goals: number | null; assists: number | null; photo: string | null; player: { name: string } | null }
-interface KTeam { id: number; name: string }
-interface Cached { scorers: KStat[]; assists: KStat[]; teams: KTeam[] }
+interface GoldenBootStat {
+  player_name: string
+  photo_url: string | null
+  goals: number
+  assists: number
+  team_code: string
+  updated_at: string
+}
 
 export async function GET() {
   const supabase = await createServerSupabaseClient()
-  const { data: row, error } = await supabase
-    .from('live_cache').select('data, updated_at').eq('key', 'golden_boot').maybeSingle()
+  const { data, error } = await supabase
+    .from('golden_boot_stats')
+    .select('player_name, photo_url, goals, assists, team_code, updated_at')
+    .order('goals', { ascending: false })
+    .order('assists', { ascending: false })
+    .order('player_name')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!row) return NextResponse.json({ scorers: [], assists: [], updatedAt: null })
 
-  const cached = (row as { data: Cached; updated_at: string }).data
-  const codeByTeamId = new Map<number, string | null>()
-  for (const t of cached.teams ?? []) codeByTeamId.set(t.id, teamNameToCode(t.name))
-
-  const shape = (rows: KStat[], primary: 'goals' | 'assists') => (rows ?? [])
-    .map((r) => ({
-      name: r.player?.name ?? '',
-      photo: r.photo ?? null,
-      goals: r.goals ?? 0,
-      assists: r.assists ?? 0,
-      code: codeByTeamId.get(r.teamId) ?? null,
-    }))
+  const rows = (data ?? []) as GoldenBootStat[]
+  const shape = (primary: 'goals' | 'assists') => rows
+    .map((row) => ({ name: row.player_name, photo: row.photo_url, goals: row.goals, assists: row.assists, code: row.team_code }))
     .sort((a, b) => b[primary] - a[primary] || b[primary === 'goals' ? 'assists' : 'goals'] - a[primary === 'goals' ? 'assists' : 'goals'] || a.name.localeCompare(b.name))
 
   return NextResponse.json({
-    scorers: shape(cached.scorers, 'goals'),
-    assists: shape(cached.assists, 'assists'),
-    updatedAt: (row as { updated_at: string }).updated_at,
+    scorers: shape('goals'),
+    assists: shape('assists'),
+    updatedAt: rows[0]?.updated_at ?? null,
   })
 }

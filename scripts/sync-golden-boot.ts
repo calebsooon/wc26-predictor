@@ -1,50 +1,57 @@
 /**
- * Pulls Golden Boot data (top scorers + assists + teams) from Kickoffapi and
- * writes it into the live_cache table. Run from a residential connection —
- * Kickoffapi's Cloudflare blocks datacenter IPs (Vercel/GitHub), so this can't
- * run server-side. The /api/golden-boot route reads the cached row.
- *
- * Usage (re-run after match days to refresh):
- *   npx tsx --env-file=.env.local scripts/sync-golden-boot.ts
+ * Derive Golden Boot totals from completed fixture goal events, then persist
+ * MatchDay-owned standings. This avoids the provider's stale aggregate tables.
  */
-
 import { createClient } from '@supabase/supabase-js'
+import { deriveGoldenBootStats, type GoldenBootEvent } from '@/lib/golden-boot'
+import { groupPlayersByCode, teamNameToCode, type RosterPlayer } from '@/lib/team-match'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-const KEY = process.env.KICKOFF_API_KEY ?? ''
-const LEAGUE = Number(process.env.KICKOFF_LEAGUE ?? 1)
-const SEASON = Number(process.env.KICKOFF_SEASON ?? 2026)
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) { console.error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'); process.exit(1) }
-if (!KEY) { console.error('Missing KICKOFF_API_KEY'); process.exit(1) }
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+const key = process.env.KICKOFF_API_KEY ?? ''
+const league = Number(process.env.KICKOFF_LEAGUE ?? 1)
+const season = Number(process.env.KICKOFF_SEASON ?? 2026)
+if (!url || !serviceKey) throw new Error('Missing Supabase environment variables')
+if (!key) throw new Error('Missing KICKOFF_API_KEY')
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-const BASE = 'https://api.kickoffapi.com/api/v1'
+const supabase = createClient(url, serviceKey)
+const base = 'https://api.kickoffapi.com/api/v1'
+const finished = new Set(['FT', 'AET', 'PEN'])
 
-async function kapi(path: string): Promise<unknown[]> {
-  const res = await fetch(`${BASE}${path}`, { headers: { 'x-api-key': KEY } })
-  if (!res.ok) throw new Error(`kickoffapi ${res.status} on ${path}: ${(await res.text()).slice(0, 120)}`)
-  const json = await res.json() as { response?: unknown[] }
-  return json.response ?? []
+interface Fixture { id: number; statusShort: string; homeTeam: { id: number; name: string }; awayTeam: { id: number; name: string } }
+
+async function kapi<T>(path: string): Promise<T[]> {
+  const response = await fetch(`${base}${path}`, { headers: { 'x-api-key': key } })
+  if (!response.ok) throw new Error(`kickoffapi ${response.status} on ${path}: ${(await response.text()).slice(0, 120)}`)
+  return ((await response.json()) as { response?: T[] }).response ?? []
 }
 
 async function main() {
-  console.log('Fetching Golden Boot data from Kickoffapi…')
-  const [scorers, assists, teams] = await Promise.all([
-    kapi(`/topscorers?league=${LEAGUE}&season=${SEASON}`),
-    kapi(`/topassists?league=${LEAGUE}&season=${SEASON}`),
-    kapi(`/teams?league=${LEAGUE}&season=${SEASON}`),
+  console.log('Deriving Golden Boot standings from completed fixture events…')
+  const [fixtures, players] = await Promise.all([
+    kapi<Fixture>(`/fixtures?league=${league}&season=${season}`),
+    supabase.from('players').select('id, name, team_name'),
   ])
-  console.log(`  scorers: ${scorers.length}, assists: ${assists.length}, teams: ${teams.length}`)
+  if (players.error) throw players.error
+  const rosterByCode = groupPlayersByCode((players.data ?? []) as RosterPlayer[])
+  const completed = fixtures.filter((fixture) => finished.has(fixture.statusShort))
+  const eventFixtures: Array<{ teamCodes: Map<number, string>; events: GoldenBootEvent[] }> = []
 
-  const { error } = await supabase.from('live_cache').upsert({
-    key: 'golden_boot',
-    data: { scorers, assists, teams },
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'key' })
-  if (error) { console.error('Write failed:', error.message); process.exit(1) }
+  for (const fixture of completed) {
+    const events = await kapi<GoldenBootEvent>(`/fixtures/${fixture.id}/events`)
+    eventFixtures.push({
+      teamCodes: new Map([
+        [fixture.homeTeam.id, teamNameToCode(fixture.homeTeam.name) ?? ''],
+        [fixture.awayTeam.id, teamNameToCode(fixture.awayTeam.name) ?? ''],
+      ]),
+      events,
+    })
+  }
 
-  console.log('Done — live_cache[golden_boot] updated. The Golden Boot page now reflects this.')
+  const stats = deriveGoldenBootStats({ fixtures: eventFixtures, rosterByCode })
+  const { error } = await supabase.rpc('replace_golden_boot_stats', { p_rows: stats })
+  if (error) throw error
+  console.log(`Done — ${stats.length} player rows derived from ${completed.length} finished fixtures.`)
 }
 
-main().catch((e) => { console.error(e); process.exit(1) })
+main().catch((error) => { console.error(error); process.exit(1) })
