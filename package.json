@@ -20,6 +20,7 @@
     "data:fill-photos": "tsx --env-file=.env.local scripts/fill-missing-photos.ts",
     "data:golden-boot": "tsx --env-file=.env.local scripts/sync-golden-boot.ts",
     "data:fifa-teams": "tsx --env-file=.env.local scripts/sync-fifa-teams.ts",
+    "data:team-crests": "tsx --env-file=.env.local scripts/cache-team-crests.ts",
     "data:fifa:fixtures": "FIFA_SYNC_MODE=fixtures tsx --env-file=.env.local scripts/sync-fifa-matches.ts",
     "data:fifa:lineups": "FIFA_SYNC_MODE=lineups tsx --env-file=.env.local scripts/sync-fifa-matches.ts",
     "data:fifa:stats": "FIFA_SYNC_MODE=stats tsx --env-file=.env.local scripts/sync-fifa-matches.ts",

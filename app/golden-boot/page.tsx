@@ -66,28 +66,30 @@ export default function GoldenBootPage() {
       {error && <EmptyState icon={<TrophyIcon size={22} />} title="Couldn't load" desc={error} />}
 
       {rows && rows.length > 0 && (
-        <Card className="overflow-hidden">
-          {rows.map((s, i) => {
-            const rank = s.rank ?? i + 1
-            const isTied = (i > 0 && metric(rows[i - 1]) === metric(s)) || (i < rows.length - 1 && metric(rows[i + 1]) === metric(s))
-            return (
-            <div key={`${s.name}-${i}`} className={`flex items-center gap-3 px-4 py-2.5 ${i < rows.length - 1 ? 'border-b border-border/60' : ''} ${rank === 1 ? 'bg-gold/[0.06]' : ''}`}>
-              <span className={`w-6 text-center text-sm font-bold tabular-nums shrink-0 ${rank === 1 ? 'text-gold' : 'text-texts'}`}>{rank}</span>
-              <Avatar src={s.photo} name={s.name} size={30} />
-              {s.code ? (
-                <Link href={`/squads?team=${encodeURIComponent(s.code)}`} className="flex-1 min-w-0 group" aria-label={`Open ${getTeam(s.code).name} squad`}>
-                  <span className="text-sm font-semibold text-textp truncate block group-hover:text-primary">{s.name}</span>
-                  <span className="text-[11px] text-texts group-hover:text-primary">{getTeam(s.code).name}</span>
-                </Link>
-              ) : (
-                <div className="flex-1 min-w-0"><span className="text-sm font-semibold text-textp truncate block">{s.name}</span></div>
-              )}
-              {isTied && s.minutes > 0 && <span className="shrink-0 text-[10px] text-texts/50 tabular-nums" title="FIFA ranks tied players by fewer minutes played">{`${s.minutes.toLocaleString()}′`}</span>}
-              {s.code && <Link href={`/squads?team=${encodeURIComponent(s.code)}`} aria-label={`Open ${getTeam(s.code).name} squad`}><FlagChip code={s.code} w={22} h={15} r={3} /></Link>}
-              <span className="w-8 text-right text-base font-extrabold text-textp tabular-nums shrink-0">{metric(s)}</span>
-            </div>
-          )})}
-        </Card>
+        <>
+          <p className="text-[11px] text-texts/50 px-1">Minutes played shown — fewer minutes ranks higher at equal {tab === 'goals' ? 'goals' : 'assists'} (FIFA official tiebreaker)</p>
+          <Card className="overflow-hidden">
+            {rows.map((s, i) => {
+              const rank = s.rank ?? i + 1
+              return (
+              <div key={`${s.name}-${i}`} className={`flex items-center gap-3 px-4 py-2.5 ${i < rows.length - 1 ? 'border-b border-border/60' : ''} ${rank === 1 ? 'bg-gold/[0.06]' : ''}`}>
+                <span className={`w-6 text-center text-sm font-bold tabular-nums shrink-0 ${rank === 1 ? 'text-gold' : 'text-texts'}`}>{rank}</span>
+                <Avatar src={s.photo} name={s.name} size={30} />
+                {s.code ? (
+                  <Link href={`/squads?team=${encodeURIComponent(s.code)}`} className="flex-1 min-w-0 group" aria-label={`Open ${getTeam(s.code).name} squad`}>
+                    <span className="text-sm font-semibold text-textp truncate block group-hover:text-primary">{s.name}</span>
+                    <span className="text-[11px] text-texts group-hover:text-primary">{getTeam(s.code).name}</span>
+                  </Link>
+                ) : (
+                  <div className="flex-1 min-w-0"><span className="text-sm font-semibold text-textp truncate block">{s.name}</span></div>
+                )}
+                {s.minutes > 0 && <span className="shrink-0 text-[10px] text-texts/50 tabular-nums">{`${s.minutes.toLocaleString()}′`}</span>}
+                {s.code && <Link href={`/squads?team=${encodeURIComponent(s.code)}`} aria-label={`Open ${getTeam(s.code).name} squad`}><FlagChip code={s.code} w={22} h={15} r={3} /></Link>}
+                <span className="w-8 text-right text-base font-extrabold text-textp tabular-nums shrink-0">{metric(s)}</span>
+              </div>
+            )})}
+          </Card>
+        </>
       )}
       {rows && rows.length === 0 && !loading && (
         <EmptyState icon={<TrophyIcon size={22} />} title="No data yet" desc="Scorer stats will appear once goals are recorded." />
