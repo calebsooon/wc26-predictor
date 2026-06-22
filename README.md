@@ -50,7 +50,7 @@
 | ![](https://img.shields.io/badge/PRIZES-d97706?style=flat-square) | **Zero-sum prize pool.** Per-GW and overall payouts settle automatically from a shared pot |
 | ![](https://img.shields.io/badge/REALTIME-7c3aed?style=flat-square) | **Live leaderboard.** Supabase Realtime pushes updates the moment a result lands |
 | ![](https://img.shields.io/badge/LEAGUES-0891b2?style=flat-square) | **Multi-league.** Private leagues with join codes; isolated standings per group of friends |
-| ![](https://img.shields.io/badge/MATCH_CENTRE-16a34a?style=flat-square) | **Broadcast-style pitch.** Confirmed lineups, kit-coloured player tokens, formations, substitutions, and match events on a live positional pitch |
+| ![](https://img.shields.io/badge/MATCH_CENTRE-16a34a?style=flat-square) | **Broadcast-style pitch.** Formation-first XI layout, kit-coloured player tokens, verified substitutions, tactical shape changes, and match events on a live positional pitch |
 | ![](https://img.shields.io/badge/DATA-ea580c?style=flat-square) | **FIFA-backed match data.** Cached rosters · full-kit player images · team/player stats · confirmed lineups · Golden Boot · import freshness |
 | ![](https://img.shields.io/badge/RECAPS-be185d?style=flat-square) | **Gameweek stories.** Dynamic recaps, League Pulse, rank movement, xG upsets, and private share cards |
 | ![](https://img.shields.io/badge/CALENDAR-0284c7?style=flat-square) | **iCal feed.** Auto-updating per user; works in Google, Apple, Outlook, and Notion |
@@ -199,11 +199,13 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | Feature | Detail |
 | :--- | :--- |
 | Positional pitch | Broadcast-style pitch rendered with kit-coloured player tokens scaled to the pitch container; tap any token to open a player detail sheet |
-| Formation rendering | Formations from FIFA team tactics (`fdcp:team:tactics`) resolve into up to 6 position bands (GK · DEF · DM · CM · AM · FWD) using `lib/lineup-layout.ts` |
+| Formation-first rendering | FIFA tactics resolve full formations — including back threes, wing-backs, five-at-the-back, pivots, diamonds, and narrow systems — into balanced tactical rows using `lib/lineup-layout.ts` |
+| Provider-resilient placement | Side-specific roles such as `LCB` / `RCB` and `LWB` / `RWB` are classified correctly; an incomplete team sheet retains its intended formation depth rather than compressing into the available rows |
 | Player tokens | Silhouette or official headshot, shirt number, surname plate, goal ball / yellow card indicators, and GK colour dot |
-| Confirmed XI vs bench | Starting XI on pitch; substitutes listed below in a responsive grid |
-| Substitution events | Verified in-match subs shown with minute and player-in/out |
-| Match events timeline | Goals, yellow cards, and red cards shown per team with minute |
+| Confirmed XI vs bench | Starting XI on pitch; substitutes listed below in a responsive grid. Dense four-/five-player lines automatically use more compact tokens for clear spacing |
+| Substitution events | Verified in-match subs replace the outgoing player in their exact pitch slot, with minute and player-in/out preserved |
+| Tactical shape changes | The latest verified formation change powers the Current XI; shape changes sit alongside goals, cards, and substitutions in the match timeline |
+| Match events timeline | Goals, yellow cards, red cards, substitutions, and tactical changes are shown per team with minute |
 | Match facts panel | Venue, officials, weather, attendance, xG, shots, possession, passes, fouls, corners, and full player match-stat grids |
 | Focus view | Fullscreen pitch overlay for immersive viewing |
 | Live Supabase sync | Lineup and event data updates in real time without a page reload |
@@ -236,13 +238,13 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | Feature | Detail |
 | :--- | :--- |
 | FIFA Match Centre | Official fixtures, results, venue, officials, weather, team sheets, substitutions, and match stats cached into Supabase |
-| Live lineups | Confirmed XI, bench, shirt numbers, formation, and verified substitutions rendered on a positional pitch |
+| Live lineups | Confirmed XI, bench, shirt numbers, FIFA formation, manual formation overrides, verified substitutions, and tactical shape changes rendered on a positional pitch |
 | Match facts | Venue, officials, weather, attendance, score comparison, xG, and complete player match-stat grids |
 | Injury flags | Out / suspended players flagged across squad views |
 | FIFA Teams centre | 48 team cards, confederation filters, form, fixtures, tournament stats, and full-kit squad cards — all served from Supabase |
 | Golden Boot | FIFA-published tournament scorers and assists, cached in Supabase with FIFA's official ordering |
 | Player enrichment | Headshots, clubs, and dates of birth sourced from Wikidata; self-hosted in Supabase Storage |
-| Local sync | FIFA and Kickoffapi are read by local `npm run data:*` scripts; every page reads only cached Supabase data |
+| Local sync | All data is imported by local `npm run data:*` scripts from your machine; every page reads only cached Supabase data — the live app never calls FIFA or Kickoffapi directly |
 | Import resilience | Sync runs record freshness, rows read/written, errors, raw FIFA match snapshots, and per-match identity for safe replay and debugging |
 
 </details>
@@ -289,7 +291,11 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | Feature | Detail |
 | :--- | :--- |
 | Result entry | Score, first goal, first scorer, knockout winner, save, and rescore controls |
-| Manual team sheets | Independently edit announced XI, bench, position, pitch band / lane, and verified in-match substitutions |
+| Manual team sheets | Independently edit announced XI, bench, and position with an immediate team preview plus an on-demand full two-team pitch shared with the public Match Centre resolver |
+| Formation controls | Keep FIFA as the default, optionally set a per-team formation override, or return to the provider shape at any time |
+| Tactical changes | Record, inline-edit, or remove a team&apos;s formation switch at a minute; the latest verified shape drives the Current XI pitch and timeline |
+| Lineup checks | Save-time checks flag non-11-player XIs, missing / duplicate goalkeepers, incomplete positions, and suspicious back-line / attacking-shape mismatches before an admin confirms the sheet |
+| Manual grid override | Formation-first layout is the default; switch to manual grid only when a specific player needs a precise row or left/right lane |
 | FIFA sync cockpit | Shows FIFA fixture coverage, freshness, started-match lineup / stat coverage, missing-data counts, and copyable per-match sync commands |
 | Targeted repair | Missing started matches expose a copyable per-match command; manual sheets remain the correction path when FIFA has not published a field yet |
 | Rank snapshots | Captured automatically after scoring for movement arrows |
@@ -335,7 +341,7 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 | `/recap?gw=<1–8>` | Private gameweek story, rank movement, match moments, and share actions |
 | `/profile` | Stats, accuracy, rank chart, badges, bracket and group picks |
 | `/rules` | Scoring rules reference |
-| `/admin` | FIFA sync cockpit, result entry, lineup positioning, substitutions, and scoring actions |
+| `/admin` | FIFA sync cockpit, result entry, formation controls, live lineup preview, tactical changes, substitutions, and scoring actions |
 | `/join` | League join form; pre-filled via `?code=` invite links |
 | `/install` | Guided PWA install instructions for iOS, Android, and desktop |
 | `/faq` | In-app frequently asked questions |
@@ -491,14 +497,14 @@ flowchart LR
 
   subgraph External["External APIs"]
     direction TB
-    FIFA["FIFA GameDay\nfixtures · team sheets · stats · media"]
-    Kickoff["Kickoffapi\nlineups · results · injuries · events"]
+    FIFA["FIFA GameDay (primary)\nfixtures · team sheets · stats · media · Golden Boot"]
+    Kickoff["Kickoffapi (supplementary)\nlineups · results · injuries · events"]
   end
 
-  subgraph Scripts["Residential Scripts"]
+  subgraph Scripts["Local sync scripts"]
     direction TB
     DataFIFA["npm run data:fifa:*\nfixtures · lineups · stats · Golden Boot"]
-    DataLive["npm run data:lineups/results/injuries/events\nlive match data via Kickoffapi"]
+    DataLive["npm run data:lineups/results/injuries/events\noptional Kickoffapi fallback"]
   end
 
   subgraph Data["Supabase"]
@@ -552,7 +558,7 @@ flowchart LR
 3. `lib/leaderboard.ts` aggregates scored predictions — shared between the dashboard mini-table and `/leaderboard`
 4. `lib/prizes.ts` derives the prize snapshot from aggregated standings
 5. Supabase Realtime pushes `predictions` UPDATE events to all connected clients — standings update instantly with no page reload
-6. FIFA GameDay and Kickoffapi are read by local `npm run data:*` scripts. The importer writes fixtures, team sheets, substitutions, media, team/player match stats, Golden Boot rows, source snapshots, and sync-run health to Supabase; page views never call these APIs directly
+6. FIFA GameDay is the primary data source — local `npm run data:fifa:*` scripts write fixtures, team sheets, substitutions, media, match stats, Golden Boot rows, and sync-run health to Supabase. Kickoffapi scripts (`data:lineups`, `data:results`, `data:injuries`, `data:events`) are a residential-only supplementary fallback. Page views never call either API directly.
 
 <details>
 <summary>Project structure</summary>
@@ -604,7 +610,7 @@ components/
   CalendarExport.tsx        iCalendar subscribe / download UI
   CommandPalette.tsx        Global keyboard-driven navigation
   RecapShareActions.tsx     Copy / native share recap card actions
-  FormationPitch.tsx        Standalone formation display used in admin lineup editor
+  FormationPitch.tsx        Compact formation display using the shared lineup resolver
   TeamLink.tsx              Linked team name + flag chip
   ThemeToggle.tsx           Light / dark mode toggle
   RulesContent.tsx          Shared rules copy used by RulesModal and /rules
@@ -614,8 +620,9 @@ lib/
   scoring.ts                Single source of truth for all point values and scorePrediction
   prizes.ts                 Prize pool constants and computePrizeSnapshot
   leaderboard.ts            aggregateLeaderboard — shared aggregation and canonical sort
-  lineup-layout.ts          Formation-to-pitch position resolver (6 bands, y-spread by rank)
-  lineup-state.ts           Pure announced-XI and verified-substitution state resolver
+  lineup-layout.ts          Formation-first position resolver with tactical-row capacity matching and manual-grid fallback
+  lineup-state.ts           Pure announced-XI, verified-substitution, and current-shape state resolver
+  lineup-validation.ts      Conservative admin XI / goalkeeper / formation-shape checks
   lineup-events.ts          Match event (goal / card / sub) normalisation
   live-sync.ts              First-credited-goal resolution across event streams
   score-sync.ts             Shared prediction scoring flow used by admin and result sync scripts
@@ -690,10 +697,12 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>   # server-only — never commit
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
-# Kickoffapi — required for live lineup, result, injury, and event sync
+# Optional — Kickoffapi supplementary sync (lineups, results, injuries, events)
+# Kickoffapi blocks datacenter IPs; scripts must run from a residential machine.
+# FIFA GameDay scripts are the primary data source and work without this key.
 KICKOFF_API_KEY=<kickoffapi-key>
 
-# Optional — GitHub Actions manual sync trigger
+# Optional — GitHub Actions prediction-reminder trigger
 CRON_SECRET=<random-string>                         # server-only — never commit
 
 # Optional — browser push notifications
@@ -764,16 +773,18 @@ These commands cache the official FIFA fixture schedule, results, team sheets, s
 
 > The **Admin → FIFA sync cockpit** shows per-match coverage, freshness, and generates the exact repair command for any match missing lineups or stats.
 
-### Kickoffapi — live match data
+### Kickoffapi — supplementary live data (optional)
 
-These commands use Kickoffapi (residential IP required) for real-time lineup, result, injury, and in-match event data.
+These commands use Kickoffapi as a secondary source for lineups, results, injuries, and in-match events. **Kickoffapi blocks datacenter IPs** — scripts must run from a residential machine and the key may be unavailable. The FIFA GameDay scripts above are the primary and recommended data source; these are a fallback supplement.
 
-| Command | What it does |
-| :--- | :--- |
-| `npm run data:lineups` | Pull confirmed XI + formation for upcoming / recent matches and write via `replace_match_lineup`. Use `MATCH_ID=<uuid>` to target one match, `ALL=1` for a full backfill. |
-| `npm run data:results` | Pull finished match scores and first scorer, write results, and re-score all predictions automatically. Idempotent — already-scored matches are skipped. |
-| `npm run data:injuries` | Pull the current WC injury and suspension feed, match players by name, and set `OUT` flags visible on squad pages. |
-| `npm run data:events` | Pull in-match substitution events and update the current XI. **Run while matches are live** for real-time lineup changes. Use `MATCH_ID=<uuid>` to target one match. |
+| Command | Requires `KICKOFF_API_KEY` | What it does |
+| :--- | :---: | :--- |
+| `npm run data:lineups` | Yes | Pull confirmed XI + formation for upcoming / recent matches via `replace_match_lineup`. Use `MATCH_ID=<uuid>` to target one match, `ALL=1` for a full backfill. |
+| `npm run data:results` | Yes | Pull finished match scores and first scorer, write results, and re-score all predictions. Idempotent — already-scored matches are skipped. |
+| `npm run data:injuries` | Yes | Pull the WC injury and suspension feed, match players by name, and set `OUT` flags on squad pages. |
+| `npm run data:events` | Yes | Pull in-match substitution events and update the current XI. **Run while matches are live.** Use `MATCH_ID=<uuid>` to target one match. |
+
+> If Kickoffapi is unavailable, use `npm run data:fifa:lineups`, `npm run data:fifa:fixtures`, and `npm run data:fifa:stats` for official team sheets, results, substitutions, and match stats. Injury / suspension flags remain a separate supplementary data field.
 
 ### Player enrichment — one-time
 
@@ -787,12 +798,17 @@ These commands use Kickoffapi (residential IP required) for real-time lineup, re
 ### Recommended workflow
 
 ```
-Initial setup:       npm run data:fifa:bootstrap
-Before a matchday:   npm run data:fifa:refresh
-Matchday (live):     npm run data:events        # repeat while matches run
-After results land:  npm run data:results       # scores + auto-rescore
-Routine daily:       npm run data:live
+Initial setup:        npm run data:fifa:bootstrap
+Before a matchday:    npm run data:fifa:refresh
+Matchday (live):      npm run data:fifa:lineups  # confirmed team sheets from FIFA
+                      npm run data:events        # optional: Kickoffapi sub events (if available)
+After results land:   npm run data:fifa:matches  # scores + match stats from FIFA
+                      npm run data:results       # optional: Kickoffapi rescore fallback
+Routine daily:        npm run data:live
+One match repair:     FIFA_SYNC_MODE=all MATCH_ID=<uuid> npm run data:fifa:match
 ```
+
+> FIFA GameDay is the primary and most reliable source. Kickoffapi commands are a residential-only supplement — use them when FIFA hasn't published a specific field yet, but always verify in **Admin → FIFA sync cockpit** first.
 
 ---
 
@@ -803,7 +819,7 @@ Routine daily:       npm run data:live
 | 1 | Create a hosted Supabase project, run `supabase db push`, and add `http://localhost:3000/auth/callback` + `https://<your-domain>/auth/callback` under **Authentication → URL Configuration**. |
 | 2 | Sign up once, run `ADMIN_EMAIL=<email> npm run bootstrap:admin`, create a private league, and confirm a second account can join only via its invite code. |
 | 3 | Import the repository in [Vercel](https://vercel.com). Add every value from `.env.example`; set `NEXT_PUBLIC_SITE_URL` to your production domain. |
-| 4 | In GitHub **Settings → Secrets → Actions**, add `APP_URL=https://<your-domain>` and `CRON_SECRET`. Use **Run workflow** on the Actions tab to manually trigger a live-data sync. |
+| 4 | Optional — in GitHub **Settings → Secrets → Actions**, add `APP_URL=https://<your-domain>` and `CRON_SECRET` to run prediction reminders manually. FIFA data is refreshed locally with `npm run data:fifa:*`; this workflow does not sync match data. |
 | 5 | Deploy, then run `ADMIN_EMAIL=<email> npm run setup:check` against the production URL. |
 
 ---
@@ -816,7 +832,7 @@ Routine daily:       npm run data:live
 - Test a locked prediction, the Match Centre pitch, result scoring, calendar token, and the Open Graph preview
 - Confirm live data by running `npm run data:live` from your local machine after a match finishes
 - Check **Admin → FIFA sync cockpit** after every refresh: freshness, coverage, import writes, and missing started matches should all be green
-- Run `npm run data:events` during live matches to keep the current XI up to date
+- During live matches, run `npm run data:fifa:lineups` for team sheets; `npm run data:events` is an optional Kickoffapi supplement if available
 
 ---
 

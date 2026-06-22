@@ -13,6 +13,10 @@ export interface DBMatch {
   group_name: string | null
   gameweek?: number | null
   round_name?: string | null
+  home_formation?: string | null
+  away_formation?: string | null
+  home_formation_override?: string | null
+  away_formation_override?: string | null
 }
 
 export interface MyPred {

@@ -252,8 +252,8 @@ export default function MatchDetailPage() {
   const penaltyHome = fifaMeta?.penaltyHome != null ? Number(fifaMeta.penaltyHome) : null
   const penaltyAway = fifaMeta?.penaltyAway != null ? Number(fifaMeta.penaltyAway) : null
   const hasPenalties = penaltyHome != null && penaltyAway != null
-  const homeFormation = (match as { home_formation?: string | null }).home_formation ?? null
-  const awayFormation = (match as { away_formation?: string | null }).away_formation ?? null
+  const homeFormation = match.home_formation_override ?? match.home_formation ?? null
+  const awayFormation = match.away_formation_override ?? match.away_formation ?? null
   const locked = scored || match.is_locked || (secsLeft !== null ? secsLeft <= 0 : new Date(match.match_date) <= new Date())
   const knockout = !match.group_name
   const canSubmit = h != null && a != null && !locked

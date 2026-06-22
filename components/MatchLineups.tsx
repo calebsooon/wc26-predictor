@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
 import FlagChip from '@/components/FlagChip'
 import { DialogShell } from '@/components/ui'
-import { resolveLineupState, type LineupPlayerState, type LineupSubstitution } from '@/lib/lineup-state'
+import { resolveCurrentFormation, resolveLineupState, type LineupFormationChange, type LineupPlayerState, type LineupSubstitution } from '@/lib/lineup-state'
 import { resolvePitchLayout } from '@/lib/lineup-layout'
 
 type Row = LineupPlayerState & { team_code: string; players: { name: string; photo_url: string | null } | null }
@@ -27,6 +27,21 @@ function surname(name: string) {
 function isGK(label: string | null) {
   const v = (label ?? '').toUpperCase()
   return v === 'GK' || v === 'G'
+}
+
+function playersPerLine(players: PositionedPlayer[]) {
+  const counts = new Map<number, number>()
+  for (const player of players) counts.set(player.row, (counts.get(player.row) ?? 0) + 1)
+  return counts
+}
+
+function tokenWidth(lineSize: number) {
+  // A five-player line is the densest common formation row. Give it a little
+  // more air than a striker or goalkeeper without making sparse XIs tiny.
+  if (lineSize >= 5) return '10.4%'
+  if (lineSize === 4) return '11.4%'
+  if (lineSize === 3) return '12.2%'
+  return '12.8%'
 }
 
 /* ── Kit colours (used for silhouette fill + shirt badge) */
@@ -55,10 +70,10 @@ function kitGrad(teamCode: string, gk: boolean): { grad: string; badge: string; 
 
 /* ── Player token — no circle, just bust + nameplate ── */
 function PlayerToken({
-  player, x, y, teamCode, entered, goals, yellows, onSelect,
+  player, x, y, teamCode, lineSize, entered, goals, yellows, onSelect,
 }: {
   player: LineupPlayerState; x: number; y: number
-  teamCode: string; entered?: boolean
+  teamCode: string; lineSize: number; entered?: boolean
   goals: Set<string>; yellows: Set<string>
   onSelect?: (player: LineupPlayerState) => void
 }) {
@@ -67,9 +82,11 @@ function PlayerToken({
   const { badge, ring } = kitGrad(teamCode, gk)
   const hasGoal = goals.has(String(player.player_id))
   const hasYellow = yellows.has(String(player.player_id))
+  const compact = lineSize >= 4
 
   // Token width is % of the pitch container so it scales on both mobile and desktop.
-  // At 13% and 5 players across (spacing ~16.7%), there's ~3.7% gap — readable without cramping.
+  // Dense defensive/midfield lines deliberately receive smaller tokens, leaving
+  // clear gaps for player photos and avoiding overlapping nameplates.
   return (
     <motion.button
       type="button"
@@ -80,11 +97,11 @@ function PlayerToken({
       animate={{ opacity: 1, scale: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 340, damping: 26 }}
       className="absolute -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center text-left transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 rounded-md"
-      style={{ left: `${x}%`, top: `${y}%`, width: '13%' }}
+      style={{ left: `${x}%`, top: `${y}%`, width: tokenWidth(lineSize) }}
     >
       {/* Figure — 76% of token width, 4:5 aspect ratio */}
       <div className="relative w-full flex justify-center">
-        <div className="relative" style={{ width: '76%', aspectRatio: '3 / 4' }}>
+        <div className="relative" style={{ width: compact ? '72%' : '76%', aspectRatio: '3 / 4' }}>
           {/* Goal ball */}
           {hasGoal && (
             <span className="absolute -top-2 -right-1.5 z-20">
@@ -113,10 +130,16 @@ function PlayerToken({
             {photo ? (
               <Image src={photo} alt="" fill className="object-contain object-bottom" />
             ) : (
-              <svg viewBox="0 0 36 46" className="w-full h-full block">
-                <circle cx="18" cy="13" r="9" fill={ring} stroke="rgba(0,0,0,0.2)" strokeWidth="0.5" />
-                <path d="M2 46c0-9.2 7.2-14.5 16-14.5S34 36.8 34 46z" fill={ring} stroke="rgba(0,0,0,0.2)" strokeWidth="0.5" />
-              </svg>
+              <div className="w-full h-full flex items-center justify-center">
+                <svg viewBox="0 0 36 36" style={{ width: '66%', height: 'auto' }}>
+                  <circle cx="18" cy="18" r="16" fill={ring} stroke="rgba(0,0,0,0.25)" strokeWidth="1" />
+                  {player.shirt_number != null && (
+                    <text x="18" y="23.5" textAnchor="middle" fontSize="15" fontWeight="800" fontFamily="Schibsted Grotesk, sans-serif" fill={badge}>
+                      {player.shirt_number}
+                    </text>
+                  )}
+                </svg>
+              </div>
             )}
           </div>
         </div>
@@ -126,10 +149,10 @@ function PlayerToken({
       <div
         className="w-full text-white font-bold text-center truncate leading-none mt-0.5"
         style={{
-          padding: '2px 3px',
+          padding: compact ? '1px 2px' : '2px 3px',
           borderRadius: 4,
           background: 'rgba(0,0,0,0.74)',
-          fontSize: 8,
+          fontSize: compact ? 7.3 : 8,
           fontFamily: 'Schibsted Grotesk, sans-serif',
           letterSpacing: '-0.01em',
           backdropFilter: 'blur(2px)',
@@ -183,6 +206,8 @@ function Pitch({
   onSelect?: (player: LineupPlayerState, teamCode: string) => void
   style?: React.CSSProperties
 }) {
+  const homeLineSizes = playersPerLine(homePlayers)
+  const awayLineSizes = playersPerLine(awayPlayers)
   return (
     <div
       className="relative overflow-hidden rounded-[16px]"
@@ -223,11 +248,11 @@ function Pitch({
       )}
 
       {/* Players */}
-      {awayPlayers.map(({ player, x, y }) => (
-        <PlayerToken key={`a-${player.player_id}`} player={player} x={x} y={y} teamCode={awayCode} goals={goalScorers} yellows={yellows} onSelect={(selected) => onSelect?.(selected, awayCode)} />
+      {awayPlayers.map(({ player, x, y, row }) => (
+        <PlayerToken key={`a-${player.player_id}`} player={player} x={x} y={y} lineSize={awayLineSizes.get(row) ?? 1} teamCode={awayCode} goals={goalScorers} yellows={yellows} onSelect={(selected) => onSelect?.(selected, awayCode)} />
       ))}
-      {homePlayers.map(({ player, x, y }) => (
-        <PlayerToken key={`h-${player.player_id}`} player={player} x={x} y={y} teamCode={homeCode} goals={goalScorers} yellows={yellows} onSelect={(selected) => onSelect?.(selected, homeCode)} />
+      {homePlayers.map(({ player, x, y, row }) => (
+        <PlayerToken key={`h-${player.player_id}`} player={player} x={x} y={y} lineSize={homeLineSizes.get(row) ?? 1} teamCode={homeCode} goals={goalScorers} yellows={yellows} onSelect={(selected) => onSelect?.(selected, homeCode)} />
       ))}
     </div>
   )
@@ -315,15 +340,17 @@ function SubRail({
 }
 
 /* ── Timeline bar ───────────────────────────────────── */
-function Timeline({ events, subs, rows, homeCode }: {
+function Timeline({ events, subs, formationChanges, rows, homeCode }: {
   events: MatchEvent[]
   subs: LineupSubstitution[]
+  formationChanges: LineupFormationChange[]
   rows: Row[]
   homeCode: string
 }) {
   const items = [
     ...events.map((e) => ({ minute: e.minute, key: e.id, isHome: e.team_code === homeCode, type: e.type as string, player: e.player?.name ?? '' })),
     ...subs.map((s) => ({ minute: s.minute, key: s.id ?? `${s.player_out_id}-${s.player_in_id}`, isHome: s.team_code === homeCode, type: 'sub', player: surname(rows.find((r) => r.player_id === s.player_in_id)?.players?.name ?? '') })),
+    ...formationChanges.map((change) => ({ minute: change.minute, key: change.id ?? `${change.team_code}-${change.minute}-${change.formation}`, isHome: change.team_code === homeCode, type: 'formation', player: change.formation })),
   ].sort((a, b) => a.minute - b.minute)
 
   if (!items.length) return null
@@ -342,10 +369,14 @@ function Timeline({ events, subs, rows, homeCode }: {
           const isGoal = item.type === 'goal'
           const isYellow = item.type === 'yellow_card'
           const isSub = item.type === 'sub'
+          const isFormation = item.type === 'formation'
           const isHome = item.isHome
+          const label = isFormation ? `${item.player} tactical shape change at ${item.minute} minutes` : `${item.type.replace('_', ' ')} at ${item.minute} minutes`
           return (
             <div
               key={item.key}
+              title={label}
+              aria-label={label}
               className="absolute top-0 bottom-0 flex flex-col items-center"
               style={{ left: `${pos}%`, transform: 'translateX(-50%)', width: 28, justifyContent: isHome ? 'flex-end' : 'flex-start' }}
             >
@@ -353,7 +384,7 @@ function Timeline({ events, subs, rows, homeCode }: {
                 <div
                   className="w-5 h-5 rounded-full grid place-items-center"
                   style={{
-                    background: isGoal ? '#fff' : isSub ? 'rgba(31,193,107,0.18)' : 'rgba(255,206,90,0.18)',
+                    background: isGoal ? '#fff' : isSub ? 'rgba(31,193,107,0.18)' : isFormation ? 'rgba(104,142,255,0.20)' : 'rgba(255,206,90,0.18)',
                     border: `1.5px solid ${isHome ? 'rgb(var(--blue))' : 'rgb(var(--coral))'}`,
                   }}
                 >
@@ -369,6 +400,7 @@ function Timeline({ events, subs, rows, homeCode }: {
                       <path d="M7 4 4 7l3 3M4 7h13M17 20l3-3-3-3M20 17H7" />
                     </svg>
                   )}
+                  {isFormation && <span className="text-[9px] font-black text-blue">⌘</span>}
                 </div>
                 <span className="font-bold text-center" style={{ fontSize: 9, fontFamily: 'Schibsted Grotesk, sans-serif', color: isHome ? 'rgb(var(--blue))' : 'rgb(var(--coral))' }}>
                   {item.minute}′
@@ -394,6 +426,7 @@ export function MatchLineups({
   const supabase = useMemo(() => createClient(), [])
   const [rows, setRows] = useState<Row[] | null>(null)
   const [subs, setSubs] = useState<LineupSubstitution[]>([])
+  const [formationChanges, setFormationChanges] = useState<LineupFormationChange[]>([])
   const [events, setEvents] = useState<MatchEvent[]>([])
   const [focusPitch, setFocusPitch] = useState(false)
   const [selectedPlayer, setSelectedPlayer] = useState<{ player: LineupPlayerState; teamCode: string } | null>(null)
@@ -404,10 +437,12 @@ export function MatchLineups({
       supabase.from('lineups').select('team_code, player_id, is_starting, shirt_number, position_label, grid, sort_order, players(name, photo_url)').eq('match_id', matchId),
       supabase.from('lineup_substitutions').select('id, team_code, player_out_id, player_in_id, minute, source, created_at').eq('match_id', matchId),
       supabase.from('match_events').select('id, team_code, minute, type, detail, player:players!match_events_player_id_fkey(name), assist:players!match_events_assist_id_fkey(name)').eq('match_id', matchId).order('minute'),
-    ]).then(([lineups, substitutions, timeline]) => {
+      supabase.from('match_formation_changes').select('id, team_code, minute, formation, source, created_at').eq('match_id', matchId).order('minute'),
+    ]).then(([lineups, substitutions, timeline, shapes]) => {
       setRows((lineups.data ?? []) as unknown as Row[])
       setSubs((substitutions.data ?? []) as LineupSubstitution[])
       setEvents((timeline.data ?? []) as unknown as MatchEvent[])
+      setFormationChanges((shapes.data ?? []) as LineupFormationChange[])
     })
   }, [matchId, supabase])
 
@@ -417,6 +452,7 @@ export function MatchLineups({
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lineups', filter: `match_id=eq.${matchId}` }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lineup_substitutions', filter: `match_id=eq.${matchId}` }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'match_events', filter: `match_id=eq.${matchId}` }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_formation_changes', filter: `match_id=eq.${matchId}` }, load)
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [load, matchId, supabase])
@@ -431,18 +467,20 @@ export function MatchLineups({
   const awayRows = rows.filter((r) => r.team_code === awayCode)
   const home = resolveLineupState(homeRows, subs, homeCode)
   const away = resolveLineupState(awayRows, subs, awayCode)
+  const currentHomeFormation = resolveCurrentFormation(homeFormation, formationChanges, homeCode)
+  const currentAwayFormation = resolveCurrentFormation(awayFormation, formationChanges, awayCode)
 
   const goalScorers = new Set(events.filter((e) => e.type === 'goal' && e.player).map((e) => String(rows.find((r) => r.players?.name === e.player?.name && r.team_code === e.team_code)?.player_id ?? '')))
   const yellowCards = new Set(events.filter((e) => e.type === 'yellow_card' && e.player).map((e) => String(rows.find((r) => r.players?.name === e.player?.name && r.team_code === e.team_code)?.player_id ?? '')))
 
-  const homePlayers = resolvePitchLayout(home.current, true, homeFormation)
-  const awayPlayers = resolvePitchLayout(away.current, false, awayFormation)
-  const hasEvents = events.length > 0 || home.applied.length + away.applied.length > 0
+  const homePlayers = resolvePitchLayout(home.current, true, currentHomeFormation)
+  const awayPlayers = resolvePitchLayout(away.current, false, currentAwayFormation)
+  const hasEvents = events.length > 0 || formationChanges.length > 0 || home.applied.length + away.applied.length > 0
 
   const pitchProps = {
     homePlayers, awayPlayers,
     homeCode, awayCode,
-    homeFormation, awayFormation,
+    homeFormation: currentHomeFormation, awayFormation: currentAwayFormation,
     homeScore, awayScore,
     goalScorers, yellows: yellowCards,
     onSelect: (player: LineupPlayerState, teamCode: string) => setSelectedPlayer({ player, teamCode }),
@@ -455,10 +493,10 @@ export function MatchLineups({
         <span className="flex items-center gap-1.5">
           <FlagChip code={homeCode} w={16} h={11} r={2} />
           <span className="text-textp">{getTeam(homeCode).name}</span>
-          {homeFormation && <span className="text-faint ml-1">{homeFormation}</span>}
+          {currentHomeFormation && <span className="text-faint ml-1">{currentHomeFormation}</span>}
         </span>
         <span className="flex items-center gap-1.5">
-          {awayFormation && <span className="text-faint mr-1">{awayFormation}</span>}
+          {currentAwayFormation && <span className="text-faint mr-1">{currentAwayFormation}</span>}
           <span className="text-textp">{getTeam(awayCode).name}</span>
           <FlagChip code={awayCode} w={16} h={11} r={2} />
         </span>
@@ -480,13 +518,13 @@ export function MatchLineups({
         </div>
 
         {hasEvents && (
-          <Timeline events={events} subs={[...home.applied, ...away.applied]} rows={rows} homeCode={homeCode} />
+          <Timeline events={events} subs={[...home.applied, ...away.applied]} formationChanges={formationChanges} rows={rows} homeCode={homeCode} />
         )}
 
         {/* Subs & bench in 2 columns */}
         <div className="grid grid-cols-2 gap-4">
-          <SubRail teamCode={homeCode} formation={homeFormation} applied={home.applied} bench={home.bench} rows={rows} />
-          <SubRail teamCode={awayCode} formation={awayFormation} applied={away.applied} bench={away.bench} rows={rows} />
+          <SubRail teamCode={homeCode} formation={currentHomeFormation} applied={home.applied} bench={home.bench} rows={rows} />
+          <SubRail teamCode={awayCode} formation={currentAwayFormation} applied={away.applied} bench={away.bench} rows={rows} />
         </div>
       </div>
 
@@ -495,13 +533,13 @@ export function MatchLineups({
         <Pitch {...pitchProps} style={{ minHeight: 570 }} />
 
         {hasEvents && (
-          <Timeline events={events} subs={[...home.applied, ...away.applied]} rows={rows} homeCode={homeCode} />
+          <Timeline events={events} subs={[...home.applied, ...away.applied]} formationChanges={formationChanges} rows={rows} homeCode={homeCode} />
         )}
 
         <div className="grid grid-cols-2 gap-3">
           {[
-            { code: homeCode, formation: homeFormation, applied: home.applied, bench: home.bench },
-            { code: awayCode, formation: awayFormation, applied: away.applied, bench: away.bench },
+            { code: homeCode, formation: currentHomeFormation, applied: home.applied, bench: home.bench },
+            { code: awayCode, formation: currentAwayFormation, applied: away.applied, bench: away.bench },
           ].map((t) => (
             <div
               key={t.code}

@@ -19,6 +19,8 @@ export interface ModalMatch {
   round_name?: string
   home_formation?: string | null
   away_formation?: string | null
+  home_formation_override?: string | null
+  away_formation_override?: string | null
 }
 
 interface Player { id: number; name: string; position: string | null; jersey_number: number | null; nationality: string | null }
@@ -115,6 +117,28 @@ export function SquadPanel({ code, matchId }: { code: string; matchId: string })
 
 export default function MatchModal({ match, onClose }: { match: ModalMatch; onClose: () => void }) {
   const home = getTeam(match.home_team), away = getTeam(match.away_team)
+  const [formations, setFormations] = useState<{ home: string | null; away: string | null }>({
+    home: match.home_formation_override ?? match.home_formation ?? null,
+    away: match.away_formation_override ?? match.away_formation ?? null,
+  })
+
+  useEffect(() => {
+    const suppliedHome = match.home_formation_override ?? match.home_formation
+    const suppliedAway = match.away_formation_override ?? match.away_formation
+    if (suppliedHome !== undefined || suppliedAway !== undefined) {
+      setFormations({ home: suppliedHome ?? null, away: suppliedAway ?? null })
+      return
+    }
+    const supabase = createClient()
+    supabase.from('matches')
+      .select('home_formation, away_formation, home_formation_override, away_formation_override')
+      .eq('id', match.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        const row = data as { home_formation: string | null; away_formation: string | null; home_formation_override: string | null; away_formation_override: string | null } | null
+        if (row) setFormations({ home: row.home_formation_override ?? row.home_formation, away: row.away_formation_override ?? row.away_formation })
+      })
+  }, [match.away_formation, match.away_formation_override, match.home_formation, match.home_formation_override, match.id])
 
   const hasScore = match.real_home_score !== null && match.real_away_score !== null
   const isTBC = match.home_team === 'TBC'
@@ -152,7 +176,7 @@ export default function MatchModal({ match, onClose }: { match: ModalMatch; onCl
 
         {!isTBC ? (
           <div className="flex-1 overflow-y-auto p-4">
-            <MatchLineups matchId={match.id} homeCode={match.home_team} awayCode={match.away_team} homeFormation={match.home_formation ?? null} awayFormation={match.away_formation ?? null} homeScore={match.real_home_score} awayScore={match.real_away_score} />
+            <MatchLineups matchId={match.id} homeCode={match.home_team} awayCode={match.away_team} homeFormation={formations.home} awayFormation={formations.away} homeScore={match.real_home_score} awayScore={match.real_away_score} />
           </div>
         ) : (
           <div className="px-5 py-8 text-center text-texts text-sm">Teams will be confirmed after the group stage.</div>

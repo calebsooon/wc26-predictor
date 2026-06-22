@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
-import { EmptyState, Skeleton, CalIcon } from '@/components/ui'
+import { EmptyState, Skeleton, CalIcon, PageHeader } from '@/components/ui'
 import { CalendarExportButton } from '@/components/CalendarExport'
 import { toUIMatch, matchStatus, type DBMatch, type MyPred } from '@/lib/match-ui'
 import { getActiveLeague } from '@/lib/league'
@@ -248,30 +248,20 @@ export default function FixturesPage() {
     <div style={{ maxWidth: 860, width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* Page Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
-        <div>
-          <div className="eyebrow" style={{ marginBottom: 4 }}>World Cup 2026</div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, fontFamily: 'Schibsted Grotesk, sans-serif', lineHeight: 1.15, margin: 0 }}>
-            Fixtures
-          </h1>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          {counts.missing > 0 && (
-            <div style={{
-              color: 'rgb(var(--coral))',
-              background: 'rgba(var(--coral),0.12)',
-              padding: '6px 12px',
-              borderRadius: 999,
-              fontSize: 12.5,
-              fontWeight: 700,
-              whiteSpace: 'nowrap',
-            }}>
-              {counts.missing} open to predict
-            </div>
-          )}
-          <CalendarExportButton variant="outline" size="sm" />
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="World Cup 2026"
+        title="Fixtures"
+        action={
+          <div className="flex items-center gap-2.5 shrink-0">
+            {counts.missing > 0 && (
+              <span className="rounded-full bg-coral/12 px-3 py-1.5 text-[12.5px] font-bold text-coral whitespace-nowrap">
+                {counts.missing} to predict
+              </span>
+            )}
+            <CalendarExportButton variant="outline" size="sm" />
+          </div>
+        }
+      />
 
       {/* Filter Bar */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

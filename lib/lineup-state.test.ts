@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveLineupState, type LineupPlayerState } from './lineup-state'
+import { resolveCurrentFormation, resolveLineupState, type LineupPlayerState } from './lineup-state'
 
 const player = (id: number, starting: boolean): LineupPlayerState => ({ player_id: id, is_starting: starting, shirt_number: id, position_label: id === 1 ? 'GK' : 'ST', grid: id === 1 ? '1:1' : '4:1', sort_order: id, players: { name: `Player ${id}` } })
 
@@ -21,5 +21,13 @@ describe('resolveLineupState', () => {
     ], 'AAA')
     expect(result.current.map((p) => p.player_id)).toEqual([1, 4])
     expect(result.applied).toHaveLength(2)
+  })
+
+  it('uses the latest verified tactical change as the current formation', () => {
+    expect(resolveCurrentFormation('4-3-3', [
+      { team_code: 'AAA', minute: 55, formation: '3-4-3' },
+      { team_code: 'AAA', minute: 73, formation: '5-4-1' },
+      { team_code: 'BBB', minute: 70, formation: '4-4-2' },
+    ], 'AAA')).toBe('5-4-1')
   })
 })

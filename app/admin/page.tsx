@@ -13,7 +13,9 @@ import FlagChip from '@/components/FlagChip'
 import { WEIGHT_FIELDS, resolveWeights, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { fmtDateTime } from '@/lib/date-format'
 import { normalisePosition, POSITION_ABBR } from '@/lib/teams'
-import { resolveLineupState, type LineupPlayerState, type LineupSubstitution } from '@/lib/lineup-state'
+import { resolveCurrentFormation, resolveLineupState, type LineupFormationChange, type LineupPlayerState, type LineupSubstitution } from '@/lib/lineup-state'
+import { parseFormation, resolvePitchLayout } from '@/lib/lineup-layout'
+import { validateLineup } from '@/lib/lineup-validation'
 
 /* ── EditConfirmButton ───────────────────────────────────────────────────── */
 function EditConfirmButton({ saving, onConfirm, label }: { saving: boolean; onConfirm: () => void; label: string }) {
@@ -38,10 +40,12 @@ function EditConfirmButton({ saving, onConfirm, label }: { saving: boolean; onCo
 
 /* ── LineupEditor ────────────────────────────────────────────────────────── */
 const POS_OPTIONS = ['GK', 'RB', 'RWB', 'CB', 'LB', 'LWB', 'CDM', 'DM', 'CM', 'RM', 'LM', 'CAM', 'AM', 'RW', 'LW', 'CF', 'ST', 'SS']
-const PITCH_ROWS = [{ value: '0', label: 'GK' }, { value: '1', label: 'Def' }, { value: '2', label: 'Mid' }, { value: '3', label: 'Fwd' }]
+const PITCH_ROWS = [{ value: '0', label: 'GK' }, { value: '1', label: 'Def' }, { value: '2', label: 'Low mid' }, { value: '3', label: 'High mid' }, { value: '4', label: 'Fwd' }]
 const PITCH_LANES = [{ value: '1', label: 'Far L' }, { value: '2', label: 'Left' }, { value: '3', label: 'Centre' }, { value: '4', label: 'Right' }, { value: '5', label: 'Far R' }]
+const FORMATION_PRESETS = ['3-4-3', '3-5-2', '3-4-2-1', '3-1-4-2', '4-3-3', '4-4-2', '4-2-3-1', '4-1-4-1', '4-2-2-2', '4-3-1-2', '4-3-2-1', '5-3-2', '5-4-1', '5-2-3']
 
 interface LineupEntry { playerId: number; name: string; jersey: number | null; status: 'out' | 'starter' | 'sub'; posLabel: string; grid: string | null }
+type LayoutMode = 'formation' | 'manual'
 
 function defaultGrid(position: string) {
   const pos = position.toUpperCase()
@@ -56,12 +60,267 @@ function defaultGrid(position: string) {
   return '3:3'
 }
 
-function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamCode: string; playerKey: string }) {
+function shortName(name: string) {
+  const parts = name.trim().split(/\s+/)
+  return parts.at(-1) ?? name
+}
+
+function LineupPreview({ teamCode, entries, formation, layoutMode }: {
+  teamCode: string
+  entries: LineupEntry[]
+  formation: string | null
+  layoutMode: LayoutMode
+}) {
+  const starters = entries.filter((entry) => entry.status === 'starter')
+  const positioned = resolvePitchLayout(
+    starters.map((entry, index) => ({
+      player_id: entry.playerId,
+      position_label: entry.posLabel || null,
+      grid: layoutMode === 'manual' ? entry.grid : null,
+      sort_order: index,
+    })),
+    true,
+    formation,
+  )
+  const byId = new Map(entries.map((entry) => [entry.playerId, entry]))
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-2.5">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-texts"><FlagChip code={teamCode} w={15} h={10} r={2} />Live pitch preview</span>
+        <span className="text-[10px] font-bold text-primary">{formation ?? 'Auto shape'}</span>
+      </div>
+      <div className="relative h-[235px] overflow-hidden rounded-lg border border-white/10" style={{ background: 'linear-gradient(180deg, #0b653b, #07512f)' }}>
+        <div className="absolute inset-[8px] border border-white/25 rounded-[3px]" />
+        <div className="absolute left-[8px] right-[8px] top-1/2 h-px bg-white/25" />
+        <div className="absolute left-1/2 top-1/2 h-[46px] w-[46px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20" />
+        <div className="absolute bottom-[8px] left-1/2 h-[39px] w-[47%] -translate-x-1/2 border border-b-0 border-white/25" />
+        {positioned.map((slot) => {
+          const entry = byId.get(slot.player.player_id)
+          if (!entry) return null
+          return (
+            <div key={entry.playerId} className="absolute z-10 -translate-x-1/2 -translate-y-1/2 text-center" style={{ left: `${slot.x}%`, top: `${slot.y}%`, width: 52 }}>
+              <span className="mx-auto grid h-5 w-5 place-items-center rounded-full border border-white/50 bg-primary text-[9px] font-black text-[#042614] shadow-lg">{entry.jersey ?? '–'}</span>
+              <span className="mt-0.5 block truncate rounded bg-black/65 px-1 py-px text-[8px] font-bold text-white">{shortName(entry.name)}</span>
+            </div>
+          )
+        })}
+        {starters.length === 0 && <p className="absolute inset-0 grid place-items-center text-xs font-semibold text-white/60">Choose starters to preview the shape</p>}
+      </div>
+    </div>
+  )
+}
+
+type AdminLineupRow = LineupPlayerState & { team_code: string; players: { name: string } | null }
+
+function FullMatchLineupPreview({
+  matchId, homeCode, awayCode, homeFormation, awayFormation, refreshKey,
+}: {
+  matchId: string
+  homeCode: string
+  awayCode: string
+  homeFormation: string | null
+  awayFormation: string | null
+  refreshKey: number
+}) {
+  const supabase = useMemo(() => createClient(), [])
+  const [rows, setRows] = useState<AdminLineupRow[] | null>(null)
+  const [subs, setSubs] = useState<LineupSubstitution[]>([])
+  const [formationChanges, setFormationChanges] = useState<LineupFormationChange[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      supabase.from('lineups').select('team_code, player_id, is_starting, shirt_number, position_label, grid, sort_order, players(name)').eq('match_id', matchId),
+      supabase.from('lineup_substitutions').select('id, team_code, player_out_id, player_in_id, minute, source, created_at').eq('match_id', matchId),
+      supabase.from('match_formation_changes').select('id, team_code, minute, formation, source, created_at').eq('match_id', matchId).order('minute'),
+    ]).then(([lineups, substitutions, shapes]) => {
+      if (cancelled) return
+      setRows((lineups.data ?? []) as unknown as AdminLineupRow[])
+      setSubs((substitutions.data ?? []) as LineupSubstitution[])
+      setFormationChanges((shapes.data ?? []) as LineupFormationChange[])
+    })
+    return () => { cancelled = true }
+  }, [matchId, refreshKey, supabase])
+
+  if (rows === null) return <div className="grid h-64 place-items-center rounded-xl border border-border bg-surface text-xs text-texts">Loading both XIs…</div>
+  if (!rows.length) return <div className="rounded-xl border border-dashed border-border bg-surface px-4 py-8 text-center text-xs text-texts">Save at least one announced lineup to preview both teams.</div>
+
+  const home = resolveLineupState(rows.filter((row) => row.team_code === homeCode), subs, homeCode)
+  const away = resolveLineupState(rows.filter((row) => row.team_code === awayCode), subs, awayCode)
+  const currentHomeFormation = resolveCurrentFormation(homeFormation, formationChanges, homeCode)
+  const currentAwayFormation = resolveCurrentFormation(awayFormation, formationChanges, awayCode)
+  const homePlayers = resolvePitchLayout(home.current, true, currentHomeFormation)
+  const awayPlayers = resolvePitchLayout(away.current, false, currentAwayFormation)
+  const nameById = new Map(rows.map((row) => [row.player_id, row.players?.name ?? 'Player']))
+  const renderPlayer = (player: typeof homePlayers[number], side: 'home' | 'away') => (
+    <div key={`${side}-${player.player.player_id}`} className="absolute z-10 -translate-x-1/2 -translate-y-1/2 text-center" style={{ left: `${player.x}%`, top: `${player.y}%`, width: 56 }}>
+      <span className={`mx-auto grid h-5 w-5 place-items-center rounded-full border border-white/50 text-[9px] font-black shadow-lg ${side === 'home' ? 'bg-primary text-[#042614]' : 'bg-blue text-white'}`}>{player.player.shirt_number ?? '–'}</span>
+      <span className="mt-0.5 block truncate rounded bg-black/65 px-1 py-px text-[8px] font-bold text-white">{shortName(nameById.get(player.player.player_id) ?? 'Player')}</span>
+    </div>
+  )
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-3">
+      <div className="mb-2 flex items-center justify-between gap-3 text-[11px] font-bold">
+        <span className="flex items-center gap-1.5"><FlagChip code={awayCode} w={16} h={11} r={2} />{getTeam(awayCode).name}<span className="text-faint">{currentAwayFormation ?? 'Auto'}</span></span>
+        <span className="text-[10px] uppercase tracking-wider text-texts">Current XI preview</span>
+        <span className="flex items-center gap-1.5"><span className="text-faint">{currentHomeFormation ?? 'Auto'}</span>{getTeam(homeCode).name}<FlagChip code={homeCode} w={16} h={11} r={2} /></span>
+      </div>
+      <div className="relative h-[480px] overflow-hidden rounded-xl border border-white/10" style={{ background: 'repeating-linear-gradient(180deg, #0b653b 0 10%, #07512f 10% 20%)' }}>
+        <div className="absolute inset-[10px] rounded-[4px] border border-white/25" />
+        <div className="absolute left-[10px] right-[10px] top-1/2 h-px bg-white/25" />
+        <div className="absolute left-1/2 top-1/2 h-[82px] w-[82px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20" />
+        <div className="absolute bottom-[10px] left-1/2 h-[72px] w-[48%] -translate-x-1/2 border border-b-0 border-white/25" />
+        <div className="absolute top-[10px] left-1/2 h-[72px] w-[48%] -translate-x-1/2 border border-t-0 border-white/25" />
+        {awayPlayers.map((player) => renderPlayer(player, 'away'))}
+        {homePlayers.map((player) => renderPlayer(player, 'home'))}
+      </div>
+      <p className="mt-2 text-[10px] text-texts">Shows the current XI after verified substitutions. Formation-first spacing is used unless that team has saved manual grid coordinates.</p>
+    </div>
+  )
+}
+
+function FormationOverrideControl({
+  matchId, teamCode, providerFormation, override, column, onSaved,
+}: {
+  matchId: string
+  teamCode: string
+  providerFormation: string | null
+  override: string | null
+  column: 'home_formation_override' | 'away_formation_override'
+  onSaved: (formation: string | null) => void
+}) {
+  const supabase = createClient()
+  const [draft, setDraft] = useState(override ?? '')
+  const [saving, setSaving] = useState(false)
+  const listId = `formation-presets-${matchId}-${teamCode}`
+
+  useEffect(() => { setDraft(override ?? '') }, [override])
+
+  async function save(next: string | null) {
+    const value = next?.trim() || null
+    if (value && !parseFormation(value)) { toast.error('Use a valid formation such as 4-2-3-1 or 3-5-2'); return }
+    setSaving(true)
+    const { error } = await supabase.from('matches').update({ [column]: value }).eq('id', matchId)
+    setSaving(false)
+    if (error) { toast.error(error.message); return }
+    setDraft(value ?? '')
+    onSaved(value)
+    toast.success(value ? `${teamCode} formation override saved` : `${teamCode} is using the FIFA formation`)
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-surface p-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div><p className="text-[10px] font-bold uppercase tracking-wider text-texts">Formation source</p><p className="mt-0.5 text-[11px] text-textp">{override ? `Manual override · ${override}` : `FIFA default · ${providerFormation ?? 'not published'}`}</p></div>
+        {override && <button onClick={() => save(null)} disabled={saving} className="text-[10px] font-bold text-texts underline hover:text-primary">Use FIFA</button>}
+      </div>
+      <div className="mt-2 flex gap-1.5">
+        <input
+          list={listId}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value.replace(/\s/g, ''))}
+          placeholder="Override e.g. 3-4-3"
+          className="min-w-0 flex-1 rounded-md border border-border bg-card px-2 text-[11px] text-textp placeholder:text-faint"
+          aria-label={`${teamCode} formation override`}
+        />
+        <datalist id={listId}>{FORMATION_PRESETS.map((preset) => <option key={preset} value={preset} />)}</datalist>
+        <Button size="sm" variant="outline" onClick={() => save(draft)} disabled={saving || draft.trim() === (override ?? '')}>{saving ? '…' : 'Save'}</Button>
+      </div>
+    </div>
+  )
+}
+
+type FormationChange = { id: string; team_code: string; minute: number; formation: string; source: 'fifa' | 'manual'; created_at: string }
+
+function FormationChangesEditor({ matchId, teamCode, baseFormation, onChanged }: { matchId: string; teamCode: string; baseFormation: string | null; onChanged?: () => void }) {
+  const supabase = createClient()
+  const [changes, setChanges] = useState<FormationChange[]>([])
+  const [minute, setMinute] = useState('60')
+  const [formation, setFormation] = useState(baseFormation ?? '4-3-3')
+  const [saving, setSaving] = useState(false)
+  const [editing, setEditing] = useState<{ id: string; minute: string; formation: string } | null>(null)
+  const listId = `formation-change-presets-${matchId}-${teamCode}`
+
+  const load = useCallback(async () => {
+    const { data } = await supabase.from('match_formation_changes').select('id, team_code, minute, formation, source, created_at').eq('match_id', matchId).eq('team_code', teamCode).order('minute')
+    setChanges((data ?? []) as FormationChange[])
+  }, [matchId, supabase, teamCode])
+
+  useEffect(() => { void load() }, [load])
+  useEffect(() => { if (!changes.length) setFormation(baseFormation ?? '4-3-3') }, [baseFormation, changes.length])
+
+  async function add() {
+    const eventMinute = Number(minute)
+    const value = formation.trim().replace(/\s/g, '')
+    if (!Number.isInteger(eventMinute) || eventMinute < 0 || eventMinute > 130) { toast.error('Choose a minute from 0 to 130'); return }
+    if (!parseFormation(value)) { toast.error('Use a valid formation such as 4-2-3-1 or 3-5-2'); return }
+    setSaving(true)
+    const { error } = await supabase.from('match_formation_changes').insert({ match_id: matchId, team_code: teamCode, minute: eventMinute, formation: value, source: 'manual' })
+    setSaving(false)
+    if (error) { toast.error(error.message.includes('unique') ? 'A shape change already exists at that minute — remove it first.' : error.message); return }
+    await load()
+    onChanged?.()
+    toast.success('Formation change recorded')
+  }
+
+  async function saveEdit() {
+    if (!editing) return
+    const eventMinute = Number(editing.minute)
+    const value = editing.formation.trim().replace(/\s/g, '')
+    if (!Number.isInteger(eventMinute) || eventMinute < 0 || eventMinute > 130) { toast.error('Choose a minute from 0 to 130'); return }
+    if (!parseFormation(value)) { toast.error('Use a valid formation such as 4-2-3-1 or 3-5-2'); return }
+    setSaving(true)
+    const { error } = await supabase.from('match_formation_changes').update({ minute: eventMinute, formation: value }).eq('id', editing.id)
+    setSaving(false)
+    if (error) { toast.error(error.message.includes('unique') ? 'A shape change already exists at that minute.' : error.message); return }
+    setEditing(null)
+    await load()
+    onChanged?.()
+    toast.success('Formation change updated')
+  }
+
+  async function remove(id: string) {
+    const { error } = await supabase.from('match_formation_changes').delete().eq('id', id)
+    if (error) { toast.error(error.message); return }
+    await load()
+    if (editing?.id === id) setEditing(null)
+    onChanged?.()
+    toast.success('Formation change removed')
+  }
+
+  return (
+    <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
+      <div className="flex items-center justify-between"><p className="text-[10px] font-bold uppercase tracking-wider text-texts">Tactical shape changes</p><span className="text-[10px] text-texts">Latest shape powers Current XI</span></div>
+      {changes.length > 0 && <div className="space-y-1">{changes.map((change) => editing?.id === change.id ? (
+        <div key={change.id} className="grid grid-cols-[52px_1fr_auto_auto] gap-1.5 rounded-lg border border-primary/30 bg-primary/5 p-1.5">
+          <input value={editing.minute} onChange={(event) => setEditing({ ...editing, minute: event.target.value })} inputMode="numeric" aria-label="Edited formation change minute" className="min-w-0 rounded-md border border-border bg-surface px-1 text-center text-[11px]" />
+          <input list={listId} value={editing.formation} onChange={(event) => setEditing({ ...editing, formation: event.target.value.replace(/\s/g, '') })} aria-label="Edited formation" className="min-w-0 rounded-md border border-border bg-surface px-2 text-[11px] text-textp" />
+          <Button size="sm" onClick={saveEdit} disabled={saving}>Save</Button>
+          <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+        </div>
+      ) : (
+        <div key={change.id} className="flex items-center gap-2 rounded-lg bg-surface px-2 py-1.5 text-[11px]"><span className="font-bold text-primary">{change.minute}′</span><span className="flex-1 font-semibold text-textp">{change.formation}</span><span className="text-texts">{change.source}</span>{change.source === 'manual' && <button onClick={() => setEditing({ id: change.id, minute: String(change.minute), formation: change.formation })} title="Edit this formation change" className="font-bold text-primary">Edit</button>}<button onClick={() => remove(change.id)} title="Remove this formation change" className="font-bold text-coral">×</button></div>
+      ))}</div>}
+      <div className="grid grid-cols-[52px_1fr_auto] gap-1.5">
+        <input value={minute} onChange={(event) => setMinute(event.target.value)} inputMode="numeric" aria-label="Formation change minute" className="rounded-md border border-border bg-surface px-1 text-center text-[11px]" />
+        <input list={listId} value={formation} onChange={(event) => setFormation(event.target.value.replace(/\s/g, ''))} aria-label="Formation after the change" className="min-w-0 rounded-md border border-border bg-surface px-2 text-[11px] text-textp" />
+        <datalist id={listId}>{FORMATION_PRESETS.map((preset) => <option key={preset} value={preset} />)}</datalist>
+        <Button size="sm" variant="outline" onClick={add} disabled={saving}>Add</Button>
+      </div>
+    </div>
+  )
+}
+
+function LineupEditor({ matchId, teamCode, playerKey, formation, onSaved }: { matchId: string; teamCode: string; playerKey: string; formation: string | null; onSaved?: () => void }) {
   const supabase = createClient()
   const [entries, setEntries] = useState<LineupEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState<'starter' | 'sub' | 'out'>('starter')
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('formation')
+  const [warningsAcknowledged, setWarningsAcknowledged] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -73,6 +332,7 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
       const lineupMap = new Map((lineup ?? []).map((l: { player_id: number; is_starting: boolean; position_label: string | null; shirt_number: number | null; grid: string | null }) =>
         [l.player_id, { is_starting: l.is_starting, posLabel: l.position_label ?? '', jersey: l.shirt_number, grid: l.grid }]
       ))
+      setLayoutMode((lineup ?? []).some((l: { is_starting: boolean; grid: string | null }) => l.is_starting && l.grid) ? 'manual' : 'formation')
       setEntries((players ?? []).filter((p: { id: number; name: string; jersey_number: number | null; position: string | null }) =>
         normalisePosition(p.position) !== 'Coach'
       ).map((p: { id: number; name: string; jersey_number: number | null; position: string | null }) => {
@@ -84,6 +344,7 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
           grid: l?.grid ?? null,
         }
       }))
+      setWarningsAcknowledged(false)
       setLoading(false)
     }
     load()
@@ -92,9 +353,14 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
 
   function update(playerId: number, patch: Partial<LineupEntry>) {
     setEntries((prev) => prev.map((e) => e.playerId === playerId ? { ...e, ...patch } : e))
+    setWarningsAcknowledged(false)
   }
 
   async function save() {
+    if (lineupWarnings.length > 0 && !warningsAcknowledged) {
+      toast.error('Review and acknowledge the lineup warnings before saving')
+      return
+    }
     setSaving(true)
     const selected = entries.filter((e) => e.status !== 'out')
     await supabase.from('lineups').delete().eq('match_id', matchId).eq('team_code', teamCode)
@@ -102,29 +368,77 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
       const rows = selected.map((e, i) => ({
         match_id: matchId, team_code: teamCode, player_id: e.playerId,
         is_starting: e.status === 'starter', shirt_number: e.jersey,
-        position_label: e.posLabel || null, grid: e.status === 'starter' ? (e.grid ?? defaultGrid(e.posLabel)) : null, sort_order: i, source: 'manual',
+        position_label: e.posLabel || null,
+        // Formation-first persists no grid values: the shared renderer then
+        // derives even tactical rows from the announced formation + position.
+        // Manual mode is deliberately opt-in and retains exact coordinates.
+        grid: e.status === 'starter' && layoutMode === 'manual' ? (e.grid ?? defaultGrid(e.posLabel)) : null,
+        sort_order: i, source: 'manual',
       }))
       const { error } = await supabase.from('lineups').insert(rows)
       if (error) { toast.error(error.message); setSaving(false); return }
     }
     toast.success(`Lineup saved — ${selected.filter((e) => e.status === 'starter').length} starters, ${selected.filter((e) => e.status === 'sub').length} subs`)
+    onSaved?.()
     setSaving(false)
   }
 
   async function clearLineup() {
     await supabase.from('lineups').delete().eq('match_id', matchId).eq('team_code', teamCode)
     setEntries((prev) => prev.map((e) => ({ ...e, status: 'out' })))
+    setWarningsAcknowledged(false)
+    onSaved?.()
     toast.success('Lineup cleared')
   }
 
   const filtered = entries.filter((e) => tab === 'out' ? e.status === 'out' : e.status === tab)
-  const starterCount = entries.filter((e) => e.status === 'starter').length
+  const starterEntries = entries.filter((e) => e.status === 'starter')
+  const starterCount = starterEntries.length
   const subCount = entries.filter((e) => e.status === 'sub').length
+  const lineupWarnings = useMemo(() => validateLineup(
+    entries.filter((entry) => entry.status === 'starter').map((entry) => ({ player_id: entry.playerId, position_label: entry.posLabel || null })),
+    formation,
+  ), [entries, formation])
 
   if (loading) return <div className="py-4 flex justify-center"><div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" /></div>
 
   return (
     <div className="space-y-2">
+      <div className="rounded-lg border border-border bg-surface p-2">
+        <div role="tablist" aria-label={`${teamCode} pitch layout mode`} className="grid grid-cols-2 gap-1 rounded-md bg-surface2 p-1">
+          <button
+            role="tab"
+            aria-selected={layoutMode === 'formation'}
+            onClick={() => { setLayoutMode('formation'); setWarningsAcknowledged(false) }}
+            className={`rounded-md px-2 py-1.5 text-[10.5px] font-bold transition-all ${layoutMode === 'formation' ? 'bg-primary/15 text-primary shadow-sm' : 'text-texts hover:text-textp'}`}
+          >
+            Formation-first
+          </button>
+          <button
+            role="tab"
+            aria-selected={layoutMode === 'manual'}
+            onClick={() => { setLayoutMode('manual'); setWarningsAcknowledged(false) }}
+            className={`rounded-md px-2 py-1.5 text-[10.5px] font-bold transition-all ${layoutMode === 'manual' ? 'bg-gold/15 text-gold shadow-sm' : 'text-texts hover:text-textp'}`}
+          >
+            Manual grid
+          </button>
+        </div>
+        <p className="mt-1.5 text-[10px] leading-relaxed text-texts">
+          {layoutMode === 'formation'
+            ? `Recommended. Uses ${formation ? `the ${formation} match formation` : 'the match formation when it is available'} and player positions to centre and space each line automatically.`
+            : 'Use only to fine-tune a specific player’s side or tactical row. Saved grid coordinates override formation placement.'}
+        </p>
+      </div>
+      <LineupPreview teamCode={teamCode} entries={entries} formation={formation} layoutMode={layoutMode} />
+      {lineupWarnings.length > 0 && (
+        <div className="rounded-lg border border-amber/30 bg-amber/10 p-2.5">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-amber">Lineup checks</p>
+          <ul className="mt-1 space-y-1">
+            {lineupWarnings.map((warning) => <li key={warning.code} className={`text-[10.5px] leading-snug ${warning.level === 'error' ? 'text-coral' : 'text-amber'}`}>{warning.level === 'error' ? '• ' : '– '}{warning.message}</li>)}
+          </ul>
+          <label className="mt-2 flex cursor-pointer items-center gap-2 text-[10.5px] font-semibold text-textp"><input type="checkbox" checked={warningsAcknowledged} onChange={(event) => setWarningsAcknowledged(event.target.checked)} className="h-3.5 w-3.5 accent-[rgb(var(--primary))]" />I&apos;ve reviewed these warnings</label>
+        </div>
+      )}
       {/* Filter tabs */}
       <div role="tablist" aria-label={`${teamCode} lineup selection`} className="flex gap-1 bg-surface2 border border-border rounded-lg p-1 w-fit">
         {(['starter', 'sub', 'out'] as const).map((t) => {
@@ -137,7 +451,7 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
           )
         })}
       </div>
-      {tab === 'starter' && <p className="text-[10px] text-texts">Set each starter&apos;s row and lane to place left/right centre-backs, midfielders, and wide players accurately on the match pitch.</p>}
+      {tab === 'starter' && layoutMode === 'manual' && <p className="text-[10px] text-texts">Set each starter&apos;s row and lane to place left/right centre-backs, midfielders, and wide players accurately on the match pitch.</p>}
 
       <div id={`lineup-panel-${teamCode}-${tab}`} role="tabpanel" aria-labelledby={`lineup-tab-${teamCode}-${tab}`} className="space-y-1 max-h-64 overflow-y-auto pr-1">
         {filtered.length === 0 && <p className="text-sm text-texts py-3 text-center">None</p>}
@@ -155,7 +469,7 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
                 {POS_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             )}
-            {e.status === 'starter' && <>
+            {e.status === 'starter' && layoutMode === 'manual' && <>
               <select value={e.grid?.split(':')[0] ?? defaultGrid(e.posLabel).split(':')[0]} onChange={(ev) => update(e.playerId, { grid: `${ev.target.value}:${e.grid?.split(':')[1] ?? defaultGrid(e.posLabel).split(':')[1]}` })} className="h-7 rounded-md border border-border bg-surface px-1 text-[10px] text-textp" aria-label={`${e.name} pitch row`}>
                 {PITCH_ROWS.map((row) => <option key={row.value} value={row.value}>{row.label}</option>)}
               </select>
@@ -164,7 +478,7 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
               </select>
             </>}
             <div className="flex gap-1 shrink-0">
-              <button onClick={() => update(e.playerId, { status: 'starter', grid: e.grid ?? defaultGrid(e.posLabel) })}
+              <button onClick={() => update(e.playerId, { status: 'starter', grid: layoutMode === 'manual' ? (e.grid ?? defaultGrid(e.posLabel)) : null })}
                 className={`px-2 py-1 rounded text-[10.5px] font-bold border transition-all ${e.status === 'starter' ? 'bg-primary/15 border-primary/40 text-primary' : 'border-border text-texts hover:text-textp'}`}>
                 XI
               </button>
@@ -185,13 +499,13 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
 
       <div className="flex items-center justify-between pt-1">
         <button onClick={clearLineup} className="text-[11px] text-texts hover:text-coral underline">Clear lineup</button>
-        <Button size="sm" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save lineup'}</Button>
+        <Button size="sm" onClick={save} disabled={saving || (lineupWarnings.length > 0 && !warningsAcknowledged)}>{saving ? 'Saving…' : lineupWarnings.length > 0 ? 'Save with warnings' : 'Save lineup'}</Button>
       </div>
     </div>
   )
 }
 
-function SubstitutionEditor({ matchId, teamCode }: { matchId: string; teamCode: string }) {
+function SubstitutionEditor({ matchId, teamCode, onChanged }: { matchId: string; teamCode: string; onChanged?: () => void }) {
   const supabase = createClient()
   const [rows, setRows] = useState<LineupPlayerState[]>([])
   const [events, setEvents] = useState<LineupSubstitution[]>([])
@@ -217,11 +531,11 @@ function SubstitutionEditor({ matchId, teamCode }: { matchId: string; teamCode: 
     const { error } = await supabase.from('lineup_substitutions').insert({ match_id: matchId, team_code: teamCode, player_out_id: playerOut, player_in_id: playerIn, minute: eventMinute, source: 'manual' })
     setSaving(false)
     if (error) { toast.error(error.message); return }
-    setOutId(''); setInId(''); await load(); toast.success('Substitution added')
+    setOutId(''); setInId(''); await load(); onChanged?.(); toast.success('Substitution added')
   }
   async function remove(id: string) {
     const { error } = await supabase.from('lineup_substitutions').delete().eq('id', id)
-    if (error) toast.error(error.message); else { await load(); toast.success('Substitution removed') }
+    if (error) toast.error(error.message); else { await load(); onChanged?.(); toast.success('Substitution removed') }
   }
   if (!rows.length) return <p className="text-xs text-texts">Save the announced lineup first to record substitutions.</p>
   return <div className="mt-3 pt-3 border-t border-border/60 space-y-2">
@@ -248,6 +562,10 @@ interface Match {
   first_goal_team: string | null
   first_goal_player_id: number | null
   match_winner: string | null
+  home_formation: string | null
+  away_formation: string | null
+  home_formation_override: string | null
+  away_formation_override: string | null
   rounds: { name: string } | null
 }
 
@@ -270,6 +588,10 @@ function AdminRow({ m, onSaved }, ref) {
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
   const [scoringFailed, setScoringFailed] = useState(false)
+  const [homeFormationOverride, setHomeFormationOverride] = useState<string | null>(m.home_formation_override)
+  const [awayFormationOverride, setAwayFormationOverride] = useState<string | null>(m.away_formation_override)
+  const [fullPreviewOpen, setFullPreviewOpen] = useState(false)
+  const [previewVersion, setPreviewVersion] = useState(0)
 
   const hasScore = m.real_home_score !== null && m.real_away_score !== null
   const isKnockout = !m.group_name
@@ -413,18 +735,34 @@ function AdminRow({ m, onSaved }, ref) {
           )}
 
           <div className="pt-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-texts mb-2">Lineup management</p>
+            <div className="mb-2 flex items-center justify-between gap-3"><p className="text-[11px] font-bold uppercase tracking-wider text-texts">Lineup management</p><Button size="sm" variant="outline" onClick={() => setFullPreviewOpen((value) => !value)}>{fullPreviewOpen ? 'Hide full pitch' : 'Preview both teams'}</Button></div>
+            {fullPreviewOpen && <div className="mb-3"><FullMatchLineupPreview matchId={m.id} homeCode={m.home_team} awayCode={m.away_team} homeFormation={homeFormationOverride ?? m.home_formation} awayFormation={awayFormationOverride ?? m.away_formation} refreshKey={previewVersion} /></div>}
             {['home', 'away'].map((side) => {
               const team = side === 'home' ? home : away
               const code = side === 'home' ? m.home_team : m.away_team
+              const providerFormation = side === 'home' ? m.home_formation : m.away_formation
+              const formationOverride = side === 'home' ? homeFormationOverride : awayFormationOverride
+              const formation = formationOverride ?? providerFormation
+              const formationColumn = side === 'home' ? 'home_formation_override' : 'away_formation_override'
               return (
                 <div key={side} className="mb-3">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-texts flex items-center gap-2">
                     <FlagChip code={code} w={16} h={11} r={2} /> {team.name} lineup
                   </label>
                   <div className="mt-1.5 bg-surface border border-border rounded-lg p-3">
-                    <LineupEditor matchId={m.id} teamCode={code} playerKey={team.playerKey} />
-                    <SubstitutionEditor matchId={m.id} teamCode={code} />
+                    <FormationOverrideControl
+                      matchId={m.id}
+                      teamCode={code}
+                      providerFormation={providerFormation}
+                      override={formationOverride}
+                      column={formationColumn}
+                      onSaved={(next) => { if (side === 'home') setHomeFormationOverride(next); else setAwayFormationOverride(next); setPreviewVersion((version) => version + 1) }}
+                    />
+                    <div className="mt-3">
+                    <LineupEditor matchId={m.id} teamCode={code} playerKey={team.playerKey} formation={formation} onSaved={() => setPreviewVersion((version) => version + 1)} />
+                    </div>
+                    <SubstitutionEditor matchId={m.id} teamCode={code} onChanged={() => setPreviewVersion((version) => version + 1)} />
+                    <FormationChangesEditor matchId={m.id} teamCode={code} baseFormation={formation} onChanged={() => setPreviewVersion((version) => version + 1)} />
                   </div>
                 </div>
               )
@@ -1337,7 +1675,7 @@ export default function AdminPage() {
         if (!profile?.is_admin) { router.replace('/dashboard'); return }
         const { data, error } = await supabase
           .from('matches')
-          .select('id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, first_goal_team, first_goal_player_id, match_winner, rounds(name)')
+          .select('id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, first_goal_team, first_goal_player_id, match_winner, home_formation, away_formation, home_formation_override, away_formation_override, rounds(name)')
           .order('match_date')
         if (error) throw error
         setMatches((data ?? []) as unknown as Match[])
