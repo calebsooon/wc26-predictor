@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Card, EmptyState, PageHeader, Pill, SearchIcon, Skeleton, TrophyIcon, UsersIcon } from '@/components/ui'
+import { Card, DialogShell, EmptyState, PageHeader, Pill, SearchIcon, Skeleton, TrophyIcon, UsersIcon } from '@/components/ui'
 import FlagChip from '@/components/FlagChip'
 import { FLAG_GRADIENTS, POSITION_ABBR, POSITION_ORDER } from '@/lib/teams'
 import { useUrlState } from '@/lib/url-state'
@@ -154,16 +154,21 @@ function TeamProfile({ detail, onBack }: { detail: TeamDetail; onBack: () => voi
         <div className="text-right"><p className="text-xs text-texts">Tournament form</p><div className="mt-2"><FormDots code={team.code} matches={filteredMatches} /></div></div>
       </div>
     </section>
-    <div className="flex gap-2 border-b border-border overflow-x-auto">{(['overview', 'squad', 'fixtures'] as const).map((name) => <button key={name} onClick={() => setTab(name)} className={`capitalize px-3 pb-3 text-sm font-bold border-b-2 ${tab === name ? 'border-primary text-primary' : 'border-transparent text-texts hover:text-textp'}`}>{name}</button>)}</div>
+    <div role="tablist" aria-label={`${team.name} sections`} className="flex gap-2 border-b border-border overflow-x-auto">{(['overview', 'squad', 'fixtures'] as const).map((name) => <button key={name} id={`team-tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={`team-panel-${name}`} onClick={() => setTab(name)} className={`capitalize px-3 pb-3 text-sm font-bold border-b-2 ${tab === name ? 'border-primary text-primary' : 'border-transparent text-texts hover:text-textp'}`}>{name}</button>)}</div>
+    <div id={`team-panel-${tab}`} role="tabpanel" aria-labelledby={`team-tab-${tab}`}>
     {tab === 'overview' && <div className="space-y-6">
       <section><div className="mb-3 flex items-center justify-between gap-3"><h2 className="font-extrabold text-textp">Team stats</h2><button onClick={() => setAdvancedStats((value) => !value)} className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-bold text-texts transition hover:text-textp">{advancedStats ? 'Show essentials' : `More FIFA stats (${teamExtraMetrics.length})`}</button></div><div className="grid grid-cols-2 lg:grid-cols-4 gap-3"><Metric label="Record" value={`${wins}-${draws}-${losses}`} hint={`${played} played`} /><Metric label="Goals" value={stat(team.stats, 'goals')} hint={`${stat(team.stats, 'goals_conceded')} conceded`} /><Metric label="Passes" value={stat(team.stats, 'passes').toLocaleString()} hint={`${passAccuracy}% completed`} /><Metric label="Shots on target" value={stat(team.stats, 'attempt_at_goal_on_target')} hint={`${stat(team.stats, 'attempt_at_goal')} attempts`} /></div>{advancedStats && <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">{teamExtraMetrics.map(([label, value, suffix]) => <Metric key={label} label={label} value={`${displayStat(value)}${suffix}`} />)}</div>}</section>
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-extrabold text-textp">Player stats</h2>
-          <div className="flex gap-1.5 overflow-x-auto">
+          <div role="tablist" aria-label="Player stat categories" className="flex gap-1.5 overflow-x-auto">
             {(['essentials', 'attacking', 'progression', 'physical', 'defending', 'goalkeeping'] as const).map((v) => (
               <button
                 key={v}
+                id={`player-stats-tab-${v}`}
+                role="tab"
+                aria-selected={playerStatView === v}
+                aria-controls={`player-stats-panel-${v}`}
                 onClick={() => setPlayerStatView(v)}
                 className={`h-7 px-3 rounded-xl text-[11.5px] font-bold whitespace-nowrap capitalize border transition ${
                   playerStatView === v
@@ -176,7 +181,7 @@ function TeamProfile({ detail, onBack }: { detail: TeamDetail; onBack: () => voi
             ))}
           </div>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div id={`player-stats-panel-${playerStatView}`} role="tabpanel" aria-labelledby={`player-stats-tab-${playerStatView}`} className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {playerLeaderViews[playerStatView].map(([label, key, suffix, decimals]) => {
             const leaderFn = playerStatView === 'goalkeeping' ? leadersGK : leaders
             const p = leaderFn(key)
@@ -188,6 +193,7 @@ function TeamProfile({ detail, onBack }: { detail: TeamDetail; onBack: () => voi
     </div>}
     {tab === 'squad' && <div className="space-y-7">{POSITIONS.map((position) => { const group = positionPlayers.filter((player) => squadGroup(player) === position); if (!group.length) return null; const label = position === 'Unclassified' ? 'Other squad members' : `${position}s`; const badge = position === 'Unclassified' ? '—' : POSITION_ABBR[position]; return <section key={position}><div className="flex items-center gap-2 mb-3"><Pill tone="default">{badge}</Pill><h2 className="font-extrabold text-textp">{label}</h2><span className="text-xs text-texts">{group.length}</span>{position === 'Unclassified' && <span className="text-[11px] text-texts">FIFA has not assigned a position yet</span>}</div><div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">{group.map((player) => <button key={player.fifa_player_id} onClick={() => setSelectedPlayer(player)} className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl"><Card className="relative overflow-hidden min-h-[272px] p-4 flex flex-col justify-between transition hover:border-primary/55"><div className="flex justify-between items-start relative z-10"><span className="w-7 h-7 grid place-items-center rounded-lg bg-surface2 text-sm font-extrabold tabular-nums">{player.jersey_number ?? '—'}</span>{player.player.injured && <span className="px-1.5 py-0.5 rounded bg-coral/15 text-coral text-[10px] font-bold">OUT</span>}</div>{player.player.photo_url && <Image src={player.player.photo_url} alt="" width={180} height={245} className="absolute inset-x-0 bottom-8 h-[216px] w-full object-contain object-bottom" />}<div className="relative z-10 mt-auto pt-3 bg-gradient-to-t from-card via-card/95"><div className="flex gap-1.5 items-center"><FlagChip code={team.code} w={18} h={12} r={2} />{picks.has(player.player_id) && <span className="text-gold text-xs" title="Your first-scorer pick">★</span>}</div><p className="font-extrabold text-sm text-textp mt-1 truncate">{player.player.name}</p><p className="text-[11px] text-texts">{age(player.player.dob) != null ? `${age(player.player.dob)} years` : 'Age unavailable'} · {position === 'Unclassified' ? 'Position pending' : position}</p>{(player.height_cm || player.weight_kg) && <p className="text-[10px] text-texts/60 mt-px tabular-nums">{[player.height_cm ? `${player.height_cm}cm` : null, player.weight_kg ? `${player.weight_kg}kg` : null].filter(Boolean).join(' · ')}</p>}{stat(player.stats, 'total_competition_minutes_played') > 0 && <p className="text-[10px] font-bold text-primary mt-0.5 tabular-nums">{[stat(player.stats, 'goals') > 0 ? `${stat(player.stats, 'goals')}G` : null, stat(player.stats, 'assists') > 0 ? `${stat(player.stats, 'assists')}A` : null, `${stat(player.stats, 'total_competition_minutes_played')}'`].filter(Boolean).join(' · ')}</p>}</div></Card></button>)}</div></section>})}</div>}
     {tab === 'fixtures' && <FixtureStrip code={team.code} matches={filteredMatches} />}
+    </div>
     {selectedPlayer && <TeamPlayerSheet player={selectedPlayer} team={team} onClose={() => setSelectedPlayer(null)} />}
   </div>
 }
@@ -197,7 +203,7 @@ function TeamPlayerSheet({ player, team, onClose }: { player: TeamPlayer; team: 
     ['Goals', stat(player.stats, 'goals')], ['Assists', stat(player.stats, 'assists')], ['Minutes', `${stat(player.stats, 'total_competition_minutes_played')}′`],
     ['Passes', stat(player.stats, 'passes')], ['Distance', `${displayStat(displayMetricValue('total_distance', stat(player.stats, 'total_distance')))} km`], ['Top speed', `${displayStat(stat(player.stats, 'top_speed'))} km/h`],
   ]
-  return <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 p-3 sm:items-center" role="dialog" aria-modal="true" aria-label={`${player.player.name} player details`}><button onClick={onClose} aria-label="Close player details" className="absolute inset-0" /><div className="relative w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl"><div className="flex items-start gap-4"><div className="h-24 w-20 overflow-hidden rounded-xl bg-surface2">{player.player.photo_url && <Image src={player.player.photo_url} alt="" width={80} height={96} className="h-full w-full object-contain object-bottom" />}</div><div className="min-w-0 flex-1"><p className="text-[10px] font-bold uppercase tracking-wider text-texts">{team.name}</p><h2 className="mt-1 truncate text-xl font-black text-textp">{player.player.name}</h2><p className="mt-1 text-xs text-texts">#{player.jersey_number ?? '—'} · {player.position ?? 'Position pending'}</p>{player.player.injured && <span className="mt-2 inline-flex rounded bg-coral/15 px-2 py-1 text-[10px] font-bold text-coral">{player.player.injury_type ?? 'Unavailable'}</span>}</div><button onClick={onClose} className="text-texts hover:text-textp">×</button></div><div className="mt-5 grid grid-cols-3 gap-2">{rows.map(([label, value]) => <div key={label} className="rounded-xl border border-border bg-surface px-2 py-2.5 text-center"><p className="text-[9px] font-bold uppercase tracking-wider text-texts">{label}</p><p className="mt-1 text-sm font-extrabold tabular-nums text-textp">{value}</p></div>)}</div><p className="mt-3 text-[10px] text-texts">Official FIFA tournament data · refreshed with the team cache.</p></div></div>
+  return <DialogShell open onClose={onClose} ariaLabel={`${player.player.name} player details`} maxWidth="max-w-md" zIndexClassName="z-[80]" panelClassName="rounded-2xl border border-border bg-card p-5 shadow-2xl"><div className="flex items-start gap-4"><div className="h-24 w-20 overflow-hidden rounded-xl bg-surface2">{player.player.photo_url && <Image src={player.player.photo_url} alt="" width={80} height={96} className="h-full w-full object-contain object-bottom" />}</div><div className="min-w-0 flex-1"><p className="text-[10px] font-bold uppercase tracking-wider text-texts">{team.name}</p><h2 className="mt-1 truncate text-xl font-black text-textp">{player.player.name}</h2><p className="mt-1 text-xs text-texts">#{player.jersey_number ?? '—'} · {player.position ?? 'Position pending'}</p>{player.player.injured && <span className="mt-2 inline-flex rounded bg-coral/15 px-2 py-1 text-[10px] font-bold text-coral">{player.player.injury_type ?? 'Unavailable'}</span>}</div><button onClick={onClose} aria-label="Close player details" className="text-texts hover:text-textp">×</button></div><div className="mt-5 grid grid-cols-3 gap-2">{rows.map(([label, value]) => <div key={label} className="rounded-xl border border-border bg-surface px-2 py-2.5 text-center"><p className="text-[9px] font-bold uppercase tracking-wider text-texts">{label}</p><p className="mt-1 text-sm font-extrabold tabular-nums text-textp">{value}</p></div>)}</div><p className="mt-3 text-[10px] text-texts">Official FIFA tournament data · refreshed with the team cache.</p></DialogShell>
 }
 
 export default function SquadsPage() {

@@ -5,10 +5,36 @@
    All colours are token-driven so they flip light/dark automatically.
    ============================================================ */
 
-import { useEffect, useRef, useState, type ReactNode, type ButtonHTMLAttributes } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type ButtonHTMLAttributes, type RefObject } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import { getTeam, FLAG_GRADIENTS } from '@/lib/teams'
+
+// Dialogs can stack (for example, the scorer picker over the prediction
+// modal). Reference-count the scroll lock so closing the inner dialog never
+// re-enables background scrolling while the outer one remains open.
+let dialogScrollLocks = 0
+let restoreBodyOverflow = ''
+const dialogStack: symbol[] = []
+
+function lockDialogScroll() {
+  if (dialogScrollLocks === 0) {
+    restoreBodyOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+  }
+  dialogScrollLocks += 1
+}
+
+function unlockDialogScroll() {
+  dialogScrollLocks = Math.max(0, dialogScrollLocks - 1)
+  if (dialogScrollLocks === 0) document.body.style.overflow = restoreBodyOverflow
+}
+
+function removeDialogFromStack(id: symbol) {
+  const index = dialogStack.lastIndexOf(id)
+  if (index >= 0) dialogStack.splice(index, 1)
+}
 
 /* ---------- Flag chip (CSS gradient, no emoji) ---------- */
 export function Flag({ code, size = 22 }: { code: string; size?: number }) {
@@ -67,19 +93,44 @@ export function Avatar({
   )
 }
 
-/* ---------- Modal (generic overlay) ---------- */
-export function Modal({
-  open, onClose, title, children, maxWidth = 'max-w-lg',
-}: { open: boolean; onClose: () => void; title?: ReactNode; children: ReactNode; maxWidth?: string }) {
+/* ---------- Dialog shell + modal ---------- */
+type DialogShellProps = {
+  open: boolean
+  onClose: () => void
+  ariaLabel: string
+  children: ReactNode
+  maxWidth?: string
+  panelClassName?: string
+  zIndexClassName?: string
+  initialFocusRef?: RefObject<HTMLElement | null>
+  portal?: boolean
+  align?: 'bottom' | 'center'
+}
+
+/**
+ * Shared accessible dialog foundation. Use this for custom sheets and rich
+ * modals so every overlay gets the same Escape, focus-trap, and scroll-lock
+ * behaviour rather than reimplementing it per page.
+ */
+export function DialogShell({
+  open, onClose, ariaLabel, children, maxWidth = 'max-w-lg', panelClassName = '',
+  zIndexClassName = 'z-50', initialFocusRef, portal = false, align = 'bottom',
+}: DialogShellProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const dialogId = useRef(Symbol('dialog'))
   useEffect(() => {
     if (!open) return
+    const id = dialogId.current
     const focusables = () => Array.from(panelRef.current?.querySelectorAll<HTMLElement>(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     ) ?? []).filter((el) => !el.hasAttribute('disabled'))
-    focusables()[0]?.focus()
+    if (initialFocusRef?.current) initialFocusRef.current.focus()
+    else focusables()[0]?.focus()
     function onKey(e: KeyboardEvent) {
+      // Only the front-most dialog responds. This matters for the scorer
+      // picker, which opens above the prediction dialog.
+      if (dialogStack.at(-1) !== id) return
       if (e.key === 'Escape') { onClose(); return }
       if (e.key !== 'Tab') return
       const f = focusables()
@@ -88,29 +139,50 @@ export function Modal({
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
     }
+    dialogStack.push(id)
     window.addEventListener('keydown', onKey)
-    document.body.style.overflow = 'hidden'
-    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
-  }, [open, onClose])
+    lockDialogScroll()
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      removeDialogFromStack(id)
+      unlockDialogScroll()
+    }
+  }, [initialFocusRef, open, onClose])
 
   if (!open) return null
-  return (
+  const dialog = (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-0 sm:px-4"
+      className={`fixed inset-0 ${zIndexClassName} flex ${align === 'center' ? 'items-center px-4' : 'items-end sm:items-center px-0 sm:px-4'} justify-center bg-black/60 backdrop-blur-sm`}
       onClick={(e) => { if (e.target === overlayRef.current) onClose() }}
       role="dialog"
       aria-modal="true"
-      aria-labelledby="modal-title"
+      aria-label={ariaLabel}
     >
-      <div ref={panelRef} className={`w-full ${maxWidth} bg-card border border-border rounded-t-[24px] sm:rounded-[20px] shadow-card overflow-hidden flex flex-col max-h-[90vh]`}>
-        <div className="flex items-center justify-between gap-3 px-5 h-14 shrink-0 border-b border-border bg-surface">
-          <h2 id="modal-title" className="font-bold font-display text-textp text-[15px] truncate">{title}</h2>
-          <button onClick={onClose} aria-label="Close" className="w-8 h-8 grid place-items-center rounded-lg bg-surface2 text-texts hover:text-textp shrink-0 text-sm">✕</button>
-        </div>
-        <div className="flex-1 overflow-y-auto">{children}</div>
-      </div>
+      <div ref={panelRef} className={`w-full ${maxWidth} ${panelClassName}`}>{children}</div>
     </div>
+  )
+  return portal && typeof document !== 'undefined' ? createPortal(dialog, document.body) : dialog
+}
+
+export function Modal({
+  open, onClose, title, children, maxWidth = 'max-w-lg',
+}: { open: boolean; onClose: () => void; title?: ReactNode; children: ReactNode; maxWidth?: string }) {
+  const ariaLabel = typeof title === 'string' ? title : 'Dialog'
+  return (
+    <DialogShell
+      open={open}
+      onClose={onClose}
+      ariaLabel={ariaLabel}
+      maxWidth={maxWidth}
+      panelClassName="bg-card border border-border rounded-t-[24px] sm:rounded-[20px] shadow-card overflow-hidden flex flex-col max-h-[90vh]"
+    >
+      <div className="flex items-center justify-between gap-3 px-5 h-14 shrink-0 border-b border-border bg-surface">
+        <h2 className="font-bold font-display text-textp text-[15px] truncate">{title}</h2>
+        <button onClick={onClose} aria-label="Close" className="w-8 h-8 grid place-items-center rounded-lg bg-surface2 text-texts hover:text-textp shrink-0 text-sm">✕</button>
+      </div>
+      <div className="flex-1 overflow-y-auto">{children}</div>
+    </DialogShell>
   )
 }
 
@@ -290,9 +362,9 @@ export function StatusBadge({ status, pts }: { status: PredStatus; pts?: number 
 
 /* ---------- Tabs (underline) ---------- */
 type Tab = string | { key: string; label: string }
-export function Tabs({ tabs, value, onChange, className = '' }: { tabs: Tab[]; value: string; onChange: (k: string) => void; className?: string }) {
+export function Tabs({ tabs, value, onChange, className = '', ariaLabel = 'Sections', panelIdPrefix }: { tabs: Tab[]; value: string; onChange: (k: string) => void; className?: string; ariaLabel?: string; panelIdPrefix?: string }) {
   return (
-    <div className={`flex gap-1 border-b border-border overflow-x-auto no-scrollbar ${className}`}>
+    <div role="tablist" aria-label={ariaLabel} className={`flex gap-1 border-b border-border overflow-x-auto no-scrollbar ${className}`}>
       {tabs.map((t) => {
         const key = typeof t === 'string' ? t : t.key
         const label = typeof t === 'string' ? t : t.label
@@ -300,6 +372,10 @@ export function Tabs({ tabs, value, onChange, className = '' }: { tabs: Tab[]; v
         return (
           <button
             key={key}
+            id={panelIdPrefix ? `${panelIdPrefix}-tab-${key}` : undefined}
+            role="tab"
+            aria-selected={active}
+            aria-controls={panelIdPrefix ? `${panelIdPrefix}-panel-${key}` : undefined}
             onClick={() => onChange(key)}
             className={`relative px-4 h-10 text-[13px] font-semibold whitespace-nowrap transition-colors ${active ? 'text-textp' : 'text-texts hover:text-textp'}`}
           >

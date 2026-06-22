@@ -55,6 +55,8 @@ export default function GoldenBootPage() {
       />
       <Tabs
         tabs={[{ key: 'goals', label: 'Top Scorers' }, { key: 'assists', label: 'Top Assists' }]}
+        ariaLabel="Golden Boot standings"
+        panelIdPrefix="golden-boot"
         value={tab} onChange={(k) => {
           const next = k as 'goals' | 'assists'
           setTab(next)
@@ -62,6 +64,7 @@ export default function GoldenBootPage() {
         }}
       />
 
+      <div id={`golden-boot-panel-${tab}`} role="tabpanel" aria-labelledby={`golden-boot-tab-${tab}`}>
       {loading && <div className="space-y-2">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>}
       {error && <EmptyState icon={<TrophyIcon size={22} />} title="Couldn't load" desc={error} />}
 
@@ -94,6 +97,7 @@ export default function GoldenBootPage() {
       {rows && rows.length === 0 && !loading && (
         <EmptyState icon={<TrophyIcon size={22} />} title="No data yet" desc="Scorer stats will appear once goals are recorded." />
       )}
+      </div>
     </div>
   )
 }

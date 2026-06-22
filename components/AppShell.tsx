@@ -456,7 +456,7 @@ function LeagueSwitcher({
       </button>
       {open && (
         <>
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <button type="button" aria-label="Close league switcher" className="fixed inset-0 z-30 cursor-default" onClick={() => setOpen(false)} />
           <div className={`absolute z-40 mt-2 ${compact ? 'right-0 w-56' : 'left-0 w-full'} bg-card border border-border rounded-xl shadow-2xl overflow-hidden`}>
             <div className="max-h-72 overflow-y-auto p-1.5">
               {leagues.map((l) => (

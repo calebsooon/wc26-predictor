@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
@@ -1153,13 +1154,13 @@ export default function ProfilePage() {
                   }}
                 >
                   {/* Score — opens the match */}
-                  <div onClick={() => router.push(`/match/${p.match_id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, width: 150, flexShrink: 0, cursor: 'pointer' }}>
+                  <Link href={`/match/${p.match_id}`} aria-label={`Open ${m.home_team} versus ${m.away_team}`} style={{ display: 'flex', alignItems: 'center', gap: 6, width: 150, flexShrink: 0, cursor: 'pointer' }}>
                     <FlagChip code={m.home_team} w={28} h={19} r={4} />
                     <span style={{ fontSize: 14, fontWeight: 700, color: 'rgb(var(--textp))', fontVariantNumeric: 'tabular-nums' }}>
                       {m.real_home_score}–{m.real_away_score}
                     </span>
                     <FlagChip code={m.away_team} w={28} h={19} r={4} />
-                  </div>
+                  </Link>
                   {/* Teams */}
                   <span style={{ flex: 1, fontSize: 12.5, color: 'rgb(var(--texts))', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {m.home_team} vs {m.away_team}

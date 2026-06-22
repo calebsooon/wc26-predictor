@@ -1,14 +1,18 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
 import FlagChip from '@/components/FlagChip'
+import { DialogShell } from '@/components/ui'
 import { resolveLineupState, type LineupPlayerState, type LineupSubstitution } from '@/lib/lineup-state'
+import { resolvePitchLayout } from '@/lib/lineup-layout'
 
 type Row = LineupPlayerState & { team_code: string; players: { name: string; photo_url: string | null } | null }
+type PositionedPlayer = ReturnType<typeof resolvePitchLayout<LineupPlayerState>>[number]
 type MatchEvent = {
   id: string; team_code: string; minute: number
   type: 'goal' | 'yellow_card' | 'red_card'; detail: string | null
@@ -20,63 +24,9 @@ function surname(name: string) {
   return parts.length > 1 ? parts.at(-1)! : name
 }
 
-// Map FIFA position codes to 6 logical bands.
-// FIFA sends codes like GK / CB / LB / RB / LWB / DM / CDM / CM / LM / RM / CAM / LW / RW / ST / CF.
-// 6 bands let formations like 4-2-3-1 render 5 distinct rows (GK + DEF + DM + CAM + ST).
-function positionBand(label: string | null): number {
-  const v = (label ?? '').toUpperCase().trim()
-  if (['GK', 'G', 'GKP'].includes(v)) return 0
-  // Defenders
-  if (['CB', 'LCB', 'RCB', 'LB', 'RB', 'LWB', 'RWB', 'DC', 'DL', 'DR', 'SW', 'D', 'DF', 'FB', 'WB', 'BK'].includes(v)) return 1
-  // Holding / defensive midfielders
-  if (['DM', 'CDM', 'DML', 'DMR', 'DMC', 'VOL', 'DM_L', 'DM_R'].includes(v)) return 2
-  // Central / wide midfielders
-  if (['CM', 'LM', 'RM', 'MF', 'MC', 'ML', 'MR', 'WM', 'CMC', 'CML', 'CMR', 'M'].includes(v)) return 3
-  // Attacking mids / wingers
-  if (['CAM', 'AM', 'LW', 'RW', 'WL', 'WR', 'SS', 'AMC', 'AML', 'AMR', 'WF', 'WFL', 'WFR', 'IF', 'IFL', 'IFR'].includes(v)) return 4
-  // Forwards / strikers
-  if (['ST', 'CF', 'F', 'FC', 'FW', 'FWL', 'FWR', 'STL', 'STR', 'CFL'].includes(v)) return 5
-  // Generic prefix fallbacks for any unlisted FIFA codes
-  if (v.startsWith('G')) return 0
-  if (v.startsWith('D') && v[1] !== 'M') return 1
-  if (v.startsWith('DM')) return 2
-  if (v.startsWith('M') || v.startsWith('CM') || v.startsWith('RM') || v.startsWith('LM')) return 3
-  if (v.startsWith('A') || v.startsWith('W') || v.startsWith('IF')) return 4
-  if (v.startsWith('F') || v.startsWith('S') || v.startsWith('C')) return 5
-  return 3
-}
-
 function isGK(label: string | null) {
   const v = (label ?? '').toUpperCase()
   return v === 'GK' || v === 'G'
-}
-
-function positions(rows: LineupPlayerState[], home: boolean) {
-  const grouped = new Map<number, LineupPlayerState[]>()
-  for (const row of rows) {
-    const key = row.grid ? Number(row.grid.split(':')[0]) : positionBand(row.position_label)
-    grouped.set(key, [...(grouped.get(key) ?? []), row])
-  }
-  const keys = Array.from(grouped.keys()).sort((a, b) => a - b)
-  const n = keys.length
-  // Use bandIndex (sequential 0..n-1) for y-spread so formations with 5 distinct rows
-  // (GK/DEF/DM/CAM/ST) fill the same pitch range as a simpler 4-row layout.
-  return keys.flatMap((key, bandIndex) =>
-    (grouped.get(key) ?? [])
-      .sort((a, b) => {
-        const lA = Number(a.grid?.split(':')[1])
-        const lB = Number(b.grid?.split(':')[1])
-        if (Number.isFinite(lA) && Number.isFinite(lB) && lA !== lB) return lA - lB
-        return a.sort_order - b.sort_order
-      })
-      .map((player, idx, all) => ({
-        player,
-        x: (idx + 1) / (all.length + 1) * 100,
-        y: home
-          ? 87 - (n > 1 ? bandIndex / (n - 1) * 34 : 0)
-          : 13 + (n > 1 ? bandIndex / (n - 1) * 34 : 0),
-      }))
-  )
 }
 
 /* ── Kit colours (used for silhouette fill + shirt badge) */
@@ -224,8 +174,8 @@ function Pitch({
   onSelect,
   style,
 }: {
-  homePlayers: ReturnType<typeof positions>
-  awayPlayers: ReturnType<typeof positions>
+  homePlayers: PositionedPlayer[]
+  awayPlayers: PositionedPlayer[]
   homeCode: string; awayCode: string
   homeFormation: string | null; awayFormation: string | null
   homeScore: number | null; awayScore: number | null
@@ -439,7 +389,7 @@ export function MatchLineups({
 }: {
   matchId: string; homeCode: string; awayCode: string
   homeFormation: string | null; awayFormation: string | null
-  homeScore?: number | null; awayScore?: number | null; scoreLabel?: string
+  homeScore?: number | null; awayScore?: number | null
 }) {
   const supabase = useMemo(() => createClient(), [])
   const [rows, setRows] = useState<Row[] | null>(null)
@@ -485,8 +435,8 @@ export function MatchLineups({
   const goalScorers = new Set(events.filter((e) => e.type === 'goal' && e.player).map((e) => String(rows.find((r) => r.players?.name === e.player?.name && r.team_code === e.team_code)?.player_id ?? '')))
   const yellowCards = new Set(events.filter((e) => e.type === 'yellow_card' && e.player).map((e) => String(rows.find((r) => r.players?.name === e.player?.name && r.team_code === e.team_code)?.player_id ?? '')))
 
-  const homePlayers = positions(home.current, true)
-  const awayPlayers = positions(away.current, false)
+  const homePlayers = resolvePitchLayout(home.current, true, homeFormation)
+  const awayPlayers = resolvePitchLayout(away.current, false, awayFormation)
   const hasEvents = events.length > 0 || home.applied.length + away.applied.length > 0
 
   const pitchProps = {
@@ -576,7 +526,18 @@ export function MatchLineups({
         </div>
       </div>
 
-      {focusPitch && <div className="fixed inset-0 z-[80] grid place-items-center bg-black/80 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="Focused match pitch"><div className="relative flex h-full max-h-[900px] w-full max-w-2xl flex-col rounded-2xl border border-border bg-card p-3 shadow-2xl"><div className="mb-2 flex items-center justify-between"><span className="text-xs font-extrabold text-textp">Match centre · focus view</span><button onClick={() => setFocusPitch(false)} className="h-8 rounded-lg border border-border px-2.5 text-xs font-bold text-texts hover:text-textp">Close</button></div><div className="min-h-0 flex-1 flex justify-center"><Pitch {...pitchProps} style={{ height: '100%', maxHeight: 'calc(100vh - 130px)', width: 'auto', aspectRatio: '10 / 15.5' }} /></div></div></div>}
+      <DialogShell
+        open={focusPitch}
+        onClose={() => setFocusPitch(false)}
+        ariaLabel="Focused match pitch"
+        maxWidth="max-w-2xl"
+        zIndexClassName="z-[80]"
+        align="center"
+        panelClassName="flex h-full max-h-[900px] flex-col rounded-2xl border border-border bg-card p-3 shadow-2xl"
+      >
+        <div className="mb-2 flex items-center justify-between"><span className="text-xs font-extrabold text-textp">Match centre · focus view</span><button onClick={() => setFocusPitch(false)} className="h-8 rounded-lg border border-border px-2.5 text-xs font-bold text-texts hover:text-textp">Close</button></div>
+        <div className="min-h-0 flex-1 flex justify-center"><Pitch {...pitchProps} style={{ height: '100%', maxHeight: 'calc(100vh - 130px)', width: 'auto', aspectRatio: '10 / 15.5' }} /></div>
+      </DialogShell>
       {selectedPlayer && <PlayerSheet player={selectedPlayer.player} teamCode={selectedPlayer.teamCode} onClose={() => setSelectedPlayer(null)} goals={goalScorers.has(String(selectedPlayer.player.player_id))} yellow={yellowCards.has(String(selectedPlayer.player.player_id))} />}
     </div>
   )
@@ -584,7 +545,7 @@ export function MatchLineups({
 
 function PlayerSheet({ player, teamCode, onClose, goals, yellow }: { player: LineupPlayerState; teamCode: string; onClose: () => void; goals: boolean; yellow: boolean }) {
   const team = getTeam(teamCode)
-  return <div className="fixed inset-0 z-[85] flex items-end justify-center bg-black/50 p-3 sm:items-center" role="dialog" aria-modal="true" aria-label={`${player.players?.name ?? 'Player'} details`}><button className="absolute inset-0" aria-label="Close player details" onClick={onClose} /><div className="relative w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-2xl"><div className="flex items-start gap-4"><div className="h-20 w-16 shrink-0 overflow-hidden rounded-xl bg-surface2">{player.players?.photo_url ? <Image src={player.players.photo_url} alt="" width={64} height={80} className="h-full w-full object-contain object-bottom" /> : <div className="grid h-full place-items-center text-xl font-black text-texts">{player.shirt_number ?? '–'}</div>}</div><div className="min-w-0 flex-1"><p className="text-[10px] font-bold uppercase tracking-wider text-texts">{team.name}</p><h3 className="mt-1 truncate text-lg font-black text-textp">{player.players?.name ?? 'Player'}</h3><p className="mt-1 text-xs text-texts">#{player.shirt_number ?? '—'} · {player.position_label ?? 'Position pending'}</p></div><button onClick={onClose} className="text-texts hover:text-textp">×</button></div><div className="mt-4 grid grid-cols-3 gap-2 text-center"><PlayerFact label="Status" value="Current XI" /><PlayerFact label="Goal" value={goals ? 'Yes' : '—'} /><PlayerFact label="Card" value={yellow ? 'Yellow' : '—'} /></div><a href={`/squads?team=${teamCode}`} className="mt-4 block rounded-xl bg-primary px-3 py-2.5 text-center text-xs font-extrabold text-[#04210F]">Open {team.code} team centre</a></div></div>
+  return <DialogShell open onClose={onClose} ariaLabel={`${player.players?.name ?? 'Player'} details`} maxWidth="max-w-sm" zIndexClassName="z-[85]" panelClassName="rounded-2xl border border-border bg-card p-5 shadow-2xl"><div className="flex items-start gap-4"><div className="h-20 w-16 shrink-0 overflow-hidden rounded-xl bg-surface2">{player.players?.photo_url ? <Image src={player.players.photo_url} alt="" width={64} height={80} className="h-full w-full object-contain object-bottom" /> : <div className="grid h-full place-items-center text-xl font-black text-texts">{player.shirt_number ?? '–'}</div>}</div><div className="min-w-0 flex-1"><p className="text-[10px] font-bold uppercase tracking-wider text-texts">{team.name}</p><h3 className="mt-1 truncate text-lg font-black text-textp">{player.players?.name ?? 'Player'}</h3><p className="mt-1 text-xs text-texts">#{player.shirt_number ?? '—'} · {player.position_label ?? 'Position pending'}</p></div><button onClick={onClose} aria-label="Close player details" className="text-texts hover:text-textp">×</button></div><div className="mt-4 grid grid-cols-3 gap-2 text-center"><PlayerFact label="Status" value="Current XI" /><PlayerFact label="Goal" value={goals ? 'Yes' : '—'} /><PlayerFact label="Card" value={yellow ? 'Yellow' : '—'} /></div><Link href={`/squads?team=${teamCode}`} className="mt-4 block rounded-xl bg-primary px-3 py-2.5 text-center text-xs font-extrabold text-[#04210F]">Open {team.code} team centre</Link></DialogShell>
 }
 
 function PlayerFact({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border border-border bg-surface px-2 py-2"><p className="text-[9px] font-bold uppercase tracking-wider text-texts">{label}</p><p className="mt-1 text-xs font-extrabold text-textp">{value}</p></div> }

@@ -126,11 +126,11 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
   return (
     <div className="space-y-2">
       {/* Filter tabs */}
-      <div className="flex gap-1 bg-surface2 border border-border rounded-lg p-1 w-fit">
+      <div role="tablist" aria-label={`${teamCode} lineup selection`} className="flex gap-1 bg-surface2 border border-border rounded-lg p-1 w-fit">
         {(['starter', 'sub', 'out'] as const).map((t) => {
           const label = t === 'starter' ? `Starters (${starterCount})` : t === 'sub' ? `Subs (${subCount})` : 'Not selected'
           return (
-            <button key={t} onClick={() => setTab(t)}
+            <button key={t} id={`lineup-tab-${teamCode}-${t}`} role="tab" aria-selected={tab === t} aria-controls={`lineup-panel-${teamCode}-${t}`} onClick={() => setTab(t)}
               className={`px-3 py-1.5 rounded-md text-[11.5px] font-bold transition-all ${tab === t ? 'bg-card text-textp shadow-sm' : 'text-texts'}`}>
               {label}
             </button>
@@ -139,7 +139,7 @@ function LineupEditor({ matchId, teamCode, playerKey }: { matchId: string; teamC
       </div>
       {tab === 'starter' && <p className="text-[10px] text-texts">Set each starter&apos;s row and lane to place left/right centre-backs, midfielders, and wide players accurately on the match pitch.</p>}
 
-      <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+      <div id={`lineup-panel-${teamCode}-${tab}`} role="tabpanel" aria-labelledby={`lineup-tab-${teamCode}-${tab}`} className="space-y-1 max-h-64 overflow-y-auto pr-1">
         {filtered.length === 0 && <p className="text-sm text-texts py-3 text-center">None</p>}
         {filtered.map((e) => (
           <div key={e.playerId} className="flex items-center gap-2 py-1.5 border-b border-border/40 last:border-0">

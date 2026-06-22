@@ -393,10 +393,14 @@ export default function LeaderboardPage() {
 
       {/* Top-level view switcher — only show Picks tab if league has reveal on */}
       {revealPicks && (
-        <div className="flex gap-1 p-1 bg-surface rounded-xl border border-border w-fit">
+        <div role="tablist" aria-label="Leaderboard view" className="flex gap-1 p-1 bg-surface rounded-xl border border-border w-fit">
           {VIEW_TABS.map((v) => (
             <button
               key={v.key}
+              id={`leaderboard-tab-${v.key}`}
+              role="tab"
+              aria-selected={view === v.key}
+              aria-controls={`leaderboard-panel-${v.key}`}
               onClick={() => {
                 setView(v.key)
                 replaceUrl({ view: v.key === 'standings' ? null : v.key })
@@ -409,6 +413,7 @@ export default function LeaderboardPage() {
         </div>
       )}
 
+      <div id={revealPicks ? `leaderboard-panel-${view}` : undefined} role={revealPicks ? 'tabpanel' : undefined} aria-labelledby={revealPicks ? `leaderboard-tab-${view}` : undefined}>
       {view === 'picks' ? (
         <PicksView
           matches={pickMatches}
@@ -782,6 +787,7 @@ export default function LeaderboardPage() {
           )}
         </>
       )}
+      </div>
     </div>
   )
 }

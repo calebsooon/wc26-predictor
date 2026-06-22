@@ -418,11 +418,17 @@ export default function MatchDetailPage() {
       <div className="sm:hidden">
         <div
           ref={tabBarRef}
+          role="tablist"
+          aria-label="Match details"
           className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pb-3"
         >
           {mobileTabs.map((t) => (
             <button
               key={t.key}
+              id={`match-tab-${t.key}`}
+              role="tab"
+              aria-selected={mobileTab === t.key}
+              aria-controls={`match-panel-${t.key}`}
               onClick={() => setMobileTab(t.key)}
               className={`shrink-0 h-8 px-4 rounded-full text-[12.5px] font-bold border transition-all ${
                 mobileTab === t.key
@@ -436,7 +442,7 @@ export default function MatchDetailPage() {
         </div>
 
         {/* Mobile tab content */}
-        <div className="space-y-4">
+        <div id={`match-panel-${mobileTab}`} role="tabpanel" aria-labelledby={`match-tab-${mobileTab}`} className="space-y-4">
           {mobileTab === 'lineups' && (
             <MatchLineups
               matchId={match.id}
@@ -446,7 +452,6 @@ export default function MatchDetailPage() {
               awayFormation={awayFormation}
               homeScore={displayHomeScore}
               awayScore={displayAwayScore}
-              scoreLabel={scored ? 'Final score' : locked ? 'Live match' : 'Pre-match'}
             />
           )}
           {mobileTab === 'stats' && (
@@ -547,7 +552,6 @@ export default function MatchDetailPage() {
               awayFormation={awayFormation}
               homeScore={displayHomeScore}
               awayScore={displayAwayScore}
-              scoreLabel={scored ? 'Final score' : locked ? 'Live match' : 'Pre-match'}
             />
           </CollapsibleSection>
 
@@ -933,7 +937,9 @@ function PicksWall({
                       1st: <span className="text-textp font-bold">{firstGoalTeam}</span>
                     </span>
                   )}
-                  {firstScorerName && (
+                  {o.pred_no_scorer ? (
+                    <span className="text-[11px] text-faint font-medium italic">No scorer</span>
+                  ) : firstScorerName && (
                     <span className="text-[11px] text-texts font-medium">
                       Scorer: <span className="text-textp font-semibold">{firstScorerName}</span>
                     </span>

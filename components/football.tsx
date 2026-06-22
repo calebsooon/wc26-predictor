@@ -5,7 +5,7 @@
    ============================================================ */
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { getTeam } from '@/lib/teams'
+import { FLAG_GRADIENTS, getTeam } from '@/lib/teams'
 import {
   Card, Pill, StatusBadge, Avatar, Countdown, LockIcon, ScoreStepper, BoltIcon,
   type PredStatus,
@@ -43,11 +43,29 @@ export function MatchCard({ m, onClick, compact = false }: { m: UIMatch; onClick
   const stageLabel = m.stage === 'Group' ? `Group ${m.group ?? ''}`.trim() : m.stage
   const predColor = isScored ? ((m.pts ?? 0) >= 8 ? 'rgb(var(--primary))' : (m.pts ?? 0) > 0 ? 'rgb(var(--gold))' : 'rgb(var(--error))') : 'rgb(var(--texts))'
   const kickedOff = new Date(m.kickoff) <= new Date()
+  const actionLabel = isScored ? 'See breakdown' : m.pred ? 'Edit prediction' : kickedOff ? 'Open match centre' : 'Make prediction'
+  const interactive = Boolean(onClick)
 
   return (
     <motion.div whileTap={{ scale: 0.97 }} transition={{ duration: 0.12 }}>
-    <Card hover onClick={onClick} className="p-4 cursor-pointer group">
-      <div className="flex items-center justify-between mb-3">
+    <Card
+      hover={interactive}
+      onClick={onClick}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onKeyDown={interactive ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onClick?.() } } : undefined}
+      aria-label={interactive ? `${actionLabel}: ${home.name} versus ${away.name}` : undefined}
+      className={`relative overflow-hidden p-4 group ${interactive ? 'cursor-pointer' : ''}`}
+    >
+      {/* A restrained split flag ribbon identifies the fixture without turning
+          the card into a poster. It works in light/dark and on narrow cards. */}
+      <div aria-hidden="true" className="absolute inset-x-0 top-0 flex h-1 opacity-90">
+        <span className="w-1/2" style={{ background: FLAG_GRADIENTS[m.home] }} />
+        <span className="w-1/2" style={{ background: FLAG_GRADIENTS[m.away] }} />
+      </div>
+      <div aria-hidden="true" className="absolute inset-y-4 left-0 w-px opacity-45" style={{ background: FLAG_GRADIENTS[m.home] }} />
+      <div aria-hidden="true" className="absolute inset-y-4 right-0 w-px opacity-45" style={{ background: FLAG_GRADIENTS[m.away] }} />
+      <div className="relative flex items-center justify-between mb-3 pt-0.5">
         <Pill tone={m.knockout ? 'gold' : 'default'}>{stageLabel}</Pill>
         {m.status === 'locked' && kickedOff && !isScored ? (
           <span className="flex items-center gap-1.5 text-[11px] font-extrabold text-success">
@@ -62,7 +80,7 @@ export function MatchCard({ m, onClick, compact = false }: { m: UIMatch; onClick
         )}
       </div>
 
-      <div className="flex items-center">
+      <div className="relative flex items-center">
         <div className="flex-1 flex items-center gap-2.5 min-w-0">
           <FlagChip code={m.home} w={28} h={18} r={4} />
           <span className="font-bold text-textp truncate">{home.name}</span>
@@ -100,7 +118,7 @@ export function MatchCard({ m, onClick, compact = false }: { m: UIMatch; onClick
       </div>
 
       {!compact && (
-        <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/60">
+        <div className="relative flex items-center justify-between mt-3 pt-3 border-t border-border/60">
           <span className="text-[11px] text-texts truncate font-medium">
             {isScored && m.pred
               ? <span className="tabular-nums">you: {m.pred.h}–{m.pred.a}{m.pts != null ? <span style={{ color: predColor }} className="font-bold"> · +{m.pts}pts</span> : ''}</span>
@@ -111,8 +129,8 @@ export function MatchCard({ m, onClick, compact = false }: { m: UIMatch; onClick
               : <span className="text-error font-bold flex items-center gap-1"><LockIcon size={11} /> Locked</span>
             }
           </span>
-          <span className="text-[11px] font-bold shrink-0 ml-2" style={{ color: isScored ? 'rgb(var(--texts))' : m.pred ? 'rgb(var(--blue))' : 'rgb(var(--error))' }}>
-            {isScored ? 'View result →' : m.pred ? 'Edit pick →' : kickedOff ? 'Locked' : 'Predict now →'}
+          <span className={`inline-flex h-7 items-center rounded-lg border px-2.5 text-[10.5px] font-extrabold shrink-0 ml-2 transition-colors ${isScored ? 'border-border bg-surface text-textp group-hover:border-texts/40' : m.pred ? 'border-blue/35 bg-blue/10 text-blue group-hover:bg-blue/15' : kickedOff ? 'border-border bg-surface text-texts' : 'border-primary/35 bg-primary/10 text-primary group-hover:bg-primary/15'}`}>
+            {actionLabel} <span className="ml-1">→</span>
           </span>
         </div>
       )}
@@ -128,8 +146,11 @@ export function NextPredictCard({
   const home = getTeam(m.home), away = getTeam(m.away)
   const missing = pred.h == null || pred.a == null
   return (
-    <Card hover onClick={onOpen} className={`p-4 cursor-pointer group/card ${missing ? 'border-l-2 border-l-error' : ''}`}>
-      <div className="flex items-center justify-between mb-3">
+    <Card hover className={`relative p-4 cursor-pointer group/card ${missing ? 'border-l-2 border-l-error' : ''}`}>
+      {/* An actual button keeps the full card keyboard-accessible without
+          nesting the score-stepper buttons inside another interactive node. */}
+      <button type="button" onClick={onOpen} className="absolute inset-0 z-0 rounded-[inherit]" aria-label={`${missing ? 'Make' : 'Edit'} prediction for ${home.name} versus ${away.name}`} />
+      <div className="relative z-10 pointer-events-none flex items-center justify-between mb-3">
         <Pill tone={m.knockout ? 'gold' : 'default'}>{m.stage === 'Group' ? `Group ${m.group ?? ''}`.trim() : m.stage}</Pill>
         {missing
           ? <Pill tone="red" icon={<svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>}>Missing</Pill>
@@ -137,13 +158,13 @@ export function NextPredictCard({
         }
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="relative z-10 pointer-events-none flex items-center gap-2">
         <div className="flex flex-col items-center gap-1.5 w-10 shrink-0">
           <FlagChip code={m.home} w={24} h={16} r={3} />
           <span className="text-[11px] font-bold text-textp group-hover/card:text-primary transition-colors">{home.code}</span>
         </div>
         {/* Steppers must not trigger card navigation */}
-        <div className="flex items-center gap-1 flex-1 justify-center min-w-0" onClick={(e) => e.stopPropagation()}>
+        <div className="pointer-events-auto flex items-center gap-1 flex-1 justify-center min-w-0">
           <ScoreStepper value={pred.h} onChange={(v) => onChange('h', v)} compact />
           <span className="text-texts font-bold px-0.5">:</span>
           <ScoreStepper value={pred.a} onChange={(v) => onChange('a', v)} compact />
@@ -154,7 +175,7 @@ export function NextPredictCard({
         </div>
       </div>
 
-      <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-border/60">
+      <div className="relative z-10 pointer-events-none flex items-center justify-between mt-3.5 pt-3 border-t border-border/60">
         <span className="text-[11px] text-texts font-medium">{fmtTime(m.kickoff)}</span>
         <div className="flex items-center gap-3">
           <span className="text-[11px] flex items-center gap-1 font-semibold">
