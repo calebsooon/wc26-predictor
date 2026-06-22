@@ -295,6 +295,9 @@ export default function DashboardPage() {
     return gwsWithScored.length > 0 ? Math.max(...gwsWithScored) : null
   }, [gwMatchRows])
   const progressPct = Math.round((playedMatches / totalMatches) * 100)
+  const liveMatches = useMemo(() => matches.filter((m) => m.real_home_score === null && new Date(m.match_date).getTime() <= Date.now() && new Date(m.match_date).getTime() > Date.now() - 4 * 3600_000), [matches])
+  const currentWeekMatches = useMemo(() => currentGW ? gwMatchRows.filter((m) => m.gw_number === currentGW) : [], [currentGW, gwMatchRows])
+  const recapReady = currentWeekMatches.length > 0 && currentWeekMatches.every((m) => m.real_home_score !== null)
 
   const gwBoundaries = useMemo(() => {
     const countByGW = new Map<number, number>()
@@ -433,6 +436,14 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      <MatchdayActionRail
+        liveCount={liveMatches.length}
+        missingCount={missingCount}
+        recapReady={recapReady}
+        currentGW={currentGW}
+        bracketNeeded={bracketEnabled && !hasTournamentPick}
+      />
 
       {/* ── Bracket reminder ─────────────────────────────────── */}
       {bracketEnabled && !hasTournamentPick && (
@@ -778,6 +789,30 @@ export default function DashboardPage() {
       <RulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} weights={weights} showPrizePool={isMoney} />
     </div>
   )
+}
+
+function MatchdayActionRail({
+  liveCount, missingCount, recapReady, currentGW, bracketNeeded,
+}: {
+  liveCount: number
+  missingCount: number
+  recapReady: boolean
+  currentGW: number | null
+  bracketNeeded: boolean
+}) {
+  const action = liveCount > 0
+    ? { href: '/predictions', label: 'Follow live matches', sub: `${liveCount} match${liveCount !== 1 ? 'es are' : ' is'} live now`, tone: 'coral' }
+    : missingCount > 0
+      ? { href: '/predictions', label: 'Finish your picks', sub: `${missingCount} prediction${missingCount !== 1 ? 's are' : ' is'} still open`, tone: 'gold' }
+      : recapReady && currentGW
+        ? { href: `/recap?gw=${currentGW}`, label: `Open ${GW_SHORT[currentGW] ?? `GW${currentGW}`} recap`, sub: 'Your gameweek story is ready', tone: 'primary' }
+        : bracketNeeded
+          ? { href: '/bracket?phase=pre', label: 'Complete your bracket', sub: 'Champion and knockout calls are waiting', tone: 'gold' }
+          : { href: '/predictions', label: 'You are matchday-ready', sub: 'Review fixtures and your submitted calls', tone: 'primary' }
+  const colors: Record<string, string> = { primary: 'border-primary/30 bg-primary/[0.07] text-primary', gold: 'border-gold/30 bg-gold/[0.07] text-gold', coral: 'border-coral/30 bg-coral/[0.07] text-coral' }
+  return <Link href={action.href} className={`group flex items-center justify-between gap-4 rounded-2xl border px-4 py-3.5 transition hover:brightness-110 ${colors[action.tone]}`}>
+    <div className="min-w-0"><p className="text-[10px] font-extrabold uppercase tracking-[0.13em] opacity-80">Your next move</p><p className="mt-0.5 text-sm font-extrabold text-textp">{action.label}</p><p className="mt-0.5 text-xs text-texts">{action.sub}</p></div><span className="shrink-0 text-sm font-extrabold">Open →</span>
+  </Link>
 }
 
 /* ─── AccentStatCard ─────────────────────────────────────────────── */

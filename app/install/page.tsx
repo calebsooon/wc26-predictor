@@ -301,10 +301,14 @@ export default function InstallPage() {
       <Card className="p-5">
         <SectionHeader title="Step-by-step guide" sub="Select your device type" />
 
-        <div className="flex gap-2 mt-3 mb-6 flex-wrap">
+        <div role="tablist" aria-label="Installation instructions" className="flex gap-2 mt-3 mb-6 flex-wrap">
           {tabs.map((t) => (
             <button
               key={t.key}
+              id={`install-tab-${t.key}`}
+              role="tab"
+              aria-selected={activeTab === t.key}
+              aria-controls={`install-panel-${t.key}`}
               onClick={() => setActiveTab(t.key)}
               className={`flex items-center gap-1.5 h-9 px-3 rounded-xl border text-[13px] font-bold transition-all ${
                 activeTab === t.key
@@ -321,9 +325,11 @@ export default function InstallPage() {
           ))}
         </div>
 
-        {activeTab === 'ios' && <IOSGuide />}
-        {activeTab === 'android' && <AndroidGuide />}
-        {(activeTab === 'desktop-chrome' || activeTab === 'desktop-other') && <DesktopChromeGuide />}
+        <div id={`install-panel-${activeTab}`} role="tabpanel" aria-labelledby={`install-tab-${activeTab}`}>
+          {activeTab === 'ios' && <IOSGuide />}
+          {activeTab === 'android' && <AndroidGuide />}
+          {(activeTab === 'desktop-chrome' || activeTab === 'desktop-other') && <DesktopChromeGuide />}
+        </div>
       </Card>
 
       {/* FAQ */}

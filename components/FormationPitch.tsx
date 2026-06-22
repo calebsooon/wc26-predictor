@@ -6,10 +6,12 @@ import { getTeam } from '@/lib/teams'
 import { Pill } from '@/components/ui'
 import FlagChip from '@/components/FlagChip'
 import { TeamLink } from '@/components/TeamLink'
+import { resolvePitchLayout } from '@/lib/lineup-layout'
 
 interface Row {
+  player_id: number
   team_code: string; is_starting: boolean; shirt_number: number | null
-  position_label: string | null; grid: string | null
+  position_label: string | null; grid: string | null; sort_order: number
   players: { name: string } | null
 }
 
@@ -18,50 +20,10 @@ function surname(name: string): string {
   return parts.length > 1 ? parts[parts.length - 1] : name
 }
 
-// Map a position label to a pitch band: 0=GK, 1=DEF, 2=MID, 3=FWD. Handles both
-// the API's single letters (G/D/M/F) and manual labels (GK/CB/CAM/ST…).
-function band(label: string | null): number {
-  const l = (label ?? '').toUpperCase().trim()
-  if (l === 'GK' || l === 'G') return 0
-  if (l === 'D' || ['RB', 'LB', 'CB', 'RWB', 'LWB', 'WB', 'RCB', 'LCB'].includes(l)) return 1
-  if (l === 'F' || ['ST', 'CF', 'RW', 'LW', 'RF', 'LF', 'SS', 'W'].includes(l)) return 3
-  if (l === 'M' || l.includes('M')) return 2
-  return 2
-}
-
-// Place one team's XI on its half of the pitch. Prefer the provider "row:col"
-// grid; fall back to position-label bands for manually-entered lineups (no grid).
-function positions(players: Row[], home: boolean): { x: number; y: number; p: Row }[] {
-  const out: { x: number; y: number; p: Row }[] = []
-  const withGrid = players.filter((p) => p.grid)
-
-  if (withGrid.length > 0) {
-    const rows = Array.from(new Set(withGrid.map((p) => Number(p.grid!.split(':')[0])))).sort((a, b) => a - b)
-    const maxRow = rows[rows.length - 1] || 1
-    for (const r of rows) {
-      const inRow = withGrid.filter((p) => Number(p.grid!.split(':')[0]) === r)
-        .sort((a, b) => Number(a.grid!.split(':')[1]) - Number(b.grid!.split(':')[1]))
-      const depth = maxRow > 1 ? (r - 1) / (maxRow - 1) : 0   // 0 = GK line, 1 = attack
-      const y = home ? 96 - depth * 44 : 4 + depth * 44
-      inRow.forEach((p, i) => out.push({ x: ((i + 1) / (inRow.length + 1)) * 100, y, p }))
-    }
-    return out
-  }
-
-  // Fallback: group by position band (GK→DEF→MID→FWD) and lay each out as a row.
-  const byBand = new Map<number, Row[]>()
-  for (const p of players) {
-    const b = band(p.position_label)
-    const arr = byBand.get(b) ?? []
-    arr.push(p)
-    byBand.set(b, arr)
-  }
-  for (const [b, arr] of Array.from(byBand)) {
-    const depth = b / 3   // 0 = GK line, 1 = attack line
-    const y = home ? 96 - depth * 44 : 4 + depth * 44
-    arr.forEach((p, i) => out.push({ x: ((i + 1) / (arr.length + 1)) * 100, y, p }))
-  }
-  return out
+// Keep this legacy compact renderer aligned with the live Match Centre and
+// admin preview. There is one formation resolver for every pitch surface.
+function positions(players: Row[], home: boolean, formation: string | null): { x: number; y: number; p: Row }[] {
+  return resolvePitchLayout(players, home, formation).map((slot) => ({ x: slot.x, y: slot.y, p: slot.player }))
 }
 
 function Disc({ x, y, p, color }: { x: number; y: number; p: Row; color: string }) {
@@ -86,7 +48,7 @@ export function FormationPitch({ matchId, homeCode, awayCode, homeFormation, awa
   useEffect(() => {
     const supabase = createClient()
     supabase.from('lineups')
-      .select('team_code, is_starting, shirt_number, position_label, grid, players(name)')
+      .select('player_id, team_code, is_starting, shirt_number, position_label, grid, sort_order, players(name)')
       .eq('match_id', matchId).eq('is_starting', true)
       .then(({ data }) => setRows((data as unknown as Row[]) ?? []))
   }, [matchId])
@@ -95,8 +57,8 @@ export function FormationPitch({ matchId, homeCode, awayCode, homeFormation, awa
 
   const home = rows.filter((r) => r.team_code === homeCode)
   const away = rows.filter((r) => r.team_code === awayCode)
-  const homePos = positions(home, true)
-  const awayPos = positions(away, false)
+  const homePos = positions(home, true, homeFormation)
+  const awayPos = positions(away, false, awayFormation)
 
   const TeamLabel = ({ code, formation, away: isAway }: { code: string; formation: string | null; away?: boolean }) => (
     <div className={`flex items-center gap-2 ${isAway ? 'justify-start' : 'justify-end'}`}>

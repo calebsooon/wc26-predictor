@@ -18,6 +18,24 @@ export interface LineupSubstitution {
   created_at?: string
 }
 
+export interface LineupFormationChange {
+  id?: string
+  team_code: string
+  minute: number
+  formation: string
+  source?: 'fifa' | 'manual'
+  created_at?: string
+}
+
+/** The latest verified shape is the current tactical shape for a team. */
+export function resolveCurrentFormation(baseFormation: string | null, changes: LineupFormationChange[], teamCode: string) {
+  const latest = changes
+    .filter((change) => change.team_code === teamCode)
+    .sort((a, b) => a.minute - b.minute || (a.created_at ?? '').localeCompare(b.created_at ?? ''))
+    .at(-1)
+  return latest?.formation ?? baseFormation
+}
+
 export interface ResolvedLineup {
   current: LineupPlayerState[]
   bench: LineupPlayerState[]

@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam, normalisePosition, POSITION_ORDER, POSITION_ABBR } from '@/lib/teams'
 import { fmtDateLong, getTimeZoneShortLabel } from '@/lib/date-format'
 import { MatchLineups } from '@/components/MatchLineups'
+import { DialogShell } from '@/components/ui'
 
 export interface ModalMatch {
   id: string
@@ -18,6 +19,8 @@ export interface ModalMatch {
   round_name?: string
   home_formation?: string | null
   away_formation?: string | null
+  home_formation_override?: string | null
+  away_formation_override?: string | null
 }
 
 interface Player { id: number; name: string; position: string | null; jersey_number: number | null; nationality: string | null }
@@ -113,29 +116,48 @@ export function SquadPanel({ code, matchId }: { code: string; matchId: string })
 }
 
 export default function MatchModal({ match, onClose }: { match: ModalMatch; onClose: () => void }) {
-  const overlayRef = useRef<HTMLDivElement>(null)
   const home = getTeam(match.home_team), away = getTeam(match.away_team)
+  const [formations, setFormations] = useState<{ home: string | null; away: string | null }>({
+    home: match.home_formation_override ?? match.home_formation ?? null,
+    away: match.away_formation_override ?? match.away_formation ?? null,
+  })
 
   useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    document.body.style.overflow = 'hidden'
-    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
-  }, [onClose])
+    const suppliedHome = match.home_formation_override ?? match.home_formation
+    const suppliedAway = match.away_formation_override ?? match.away_formation
+    if (suppliedHome !== undefined || suppliedAway !== undefined) {
+      setFormations({ home: suppliedHome ?? null, away: suppliedAway ?? null })
+      return
+    }
+    const supabase = createClient()
+    supabase.from('matches')
+      .select('home_formation, away_formation, home_formation_override, away_formation_override')
+      .eq('id', match.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        const row = data as { home_formation: string | null; away_formation: string | null; home_formation_override: string | null; away_formation_override: string | null } | null
+        if (row) setFormations({ home: row.home_formation_override ?? row.home_formation, away: row.away_formation_override ?? row.away_formation })
+      })
+  }, [match.away_formation, match.away_formation_override, match.home_formation, match.home_formation_override, match.id])
 
   const hasScore = match.real_home_score !== null && match.real_away_score !== null
   const isTBC = match.home_team === 'TBC'
 
   return (
-    <div ref={overlayRef} className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-0 sm:px-4" onClick={(e) => { if (e.target === overlayRef.current) onClose() }}>
-      <div className="w-full sm:max-w-lg bg-card border border-border rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <DialogShell
+      open
+      onClose={onClose}
+      ariaLabel={`${home.fullName} versus ${away.fullName}`}
+      maxWidth="max-w-lg"
+      panelClassName="bg-card border border-border rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+    >
         <div className="bg-surface px-5 pt-5 pb-4 shrink-0 border-b border-border">
           <div className="flex items-start justify-between mb-4">
             <div>
               <span className="text-xs font-bold text-texts uppercase tracking-widest">{match.group_name ? `Group ${match.group_name}` : match.round_name}</span>
               <p className="text-xs text-texts mt-0.5">{fmtDateLong(match.match_date)} {getTimeZoneShortLabel()}</p>
             </div>
-            <button onClick={onClose} className="text-texts hover:text-textp p-1 -mr-1">✕</button>
+            <button onClick={onClose} aria-label="Close match" className="text-texts hover:text-textp p-1 -mr-1">✕</button>
           </div>
           <div className="flex items-center justify-between">
             <div className="flex-1 text-center">
@@ -154,12 +176,11 @@ export default function MatchModal({ match, onClose }: { match: ModalMatch; onCl
 
         {!isTBC ? (
           <div className="flex-1 overflow-y-auto p-4">
-            <MatchLineups matchId={match.id} homeCode={match.home_team} awayCode={match.away_team} homeFormation={match.home_formation ?? null} awayFormation={match.away_formation ?? null} homeScore={match.real_home_score} awayScore={match.real_away_score} scoreLabel={hasScore ? 'Final score' : match.is_locked ? 'Live match' : 'Pre-match'} />
+            <MatchLineups matchId={match.id} homeCode={match.home_team} awayCode={match.away_team} homeFormation={formations.home} awayFormation={formations.away} homeScore={match.real_home_score} awayScore={match.real_away_score} />
           </div>
         ) : (
           <div className="px-5 py-8 text-center text-texts text-sm">Teams will be confirmed after the group stage.</div>
         )}
-      </div>
-    </div>
+    </DialogShell>
   )
 }

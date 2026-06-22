@@ -17,7 +17,12 @@ export default function CommandPalette({ commands }: { commands: Command[] }) {
       }
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    function openFromShell() { setOpen(true) }
+    window.addEventListener('matchday:open-command-palette', openFromShell)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('matchday:open-command-palette', openFromShell)
+    }
   }, [])
 
   const filtered = useMemo(() => {

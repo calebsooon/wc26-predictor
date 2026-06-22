@@ -12,8 +12,11 @@
  * MATCH_ID=<uuid> FIFA_SYNC_MODE=all npm run data:fifa:matches
  */
 import { createClient } from '@supabase/supabase-js'
+import { createHash } from 'node:crypto'
 import { scoreMatchPredictions } from '@/lib/score-sync'
 import { snapshotLeagueRanks } from '@/lib/snapshot'
+import { getTeam } from '@/lib/teams'
+import { finishSyncRun, startSyncRun } from '@/lib/sync-runs'
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
@@ -124,6 +127,16 @@ async function events(token: string) {
   }
 }
 
+async function allFifaPlayers() {
+  const output: Player[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await service.from('players').select('id, fifa_player_id, team_code').not('fifa_player_id', 'is', null).range(from, from + 999)
+    if (error) throw error
+    output.push(...(data ?? []) as Player[])
+    if (!data || data.length < 1000) return output
+  }
+}
+
 function eventTeams(event: FifaEvent, codes: Map<string, string>) {
   const home = event.participants?.find((participant) => participant.role === 'Home Team')
   const away = event.participants?.find((participant) => participant.role === 'Away Team')
@@ -202,26 +215,117 @@ function substitutions(event: FifaEvent, matchId: string, players: Map<number, P
   return result
 }
 
+/**
+ * FIFA's published team-centre roster can lag behind a matchday sheet. Keep
+ * the official event usable by adding only the missing participants required
+ * to render that verified match; the normal team-cache sync remains the
+ * authority for the broader squad browser.
+ */
+async function ensureEventPlayers(event: FifaEvent, players: Map<number, Player>, teams: Map<string, string>) {
+  const missing = (event.participants ?? []).flatMap((participant) => {
+    if (participant.role !== 'Player' && participant.role !== 'Reserve Player') return []
+    const fifaPlayerId = number(participant._externalSportsPersonId)
+    const teamCode = teams.get(idTail(participant._externalTeamId) ?? '')
+    const name = String(tagValue(participant.tags, ':fdcp:player:name:eng') ?? '').trim()
+    if (!fifaPlayerId || players.has(fifaPlayerId) || !teamCode || !name) return []
+    const position = String(tagValue(participant.tags, ':position:description') ?? 'Unknown')
+    return [{
+      fifa_player_id: fifaPlayerId,
+      name,
+      position,
+      nationality: teamCode,
+      team_name: getTeam(teamCode).playerKey,
+      team_code: teamCode,
+      jersey_number: number(tagValue(participant.tags, ':shirt_number') ?? participant.number),
+      last_updated: new Date().toISOString(),
+    }]
+  })
+  const unique = Array.from(new Map(missing.map((player) => [player.fifa_player_id, player])).values())
+  if (!unique.length || DRY_RUN) return 0
+  const { data, error } = await service.from('players').upsert(unique, { onConflict: 'fifa_player_id' }).select('id, fifa_player_id, team_code')
+  if (error) throw error
+  for (const player of data ?? []) {
+    if (player.fifa_player_id != null) players.set(Number(player.fifa_player_id), { id: player.id, fifa_player_id: Number(player.fifa_player_id), team_code: player.team_code })
+  }
+  return data?.length ?? 0
+}
+
+/**
+ * Keep event-sheet identity separate from the broader squad cache. The
+ * lineups table still references a local player for rendering, but this row
+ * tells us precisely what FIFA published for this match if a player is later
+ * renamed, moved, or absent from the canonical roster.
+ */
+async function saveParticipants(event: FifaEvent, matchId: string, players: Map<number, Player>, teams: Map<string, string>) {
+  if (DRY_RUN) return 0
+  const rows = (event.participants ?? []).flatMap((participant) => {
+    if (participant.role !== 'Player' && participant.role !== 'Reserve Player') return []
+    const fifaPlayerId = number(participant._externalSportsPersonId)
+    const teamCode = teams.get(idTail(participant._externalTeamId) ?? '')
+    const player = fifaPlayerId ? players.get(fifaPlayerId) : null
+    const name = String(tagValue(participant.tags, ':fdcp:player:name:eng') ?? fullName(participant) ?? '').trim()
+    if (!fifaPlayerId || !teamCode || !name) return []
+    const status = String(tagValue(participant.tags, ':fdcp:player:status:label') ?? '').toLowerCase()
+    return [{
+      match_id: matchId,
+      fifa_player_id: fifaPlayerId,
+      player_id: player?.id ?? null,
+      team_code: teamCode,
+      player_name: name,
+      shirt_number: number(tagValue(participant.tags, ':shirt_number') ?? participant.number),
+      position_label: String(tagValue(participant.tags, ':position:code') ?? '') || null,
+      is_starting: status === 'starter' || participant.role === 'Player',
+      source: 'fifa',
+      source_updated_at: event.updatedAt ?? null,
+      updated_at: new Date().toISOString(),
+    }]
+  })
+  if (!rows.length) return 0
+  const { error } = await service.from('match_participants').upsert(rows, { onConflict: 'match_id,fifa_player_id' })
+  if (error) throw error
+  return rows.length
+}
+
+async function saveRawSnapshot(runId: string | null, matchId: string, event: FifaEvent) {
+  if (DRY_RUN || !runId) return
+  const serialised = JSON.stringify(event)
+  const payloadHash = createHash('sha256').update(serialised).digest('hex')
+  const { error } = await service.from('fifa_raw_snapshots').upsert({
+    sync_run_id: runId,
+    match_id: matchId,
+    resource: 'event_detail',
+    payload: event,
+    payload_hash: payloadHash,
+    source_updated_at: event.updatedAt ?? null,
+  }, { onConflict: 'match_id,resource,payload_hash', ignoreDuplicates: true })
+  if (error) throw error
+}
+
 async function main() {
+  let runId: string | null = null
+  let recordsRead = 0
+  let recordsWritten = 0
+  let latestSourceUpdatedAt: string | null = null
+  try {
   if (!['fixtures', 'lineups', 'stats', 'all'].includes(MODE)) throw new Error('FIFA_SYNC_MODE must be fixtures, lineups, stats, or all')
-  const [token, matchesResult, teamsResult, playersResult] = await Promise.all([
+  if (!DRY_RUN) runId = await startSyncRun(service, 'fifa_matches', 'cli', { provider: 'fifa', scope: MATCH_ID ? `match:${MATCH_ID}` : ALL ? `backfill:${MODE}` : MODE })
+  const [token, matchesResult, teamsResult, players] = await Promise.all([
     fifaToken(),
     service.from('matches').select('id, home_team, away_team, match_date, real_home_score, real_away_score, fifa_event_id, fifa_updated_at').order('match_date'),
     service.from('fifa_teams').select('code, fifa_team_id'),
-    service.from('players').select('id, fifa_player_id, team_code').not('fifa_player_id', 'is', null),
+    allFifaPlayers(),
   ])
   if (matchesResult.error) throw matchesResult.error
   if (teamsResult.error) throw teamsResult.error
-  if (playersResult.error) throw playersResult.error
   const matches = (matchesResult.data ?? []) as DBMatch[]
   const teams = (teamsResult.data ?? []) as Team[]
-  const players = (playersResult.data ?? []) as Player[]
   const codeByTeamId = new Map(teams.map((team) => [idTail(team.fifa_team_id)!, team.code]))
   const playerByFifaId = new Map(players.map((player) => [player.fifa_player_id, player]))
   const byPair = new Map(matches.map((match) => [key(match.home_team, match.away_team), match]))
 
   console.log(`Fetching FIFA schedule (${MODE}${ALL ? ', full backfill' : ''}${MATCH_ID ? `, ${MATCH_ID}` : ''}${DRY_RUN ? ', dry run' : ''})…`)
   const schedule = await events(token)
+  recordsRead += schedule.length
   if (schedule.length !== 104) throw new Error(`Expected 104 FIFA events, got ${schedule.length}`)
   let mapped = 0; let resultsUpdated = 0; let rescored = 0
   const mappedEvents: Array<{ event: FifaEvent; match: DBMatch }> = []
@@ -242,12 +346,14 @@ async function main() {
       fifa_metadata: { ...meta, score: { home: homeScore, away: awayScore }, final },
       fifa_updated_at: event.updatedAt ?? null, match_date: event.dateTime,
     }
+    if (event.updatedAt && (!latestSourceUpdatedAt || event.updatedAt > latestSourceUpdatedAt)) latestSourceUpdatedAt = event.updatedAt
     if (final && homeScore != null && awayScore != null) {
       update.real_home_score = homeScore; update.real_away_score = awayScore; update.is_locked = true
     }
     if (!DRY_RUN) {
       const { error } = await service.from('matches').update(update).eq('id', match.id)
       if (error) throw error
+      recordsWritten++
     }
     if (final && homeScore != null && awayScore != null && (match.real_home_score !== homeScore || match.real_away_score !== awayScore)) {
       resultsUpdated++
@@ -257,6 +363,7 @@ async function main() {
   if (!mapped) throw new Error('No MatchDay fixtures mapped to FIFA. Run npm run data:fifa-teams first and check team codes.')
   if (MODE === 'fixtures') {
     if (!DRY_RUN && resultsUpdated) await snapshotLeagueRanks(service)
+    if (runId) await finishSyncRun(service, runId, 'success', { mapped, resultsUpdated, rescored, mode: MODE }, { sourceUpdatedAt: latestSourceUpdatedAt, recordsRead, recordsWritten })
     console.log(`FIFA fixtures: ${mapped}/104 mapped, ${resultsUpdated} final result(s) updated, ${rescored} prediction(s) rescored.`)
     return
   }
@@ -271,26 +378,62 @@ async function main() {
     return kickoff >= now - 36 * 3600_000 && kickoff <= now + 36 * 3600_000
   })
   console.log(`Fetching detailed FIFA match data for ${selected.length} fixture(s)…`)
-  let lineupsWritten = 0; let statsWritten = 0; let substitutionsWritten = 0
-  await mapLimit(selected, 3, async ({ event, match }) => {
+  let lineupsWritten = 0; let statsWritten = 0; let substitutionsWritten = 0; let matchdayPlayersWritten = 0; let participantsWritten = 0; let snapshotsWritten = 0
+  // Backfills are deliberately sequential: the same player may appear in
+  // several historic match sheets, and serial writes keep event-player
+  // additions deterministic on Supabase.
+  await mapLimit(selected, ALL ? 1 : 3, async ({ event, match }) => {
     if (!ALL && !MATCH_ID && event.updatedAt && match.fifa_updated_at === event.updatedAt) return
     const detail = await fifaGet<FifaEvent>(token, `/events/fifa/${event._externalId}?aggregated=true`)
+    recordsRead++
+    if (detail.updatedAt && (!latestSourceUpdatedAt || detail.updatedAt > latestSourceUpdatedAt)) latestSourceUpdatedAt = detail.updatedAt
+    await saveRawSnapshot(runId, match.id, detail)
+    if (runId) snapshotsWritten++
     if (MODE === 'lineups' || MODE === 'all') {
-      const { data: manualRows } = await service.from('lineups').select('id').eq('match_id', match.id).eq('source', 'manual').limit(1)
+      matchdayPlayersWritten += await ensureEventPlayers(detail, playerByFifaId, codeByTeamId)
+      const savedParticipants = await saveParticipants(detail, match.id, playerByFifaId, codeByTeamId)
+      participantsWritten += savedParticipants
+      recordsWritten += savedParticipants
+      const { data: manualRows, error: manualError } = await service.from('lineups').select('team_code').eq('match_id', match.id).eq('source', 'manual')
+      if (manualError) throw manualError
+      const manualTeams = new Set((manualRows ?? []).map((row) => row.team_code))
       const { rows, formations } = lineupRows(detail, playerByFifaId, codeByTeamId)
-      const starters = rows.filter((row) => row.is_starting).length
-      if (!manualRows?.length && starters >= 20 && !DRY_RUN) {
-        const { error } = await service.rpc('replace_fifa_match_lineup', { p_match_id: match.id, p_rows: rows, p_home_formation: formations[match.home_team] ?? null, p_away_formation: formations[match.away_team] ?? null })
-        if (error) throw error
+      for (const teamCode of [match.home_team, match.away_team]) {
+        if (manualTeams.has(teamCode)) continue
+        const teamRows = rows.filter((row) => row.team_code === teamCode)
+        const starters = teamRows.filter((row) => row.is_starting).length
+        if (starters < 11) {
+          if (teamRows.length) console.warn(`${match.home_team} v ${match.away_team}: ${teamCode} only has ${starters} matched FIFA starters — preserving existing rows`)
+          continue
+        }
+        if (!DRY_RUN) {
+          // We have confirmed that this team has no manual correction. Replace
+          // any previous provider rows only for this team, leaving the opponent
+          // (and its hand-positioned pitch) untouched.
+          const { error: deleteError } = await service.from('lineups').delete().eq('match_id', match.id).eq('team_code', teamCode)
+          if (deleteError) throw deleteError
+          const { error: insertError } = await service.from('lineups').insert(teamRows.map((row) => ({ ...row, match_id: match.id, source: 'fifa' })))
+          if (insertError) throw insertError
+          const formationColumn = teamCode === match.home_team ? 'home_formation' : 'away_formation'
+          const { error: formationError } = await service.from('matches').update({ [formationColumn]: formations[teamCode] ?? null }).eq('id', match.id)
+          if (formationError) throw formationError
+          recordsWritten += teamRows.length + 1
+        }
         lineupsWritten++
       }
       const verified = substitutions(detail, match.id, playerByFifaId, codeByTeamId)
-      if (!DRY_RUN && !manualRows?.length) {
-        await service.from('lineup_substitutions').delete().eq('match_id', match.id).eq('source', 'fifa')
-        if (verified.length) {
-          const { error } = await service.from('lineup_substitutions').upsert(verified, { onConflict: 'match_id,player_out_id,player_in_id,minute' })
-          if (error) throw error
-          substitutionsWritten += verified.length
+      if (!DRY_RUN) {
+        for (const teamCode of [match.home_team, match.away_team]) {
+          if (manualTeams.has(teamCode)) continue
+          const teamSubs = verified.filter((row) => row.team_code === teamCode)
+          const { error: deleteError } = await service.from('lineup_substitutions').delete().eq('match_id', match.id).eq('team_code', teamCode).eq('source', 'fifa')
+          if (deleteError) throw deleteError
+          if (teamSubs.length) {
+            const { error } = await service.from('lineup_substitutions').upsert(teamSubs, { onConflict: 'match_id,player_out_id,player_in_id,minute' })
+            if (error) throw error
+            substitutionsWritten += teamSubs.length
+            recordsWritten += teamSubs.length
+          }
         }
       }
     }
@@ -308,12 +451,25 @@ async function main() {
       if (!DRY_RUN) {
         if (teamRows.length) { const { error } = await service.from('match_team_stats').upsert(teamRows); if (error) throw error }
         if (playerRows.length) { const { error } = await service.from('match_player_stats').upsert(playerRows); if (error) throw error }
+        recordsWritten += teamRows.length + playerRows.length
       }
       if (teamRows.length) statsWritten++
     }
   })
   if (!DRY_RUN && resultsUpdated) await snapshotLeagueRanks(service)
-  console.log(`FIFA sync: ${mapped}/104 fixtures mapped · ${resultsUpdated} results · ${lineupsWritten} team sheets · ${substitutionsWritten} substitutions · ${statsWritten} stat packs.`)
+  if (runId) await finishSyncRun(service, runId, 'success', { mapped, selected: selected.length, resultsUpdated, rescored, lineupsWritten, substitutionsWritten, statsWritten, matchdayPlayersWritten, participantsWritten, snapshotsWritten, mode: MODE }, { sourceUpdatedAt: latestSourceUpdatedAt, recordsRead, recordsWritten })
+  console.log(`FIFA sync: ${mapped}/104 fixtures mapped · ${resultsUpdated} results · ${lineupsWritten} team sheets · ${substitutionsWritten} substitutions · ${statsWritten} stat packs · ${matchdayPlayersWritten} matchday players added · ${participantsWritten} participant records.`)
+  } catch (error) {
+    if (runId) {
+      await finishSyncRun(service, runId, 'failed', { mode: MODE, all: ALL, matchId: MATCH_ID }, {
+        sourceUpdatedAt: latestSourceUpdatedAt,
+        recordsRead,
+        recordsWritten,
+        errorSummary: error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000),
+      }).catch(() => undefined)
+    }
+    throw error
+  }
 }
 
 main().catch((error) => { console.error(error); process.exit(1) })

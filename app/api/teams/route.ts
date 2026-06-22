@@ -3,22 +3,17 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic'
 
-const teamStatKeys = [
-  'matches_played', 'goals', 'goals_conceded', 'clean_sheets', 'passes', 'passes_completed',
-  'passing_accuracy_rate', 'possession', 'xg', 'attempt_at_goal', 'attempt_at_goal_on_target',
-  'attempt_at_goal_conversion_rate', 'corners', 'crosses', 'crosses_completed', 'take_ons_completed',
-  'total_distance', 'sprints', 'forced_turnovers', 'linebreaks_attempted', 'linebreaks_attempted_completed',
-  'goalkeeper_saves', 'goalkeeper_save_percentage', 'fouls_for', 'yellow_cards', 'red_cards',
-]
-
 function compactStats(stats: Record<string, unknown> | null) {
-  return Object.fromEntries(teamStatKeys.map((key) => [key, stats?.[key] ?? 0]))
+  return Object.fromEntries(Object.entries(stats ?? {}).flatMap(([key, value]) => {
+    const number = typeof value === 'number' ? value : Number(value)
+    return Number.isFinite(number) ? [[key, number]] : []
+  }))
 }
 
 export async function GET() {
   const supabase = await createServerSupabaseClient()
   const [teams, matches] = await Promise.all([
-    supabase.from('fifa_teams').select('code, name, confederation, group_letter, is_host, flag_url, crest_url, stats, updated_at').order('name'),
+    supabase.from('fifa_teams').select('code, name, confederation, group_letter, is_host, flag_url, crest_url, stats, source_updated_at, updated_at').order('name'),
     supabase.from('matches').select('id, home_team, away_team, match_date, real_home_score, real_away_score, group_name').order('match_date'),
   ])
   if (teams.error) return NextResponse.json({ error: teams.error.message }, { status: 500 })

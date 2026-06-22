@@ -6,6 +6,7 @@ const root = process.cwd()
 const migration = readFileSync(resolve(root, 'supabase/migrations/20260620000000_launch_security_and_live_data.sql'), 'utf8')
 const predictionScopeMigration = readFileSync(resolve(root, 'supabase/migrations/20260620000002_prediction_membership_scope.sql'), 'utf8')
 const substitutionMigration = readFileSync(resolve(root, 'supabase/migrations/20260621000000_lineup_substitutions.sql'), 'utf8')
+const fifaOperationsMigration = readFileSync(resolve(root, 'supabase/migrations/20260622000000_fifa_operations_and_participants.sql'), 'utf8')
 const loginPage = readFileSync(resolve(root, 'app/login/page.tsx'), 'utf8')
 
 describe('launch security migration contract', () => {
@@ -42,5 +43,13 @@ describe('launch security migration contract', () => {
     expect(substitutionMigration).toContain('lineup_substitutions: authenticated read')
     expect(substitutionMigration).toContain('lineup_substitutions: admin insert')
     expect(substitutionMigration).toContain('lineup_substitutions: admin delete')
+  })
+
+  it('keeps raw FIFA payloads admin-only while match participant data remains safe to render', () => {
+    expect(fifaOperationsMigration).toContain('create table if not exists public.match_participants')
+    expect(fifaOperationsMigration).toContain('match_participants: authenticated read')
+    expect(fifaOperationsMigration).toContain('match_participants: admin write')
+    expect(fifaOperationsMigration).toContain('create table if not exists public.fifa_raw_snapshots')
+    expect(fifaOperationsMigration).toContain('fifa_raw_snapshots: admin read')
   })
 })

@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { getTeam, normalisePosition, POSITION_ABBR } from '@/lib/teams'
-import { SearchIcon } from '@/components/ui'
+import { DialogShell, SearchIcon } from '@/components/ui'
 
 export interface PlayerForPicker {
   id: number
@@ -97,6 +97,7 @@ export function PlayerCardPicker({
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const searchRef = useRef<HTMLInputElement>(null)
 
   const noScorer = value === 'none'
   const ownGoal = value === -1
@@ -126,6 +127,11 @@ export function PlayerCardPicker({
     onChange(null)
   }
 
+  function close() {
+    setOpen(false)
+    setSearch('')
+  }
+
   return (
     <div className="relative">
       <div className="flex items-center justify-between mb-1.5">
@@ -145,9 +151,24 @@ export function PlayerCardPicker({
           ${hasChoice ? 'border-gold/40 bg-gold/[0.05]' : 'border-border bg-surface hover:border-texts/30'}`}
       >
         {noScorer ? (
-          <span className="flex-1 text-left text-textp">🚫 No scorer</span>
+          <span className="flex items-center gap-2 flex-1 text-left">
+            <span className="w-6 h-6 rounded-full border-2 border-faint/50 flex items-center justify-center shrink-0">
+              <svg width="10" height="2" viewBox="0 0 10 2"><rect width="10" height="2" rx="1" fill="currentColor" className="text-faint" /></svg>
+            </span>
+            <span className="text-textp">No scorer</span>
+          </span>
         ) : ownGoal ? (
-          <span className="flex-1 text-left text-textp">⚽ Own goal</span>
+          <span className="flex items-center gap-2 flex-1 text-left">
+            <span className="w-6 h-6 rounded-full bg-faint/10 border border-faint/30 flex items-center justify-center shrink-0">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" className="text-faint" />
+                <path d="M12 6l3.2 2.3-1.2 3.7H10L8.8 8.3z" fill="currentColor" className="text-faint" />
+                <circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-faint" />
+              </svg>
+            </span>
+            <span className="text-textp">Own goal</span>
+            <span className="text-[11px] text-faint font-medium">(first goal scored against own team)</span>
+          </span>
         ) : selected ? (
           <>
             <span className="text-lg leading-none">{getTeam(selected.team_code).flag}</span>
@@ -162,75 +183,124 @@ export function PlayerCardPicker({
         ) : (
           <span className="flex-1 text-left text-texts">Pick first scorer…</span>
         )}
-        <span className="text-texts text-[10px] shrink-0">{open ? '▲' : '▼'}</span>
+        <svg width="12" height="7" viewBox="0 0 12 7" className={`text-texts shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}>
+          <path d="M1 1l5 5 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </svg>
       </button>
 
-      {open && (
-        <div
-          className="absolute z-40 mt-2 w-full bg-card border border-border rounded-xl shadow-2xl flex flex-col"
-          style={{ maxHeight: '440px' }}
-        >
-          <div className="p-2.5 border-b border-border flex items-center gap-2 shrink-0">
-            <SearchIcon className="text-texts shrink-0" size={14} />
-            <input
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search players…"
-              className="flex-1 bg-transparent text-sm text-textp placeholder:text-texts outline-none"
-            />
-            {search && (
-              <button onClick={() => setSearch('')} className="text-texts text-xs shrink-0">✕</button>
-            )}
-          </div>
+      <DialogShell
+        open={open}
+        onClose={close}
+        ariaLabel={`Pick ${label.toLowerCase()}`}
+        maxWidth="max-w-lg"
+        zIndexClassName="z-[200]"
+        initialFocusRef={searchRef}
+        portal
+        panelClassName="bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+      >
+        <div style={{ maxHeight: '85dvh' }} className="flex flex-col">
 
-          {!search && (
-            <>
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-border shrink-0">
+              <div>
+                <p className="text-sm font-extrabold text-textp">{label}</p>
+                <p className="text-[11px] text-texts mt-0.5">Pick who scores the first goal</p>
+              </div>
               <button
-                onClick={() => { onChange('none'); setOpen(false) }}
-                className={`flex items-center gap-2 px-3 h-11 border-b border-border text-left text-sm font-bold transition-colors ${noScorer ? 'bg-gold/10 text-gold' : 'text-textp hover:bg-surface'}`}
+                onClick={close}
+                className="h-8 w-8 rounded-xl border border-border flex items-center justify-center text-texts hover:text-textp transition-colors"
+                aria-label="Close"
               >
-                🚫 No scorer <span className="text-[11px] font-medium text-texts">(predict nobody scores first)</span>
-                {noScorer && <span className="ml-auto text-gold">✓</span>}
+                <svg width="12" height="12" viewBox="0 0 12 12"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
               </button>
-              <button
-                onClick={() => { onChange(-1); setOpen(false) }}
-                className={`flex items-center gap-2 px-3 h-11 border-b border-border text-left text-sm font-bold transition-colors ${ownGoal ? 'bg-gold/10 text-gold' : 'text-textp hover:bg-surface'}`}
-              >
-                ⚽ Own goal <span className="text-[11px] font-medium text-texts">(first goal is an own goal)</span>
-                {ownGoal && <span className="ml-auto text-gold">✓</span>}
-              </button>
-            </>
-          )}
+            </div>
 
-          <div className="overflow-y-auto p-3 space-y-4">
-            {Array.from(grouped.entries()).map(([teamCode, teamPlayers]) => {
-              const team = getTeam(teamCode)
-              return (
-                <div key={teamCode}>
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <span className="text-base leading-none">{team.flag}</span>
-                    <span className="text-[10px] font-extrabold text-texts uppercase tracking-widest">{team.name}</span>
-                  </div>
-                  <div className="grid grid-cols-5 sm:grid-cols-6 gap-1.5">
-                    {teamPlayers.map((p) => (
-                      <PlayerCard
-                        key={p.id}
-                        player={p}
-                        selected={p.id === value}
-                        onClick={() => pick(p.id)}
-                      />
-                    ))}
+            {/* Search */}
+            <div className="px-3 py-2.5 border-b border-border flex items-center gap-2 shrink-0">
+              <SearchIcon className="text-texts shrink-0" size={14} />
+              <input
+                ref={searchRef}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search players…"
+                className="flex-1 bg-transparent text-sm text-textp placeholder:text-texts outline-none"
+              />
+              {search && (
+                <button onClick={() => setSearch('')} className="text-texts text-xs hover:text-textp shrink-0">✕</button>
+              )}
+            </div>
+
+            {/* Scrollable content */}
+            <div className="overflow-y-auto flex-1 p-3 space-y-1">
+              {!search && (
+                <div className="mb-3 space-y-1">
+                  {/* No scorer */}
+                  <button
+                    onClick={() => { onChange('none'); close() }}
+                    className={`w-full flex items-center gap-3 px-3 h-12 rounded-xl border text-left transition-colors ${noScorer ? 'border-gold/40 bg-gold/10' : 'border-border bg-surface hover:bg-card'}`}
+                  >
+                    <span className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 ${noScorer ? 'border-gold bg-gold/10' : 'border-border'}`}>
+                      <svg width="10" height="2" viewBox="0 0 10 2"><rect width="10" height="2" rx="1" fill="currentColor" className={noScorer ? 'text-gold' : 'text-faint'} /></svg>
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <span className={`text-sm font-bold ${noScorer ? 'text-gold' : 'text-textp'}`}>No scorer</span>
+                      <span className="text-[11px] text-texts font-medium ml-2">predict nobody scores first</span>
+                    </div>
+                    {noScorer && <span className="w-5 h-5 rounded-full bg-gold grid place-items-center shrink-0"><svg width="8" height="6" viewBox="0 0 8 6"><path d="M1 3l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" /></svg></span>}
+                  </button>
+
+                  {/* Own goal */}
+                  <button
+                    onClick={() => { onChange(-1); close() }}
+                    className={`w-full flex items-center gap-3 px-3 h-12 rounded-xl border text-left transition-colors ${ownGoal ? 'border-gold/40 bg-gold/10' : 'border-border bg-surface hover:bg-card'}`}
+                  >
+                    <span className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 ${ownGoal ? 'border-gold bg-gold/10' : 'border-border'}`}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" className={ownGoal ? 'text-gold' : 'text-faint'} />
+                        <path d="M12 5.5l3.2 2.4-1.2 3.7H10L8.8 7.9z" fill="currentColor" className={ownGoal ? 'text-gold' : 'text-faint'} />
+                        <line x1="8" y1="16" x2="16" y2="16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className={ownGoal ? 'text-gold' : 'text-faint'} />
+                      </svg>
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <span className={`text-sm font-bold ${ownGoal ? 'text-gold' : 'text-textp'}`}>Own goal</span>
+                      <span className="text-[11px] text-texts font-medium ml-2">first goal scored against own team</span>
+                    </div>
+                    {ownGoal && <span className="w-5 h-5 rounded-full bg-gold grid place-items-center shrink-0"><svg width="8" height="6" viewBox="0 0 8 6"><path d="M1 3l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" /></svg></span>}
+                  </button>
+
+                  <div className="pt-2 pb-1">
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-texts px-1">Players</p>
                   </div>
                 </div>
-              )
-            })}
-            {grouped.size === 0 && (
-              <p className="text-sm text-texts text-center py-6">No players found</p>
-            )}
-          </div>
+              )}
+
+              {Array.from(grouped.entries()).map(([teamCode, teamPlayers]) => {
+                const team = getTeam(teamCode)
+                return (
+                  <div key={teamCode} className="mb-4">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className="text-base leading-none">{team.flag}</span>
+                      <span className="text-[10px] font-extrabold text-texts uppercase tracking-widest">{team.name}</span>
+                    </div>
+                    <div className="grid grid-cols-5 sm:grid-cols-6 gap-1.5">
+                      {teamPlayers.map((p) => (
+                        <PlayerCard
+                          key={p.id}
+                          player={p}
+                          selected={p.id === value}
+                          onClick={() => pick(p.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+              {grouped.size === 0 && (
+                <p className="text-sm text-texts text-center py-8">No players found</p>
+              )}
+            </div>
         </div>
-      )}
+      </DialogShell>
     </div>
   )
 }

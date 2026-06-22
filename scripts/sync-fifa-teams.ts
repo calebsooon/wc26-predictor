@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getTeam } from '@/lib/teams'
 import { nameKey } from '@/lib/normalize'
 import { teamNameToCode } from '@/lib/team-match'
+import { finishSyncRun, startSyncRun } from '@/lib/sync-runs'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
@@ -157,6 +158,12 @@ async function cacheTeamImage(code: string, kind: 'flag' | 'crest', source: stri
 }
 
 async function main() {
+  let runId: string | null = null
+  let recordsRead = 0
+  let recordsWritten = 0
+  let latestSourceUpdatedAt: string | null = null
+  try {
+  if (!DRY_RUN) runId = await startSyncRun(supabase, 'fifa_teams', 'cli', { provider: 'fifa', scope: SKIP_IMAGES ? 'teams:metadata' : 'teams:full' })
   console.log(`Fetching FIFA team cache${DRY_RUN ? ' (dry run)' : ''}${SKIP_IMAGES ? ' (without images)' : ''}…`)
   const [token, existing, cachedTeams, matchResult] = await Promise.all([
     fifaToken(),
@@ -176,6 +183,7 @@ async function main() {
 
   const teamPayload = await fifaGet<{ items?: FifaTeam[] }>(token, `/teams?query=${encodeURIComponent(`_externalCompetitionId==\`${FIFA_SEASON_ID}\``)}`)
   const teams = teamPayload.items ?? []
+  recordsRead += teams.length
   if (teams.length !== 48) throw new Error(`Expected 48 FIFA teams, received ${teams.length}`)
 
   const byFifaId = new Map(existing.filter((player) => player.fifa_player_id).map((player) => [player.fifa_player_id!, player]))
@@ -196,6 +204,7 @@ async function main() {
     // page is the canonical current squad shown by their team centre.
     return { team, code, roster: first.items ?? [] }
   })
+  recordsRead += rosterBundles.reduce((total, bundle) => total + bundle.roster.length, 0)
 
   const imageJobs: Array<{ fifaId: number; source: string; sourceUpdatedAt?: string; existing?: ExistingPlayer }> = []
   const playerRows: Array<Record<string, unknown>> = []
@@ -276,6 +285,7 @@ async function main() {
       source_updated_at: team.updatedAt ?? null,
     }
   })
+  latestSourceUpdatedAt = teamRows.map((team) => team.source_updated_at).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null
   if (teamRows.some((team) => !team.confederation) || uniqueRows.length < 1000) throw new Error(`FIFA payload validation failed (${teamRows.length} teams, ${uniqueRows.length} players)`)
 
   const counts = Object.fromEntries(teamRows.map((team) => [team.code, uniqueRows.filter((player) => player.team_code === team.code).length]))
@@ -286,7 +296,13 @@ async function main() {
 
   const { error } = await supabase.rpc('replace_fifa_team_cache', { p_teams: teamRows, p_players: uniqueRows })
   if (error) throw error
+  recordsWritten = teamRows.length + uniqueRows.length
+  if (runId) await finishSyncRun(supabase, runId, 'success', { teams: teamRows.length, players: uniqueRows.length, unmatchedPlayers: unmatched, imageCandidates: uniqueImageJobs.length, imageFailures: imageFailures.length, skipImages: SKIP_IMAGES }, { sourceUpdatedAt: latestSourceUpdatedAt, recordsRead, recordsWritten })
   console.log('Done — FIFA team, roster, stats, and optimized player-image cache updated in Supabase.')
+  } catch (error) {
+    if (runId) await finishSyncRun(supabase, runId, 'failed', { skipImages: SKIP_IMAGES }, { sourceUpdatedAt: latestSourceUpdatedAt, recordsRead, recordsWritten, errorSummary: error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000) }).catch(() => undefined)
+    throw error
+  }
 }
 
 main().catch((error) => { console.error(error); process.exit(1) })

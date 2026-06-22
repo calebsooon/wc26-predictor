@@ -42,6 +42,28 @@ export interface ActiveLeague {
   memberProfiles: ProfileLite[]
 }
 
+// Short-lived client cache: AppShell, Dashboard, Fixtures, and Leaderboard can
+// mount in quick succession during normal navigation. Sharing these small
+// membership reads avoids a burst of identical RLS-scoped requests without
+// making a league switch feel stale.
+const LEAGUE_CACHE_TTL = 20_000
+const leagueCache = new Map<string, { expiresAt: number; value: unknown }>()
+
+function cached<T>(key: string): T | null {
+  const hit = leagueCache.get(key)
+  if (!hit || hit.expiresAt < Date.now()) return null
+  return hit.value as T
+}
+
+function store<T>(key: string, value: T) {
+  leagueCache.set(key, { expiresAt: Date.now() + LEAGUE_CACHE_TTL, value })
+  return value
+}
+
+export function invalidateLeagueCache(userId: string) {
+  Array.from(leagueCache.keys()).forEach((key) => { if (key.startsWith(`${userId}:`)) leagueCache.delete(key) })
+}
+
 function activeLeagueStorageKey(userId: string) {
   return `matchday:active-league:${userId}`
 }
@@ -64,10 +86,12 @@ function setStoredActiveLeagueId(userId: string, leagueId: string) {
 
 /** Leagues the user belongs to (with join codes — only meaningful to admins). */
 export async function getMyLeagues(supabase: SupabaseClient, userId: string): Promise<League[]> {
-  void userId
+  const cacheKey = `${userId}:mine`
+  const hit = cached<League[]>(cacheKey)
+  if (hit) return hit
   const { data, error } = await supabase.rpc('get_my_leagues')
   if (error) throw error
-  return ((data ?? []) as Array<{
+  const leagues = ((data ?? []) as Array<{
     id: string; name: string; type: LeagueType; join_code: string | null; scoring: unknown
     bracket_enabled: boolean; reveal_predictions: boolean; prize_pool: boolean
     banners_enabled: boolean; label_id: string | null; label_name: string | null; label_color: string | null
@@ -84,6 +108,7 @@ export async function getMyLeagues(supabase: SupabaseClient, userId: string): Pr
     label_id: row.label_id,
     league_labels: row.label_name && row.label_color ? { name: row.label_name, color: row.label_color } : null,
   }))
+  return store(cacheKey, leagues)
 }
 
 /**
@@ -96,6 +121,9 @@ export async function getActiveLeague(supabase: SupabaseClient, userId: string):
   const activeId = mine.find((l) => l.id === storedId)?.id ?? mine[0]?.id ?? null
   if (activeId) setStoredActiveLeagueId(userId, activeId)
   if (!activeId) return { league: null, weights: DEFAULT_WEIGHTS, allowGdManual: true, memberIds: [], memberProfiles: [] }
+  const cacheKey = `${userId}:active:${activeId}`
+  const hit = cached<ActiveLeague>(cacheKey)
+  if (hit) return hit
 
   // NB: league_members.user_id FKs to auth.users, not profiles — so we can't embed
   // profiles via PostgREST. Fetch member ids first, then their profiles by id.
@@ -112,18 +140,19 @@ export async function getActiveLeague(supabase: SupabaseClient, userId: string):
   }
   const league = (leagueRow as League | null) ?? null
 
-  return {
+  return store(cacheKey, {
     league,
     weights: resolveWeights(league?.scoring),
     allowGdManual: allowGdManualOverride(league?.scoring),
     memberIds,
     memberProfiles,
-  }
+  })
 }
 
 /** Set the user's active (currently-viewed) league. */
 export async function setActiveLeague(supabase: SupabaseClient, userId: string, leagueId: string) {
   setStoredActiveLeagueId(userId, leagueId)
+  invalidateLeagueCache(userId)
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('matchday:active-league-changed', { detail: { userId, leagueId } }))
   }

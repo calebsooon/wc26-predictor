@@ -592,12 +592,16 @@ export default function GroupsPage() {
           </h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div role="tablist" aria-label="Group predictor view" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {(['pred', 'stand'] as const).map((tab) => {
               const isActive = activeTab === tab
               return (
                 <button
                   key={tab}
+                  id={`groups-tab-${tab}`}
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={`groups-panel-${tab}`}
                   onClick={() => {
                     setActiveTab(tab)
                     replaceUrl({ tab: tab === 'stand' ? null : tab })
@@ -646,6 +650,7 @@ export default function GroupsPage() {
         </div>
       </div>
 
+      <div id={`groups-panel-${activeTab}`} role="tabpanel" aria-labelledby={`groups-tab-${activeTab}`}>
       {/* Info banner */}
       {activeTab === 'pred' && (
         <div style={{ maxWidth: 1000, margin: '16px auto 0', padding: '0 30px' }}>
@@ -702,6 +707,7 @@ export default function GroupsPage() {
             onSave={handleSaveGroup}
           />
         ))}
+      </div>
       </div>
     </div>
   )

@@ -1,13 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
 import { POINTS, weightedMatchPoints, DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
 import { getActiveLeague } from '@/lib/league'
-import { SearchIcon } from '@/components/ui'
+import { DialogShell, SearchIcon } from '@/components/ui'
 import FlagChip from '@/components/FlagChip'
 import { normalisePosition, POSITION_ORDER } from '@/lib/teams'
 import { fmtTime } from '@/lib/date-format'
@@ -84,7 +83,6 @@ export interface PredictionModalProps {
 
 export default function PredictionModal({ matchId, onClose }: PredictionModalProps) {
   const supabase = createClient()
-  const overlayRef = useRef<HTMLDivElement>(null)
 
   // Match data
   const [match, setMatch] = useState<{
@@ -117,14 +115,6 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
 
   // Countdown
   const [secsLeft, setSecsLeft] = useState<number>(0)
-
-  // Esc to close + body scroll lock
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    document.body.style.overflow = 'hidden'
-    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
-  }, [onClose])
 
   // Load data
   useEffect(() => {
@@ -230,7 +220,7 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
       user_id: userId, match_id: matchId,
       pred_home: h, pred_away: a,
       pred_first_goal_team: firstTeam,
-      pred_first_scorer_id: typeof scorerId === 'number' ? scorerId : null,
+      pred_first_scorer_id: typeof scorerId === 'number' && scorerId !== -1 ? scorerId : null,
       pred_no_scorer: scorerId === 'none',
       pred_total_goals: predTotalGoals,
       pred_goal_diff: allowGdManual ? predGoalDiff : null,
@@ -309,38 +299,17 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
   const isEditing = h != null && a != null && others.some((o) => o.user_id === userId)
 
   /* ─── Render ─────────────────────────────────────── */
-  const modal = (
-    <div
-      ref={overlayRef}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Match prediction"
-      onClick={(e) => { if (e.target === overlayRef.current) onClose() }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 60,
-        background: 'rgba(0,0,0,0.62)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
-        animation: 'mcFade 0.18s ease',
-      }}
+  return (
+    <DialogShell
+      open
+      onClose={onClose}
+      ariaLabel="Match prediction"
+      maxWidth="max-w-[560px]"
+      zIndexClassName="z-[60]"
+      portal
+      align="center"
+      panelClassName="max-h-[90vh] overflow-y-auto rounded-[20px] border border-border bg-card shadow-2xl"
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 560,
-          maxHeight: '90vh',
-          overflowY: 'auto',
-          background: 'rgb(var(--card))',
-          border: '1px solid rgb(var(--border))',
-          borderRadius: 20,
-          boxShadow: '0 30px 80px -20px rgba(0,0,0,0.65)',
-          animation: 'mcIn 0.22s cubic-bezier(0.16,1,0.3,1)',
-        }}
-      >
         {/* ── Card Header (always visible) ─────────── */}
         <div style={{
           padding: '20px 22px',
@@ -1163,7 +1132,7 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
                           : pts > 0
                             ? 'rgb(var(--gold))'
                             : 'rgb(var(--faint))'
-                      const ptsText = pts != null ? `+${pts}` : '—'
+                      const ptsText = pts != null ? `${pts > 0 ? '+' : ''}${pts}` : '—'
                       return (
                         <div
                           key={o.user_id}
@@ -1265,8 +1234,6 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
             )}
           </>
         )}
-      </div>
-    </div>
+    </DialogShell>
   )
-  return createPortal(modal, document.body)
 }
