@@ -220,7 +220,7 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
       user_id: userId, match_id: matchId,
       pred_home: h, pred_away: a,
       pred_first_goal_team: firstTeam,
-      pred_first_scorer_id: typeof scorerId === 'number' ? scorerId : null,
+      pred_first_scorer_id: typeof scorerId === 'number' && scorerId !== -1 ? scorerId : null,
       pred_no_scorer: scorerId === 'none',
       pred_total_goals: predTotalGoals,
       pred_goal_diff: allowGdManual ? predGoalDiff : null,
@@ -1132,7 +1132,7 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
                           : pts > 0
                             ? 'rgb(var(--gold))'
                             : 'rgb(var(--faint))'
-                      const ptsText = pts != null ? `+${pts}` : '—'
+                      const ptsText = pts != null ? `${pts > 0 ? '+' : ''}${pts}` : '—'
                       return (
                         <div
                           key={o.user_id}

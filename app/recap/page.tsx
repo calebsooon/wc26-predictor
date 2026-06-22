@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import type { GameweekRecap } from '@/lib/gameweek-recap'
@@ -12,6 +12,14 @@ import { RecapShareActions } from '@/components/RecapShareActions'
 type RecapPayload = { recap: GameweekRecap; money: boolean }
 
 export default function RecapPage() {
+  return (
+    <Suspense fallback={<div className="space-y-4"><Skeleton className="h-8 w-40" /><Skeleton className="h-12 rounded-xl" /><Skeleton className="h-72 rounded-xl" /></div>}>
+      <RecapContent />
+    </Suspense>
+  )
+}
+
+function RecapContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const requested = Number(searchParams.get('gw'))

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
@@ -8,6 +8,14 @@ import { getMyLeagues, setActiveLeague, isMoneyLeague, type League } from '@/lib
 import { Card, Button, PageHeader, Skeleton, TrophyIcon, LeagueBadge } from '@/components/ui'
 
 export default function JoinPage() {
+  return (
+    <Suspense fallback={<div className="space-y-4"><Skeleton className="h-12 rounded-xl" /><Skeleton className="h-48 rounded-xl" /></div>}>
+      <JoinContent />
+    </Suspense>
+  )
+}
+
+function JoinContent() {
   const supabase = createClient()
   const router = useRouter()
   const searchParams = useSearchParams()

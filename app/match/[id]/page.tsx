@@ -883,9 +883,11 @@ function PicksWall({
           : null
         const firstScorerName = o.pred_no_scorer
           ? 'No scorer'
-          : o.pred_first_scorer_id
-            ? (players.find((p) => p.id === o.pred_first_scorer_id)?.name ?? `#${o.pred_first_scorer_id}`)
-            : null
+          : o.pred_first_scorer_id === -1
+            ? 'Own goal'
+            : o.pred_first_scorer_id
+              ? (players.find((p) => p.id === o.pred_first_scorer_id)?.name ?? `#${o.pred_first_scorer_id}`)
+              : null
 
         return (
           <div
@@ -912,7 +914,7 @@ function PicksWall({
               {scoredPred ? (
                 <span className={`text-[15px] font-extrabold tabular-nums shrink-0 ${ptColor}`}
                   style={{ fontFamily: 'Schibsted Grotesk, sans-serif' }}>
-                  +{displayPts}
+                  {displayPts != null && displayPts > 0 ? '+' : ''}{displayPts}
                 </span>
               ) : (
                 <span className="text-[11px] text-texts font-medium shrink-0">pending</span>
