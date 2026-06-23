@@ -1,4 +1,4 @@
-// Resolve external team names (Kickoffapi / football-data.org) to our 3-letter
+// Resolve external provider team names to our 3-letter
 // codes, and group our players by team. Shared by the live-data routes.
 
 import { TEAMS } from '@/lib/teams'

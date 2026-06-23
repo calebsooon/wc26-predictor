@@ -425,10 +425,11 @@ export default function LeaderboardPage() {
         />
       ) : (
         <>
-          {/* GW pill tabs + CSV export */}
-          <div className="flex items-center gap-3">
+          {/* Keep the scrollable gameweek chooser separate from its actions on phones.
+              Combining them in one row left the controls competing for the same viewport. */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
             <div
-              className="flex-1 overflow-x-auto no-scrollbar -mx-4 px-4"
+              className="min-w-0 overflow-x-auto no-scrollbar pb-1 sm:flex-1 sm:pb-0"
               style={{ display: 'flex', alignItems: 'center' }}
             >
               <div style={{ display: 'flex', gap: 8, paddingBottom: 4, flexShrink: 0 }}>
@@ -462,19 +463,21 @@ export default function LeaderboardPage() {
                 })}
               </div>
             </div>
-            <button
-              onClick={() => { if (tab !== 'all') window.location.assign(`/recap?gw=${tab}`) }}
-              disabled={tab === 'all'}
-              className="shrink-0 text-[12px] font-bold text-texts hover:text-textp disabled:opacity-35 px-3 py-1.5 rounded-lg border border-border hover:border-texts/40 transition-colors"
-            >
-              Recap
-            </button>
-            <button
-              onClick={() => downloadCSV(board, gwLabel, isMoney)}
-              className="shrink-0 flex items-center gap-1.5 text-[12px] font-bold text-texts hover:text-textp px-3 py-1.5 rounded-lg border border-border hover:border-texts/40 transition-colors"
-            >
-              ↓ CSV
-            </button>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+              <button
+                onClick={() => { if (tab !== 'all') window.location.assign(`/recap?gw=${tab}`) }}
+                disabled={tab === 'all'}
+                className="text-[12px] font-bold text-texts hover:text-textp disabled:opacity-35 px-3 py-1.5 rounded-lg border border-border hover:border-texts/40 transition-colors"
+              >
+                Recap
+              </button>
+              <button
+                onClick={() => downloadCSV(board, gwLabel, isMoney)}
+                className="flex items-center justify-center gap-1.5 text-[12px] font-bold text-texts hover:text-textp px-3 py-1.5 rounded-lg border border-border hover:border-texts/40 transition-colors"
+              >
+                ↓ CSV
+              </button>
+            </div>
           </div>
 
           {board.length === 0 ? (
@@ -483,16 +486,7 @@ export default function LeaderboardPage() {
             <>
               {/* Podium */}
               {podium.length >= 3 && (
-                <div
-                  style={{
-                    background: 'rgb(var(--card))',
-                    border: '1px solid rgb(var(--border))',
-                    borderRadius: 20,
-                    padding: '52px 24px 0',
-                    position: 'relative',
-                    overflow: 'hidden',
-                  }}
-                >
+                <div className="relative overflow-hidden rounded-[20px] border border-border bg-card px-3 pt-9 sm:px-6 sm:pt-[52px]">
                   {/* Gold glow */}
                   <div style={{
                     position: 'absolute',
@@ -501,14 +495,7 @@ export default function LeaderboardPage() {
                     pointerEvents: 'none',
                   }} />
 
-                  <div style={{
-                    maxWidth: 620,
-                    margin: '0 auto',
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr 1fr',
-                    alignItems: 'end',
-                    gap: 0,
-                  }}>
+                  <div className="mx-auto grid max-w-[620px] grid-cols-3 items-end">
                     {/* 2nd place */}
                     <PodiumSlot
                       player={podium[1]}
@@ -545,18 +532,12 @@ export default function LeaderboardPage() {
                 overflow: 'hidden',
               }}>
                 {/* Table header */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '10px 16px',
-                  borderBottom: '1px solid rgb(var(--border))',
-                  gap: 14,
-                }}>
+                <div className="flex items-center gap-2 border-b border-border px-3 py-2.5 sm:gap-3.5 sm:px-4">
                   <span style={{ width: 22, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'center', flexShrink: 0 }}>#</span>
                   {hasSnapshots && <span className="hidden sm:block" style={{ width: 18, flexShrink: 0 }} />}
                   <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))' }}>Player</span>
                   <span className="hidden sm:block" style={{ width: 90, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'center', flexShrink: 0 }}>Exact</span>
-                  <span style={{ width: 60, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'right', flexShrink: 0 }}>{tab === 'all' ? 'Points' : 'GW Pts'}</span>
+                  <span className="w-[46px] shrink-0 text-right text-[10px] font-bold text-faint sm:w-[60px] sm:text-[11px]">{tab === 'all' ? 'Points' : 'GW Pts'}</span>
                   {isMoney && <span className="hidden sm:block" style={{ width: 64, fontSize: 11, fontWeight: 700, color: 'rgb(var(--faint))', textAlign: 'right', flexShrink: 0 }}>Prize</span>}
                 </div>
 
@@ -579,13 +560,8 @@ export default function LeaderboardPage() {
                     return (
                       <div
                         key={p.id}
+                        className="my-0.5 flex items-center gap-2 rounded-[13px] px-3 py-3 sm:gap-3.5 sm:px-4"
                         style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 14,
-                          padding: '12px 16px',
-                          borderRadius: 13,
-                          margin: '2px 0',
                           background: p.you ? 'rgba(var(--primary),0.10)' : undefined,
                         }}
                       >
@@ -620,12 +596,12 @@ export default function LeaderboardPage() {
                         )}
 
                         {/* Avatar */}
-                        <Avatar name={p.name} src={p.avatar} size={34} you={p.you} />
+                        <Avatar name={p.name} src={p.avatar} size={30} you={p.you} />
 
                         {/* Name + accuracy block */}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 14, fontWeight: 700, color: 'rgb(var(--textp))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+                            <span className="min-w-0 truncate text-[13px] font-bold text-textp sm:text-sm">
                               {p.name}
                             </span>
                             {p.you && (
@@ -645,7 +621,7 @@ export default function LeaderboardPage() {
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: 11, color: 'rgb(var(--texts))', marginTop: 1 }}>
+                          <div className="mt-px text-[10px] text-texts sm:text-[11px]">
                             {p.acc ?? 0}% acc · {p.exact ?? 0} exact
                           </div>
                         </div>
@@ -663,13 +639,8 @@ export default function LeaderboardPage() {
                         </span>
 
                         {/* Points — on mobile, also shows prize underneath */}
-                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                          <div style={{
-                            fontSize: 16,
-                            fontWeight: 800,
-                            fontFamily: 'Schibsted Grotesk, sans-serif',
-                            color: 'rgb(var(--textp))',
-                          }}>
+                        <div className="w-[46px] shrink-0 text-right sm:w-auto">
+                          <div className="font-display text-[15px] font-extrabold text-textp sm:text-base">
                             {p.pts}
                           </div>
                           {isMoney && prizeLabel && (
@@ -800,10 +771,12 @@ function PodiumSlot({ player, place, isMoney, tab }: { player: LBRow; place: 1 |
   const tone = prizeTone(prizeAmt)
   const prizeColor = tone === 'green' ? 'rgb(var(--success))' : tone === 'red' ? 'rgb(var(--error))' : 'rgb(var(--texts))'
 
-  const avatarSize = place === 1 ? 70 : place === 2 ? 58 : 54
-  const podiumH = place === 1 ? 132 : place === 2 ? 96 : 72
-  const numSize = place === 1 ? 38 : place === 2 ? 30 : 26
-  const ptsSize = place === 1 ? 26 : place === 2 ? 22 : 18
+  // These remain readable on desktop but leave every podium column viable at
+  // narrow phone widths, including long names and the optional prize label.
+  const avatarSize = place === 1 ? 62 : place === 2 ? 52 : 48
+  const podiumH = place === 1 ? 118 : place === 2 ? 88 : 68
+  const numSize = place === 1 ? 34 : place === 2 ? 28 : 24
+  const ptsSize = place === 1 ? 24 : place === 2 ? 20 : 17
 
   const borderColor =
     place === 1 ? 'rgb(var(--gold))' :
@@ -836,7 +809,7 @@ function PodiumSlot({ player, place, isMoney, tab }: { player: LBRow; place: 1 |
     place === 1 ? '0 0 0 4px rgb(var(--gold) / 0.16)' : undefined
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 8px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 4px' }}>
       {/* Crown for 1st */}
       {place === 1 && (
         <svg viewBox="0 0 24 24" fill="currentColor" style={{ color: 'rgb(var(--gold))', width: 24, height: 24, marginBottom: 4 }}>
@@ -858,7 +831,7 @@ function PodiumSlot({ player, place, isMoney, tab }: { player: LBRow; place: 1 |
       </div>
 
       {/* Name */}
-      <div style={{ fontSize: 14, fontWeight: 700, marginTop: 8, textAlign: 'center', color: 'rgb(var(--textp))', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700, marginTop: 7, textAlign: 'center', color: 'rgb(var(--textp))', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {player.name}
       </div>
 
@@ -895,7 +868,7 @@ function PodiumSlot({ player, place, isMoney, tab }: { player: LBRow; place: 1 |
       <div style={{
         width: '100%',
         height: podiumH,
-        marginTop: 10,
+        marginTop: 8,
         borderRadius: '13px 13px 0 0',
         display: 'flex',
         flexDirection: 'column',
@@ -911,7 +884,7 @@ function PodiumSlot({ player, place, isMoney, tab }: { player: LBRow; place: 1 |
         </span>
         {isMoney && (
           <>
-            <span style={{ fontSize: 13, fontWeight: 700, color: prizeColor }}>{prizeLabel}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: prizeColor }}>{prizeLabel}</span>
             <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'rgb(var(--texts))' }}>prize</span>
           </>
         )}
@@ -1006,7 +979,7 @@ function StatHighlights({ board, rows, weights }: { board: LBRow[]; rows: PredRo
   if (cards.length === 0) return null
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-[14px]">
+    <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 gap-[14px]">
       {cards.map((card) => (
         <div
           key={card.label}
@@ -1117,15 +1090,15 @@ function PicksView({
             </div>
 
             {/* Teams */}
-            <div className="flex items-center justify-between mb-3">
-              <TeamLink code={home.code} className="flex items-center gap-2 group">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <TeamLink code={home.code} className="flex min-w-0 flex-1 items-center gap-2 group">
                 <FlagChip code={home.code} w={24} h={16} r={3} />
-                <span className="font-bold text-textp">{home.name}</span>
+                <span className="truncate font-bold text-textp">{home.name}</span>
               </TeamLink>
-              <span className="text-texts font-bold text-sm px-2">vs</span>
-              <TeamLink code={away.code} className="flex items-center gap-2 flex-row-reverse group">
+              <span className="shrink-0 px-1 text-sm font-bold text-texts sm:px-2">vs</span>
+              <TeamLink code={away.code} className="flex min-w-0 flex-1 items-center gap-2 flex-row-reverse group">
                 <FlagChip code={away.code} w={24} h={16} r={3} />
-                <span className="font-bold text-textp text-right">{away.name}</span>
+                <span className="truncate text-right font-bold text-textp">{away.name}</span>
               </TeamLink>
             </div>
 

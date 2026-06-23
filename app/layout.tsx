@@ -49,6 +49,9 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: '#0B0C14',
+  // Lets the safe-area padding in AppShell protect the bottom navigation on
+  // notched devices when the app is installed in standalone mode.
+  viewportFit: 'cover',
 };
 
 // Set the theme class before paint to avoid a flash of the wrong theme.

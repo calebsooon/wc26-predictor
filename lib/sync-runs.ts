@@ -16,6 +16,21 @@ export type SyncRunFinish = {
   errorSummary?: string | null
 }
 
+/** Turn Supabase and fetch errors into a useful, compact sync-run message. */
+export function describeSyncError(error: unknown) {
+  if (error instanceof Error) return error.message
+  if (error && typeof error === 'object') {
+    const value = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown }
+    const parts = [value.message, value.details, value.hint, value.code]
+      .filter((part): part is string | number => typeof part === 'string' || typeof part === 'number')
+      .map(String)
+    if (parts.length) return parts.join(' · ')
+    try { return JSON.stringify(error) }
+    catch { return 'Unknown provider error' }
+  }
+  return String(error)
+}
+
 export async function startSyncRun(service: SupabaseClient, kind: SyncKind, trigger: SyncTrigger, start: SyncRunStart = {}) {
   const { data, error } = await service
     .from('sync_runs')

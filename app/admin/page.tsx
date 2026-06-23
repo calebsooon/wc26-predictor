@@ -903,14 +903,16 @@ function FifaSyncDashboard() {
   }
 
   const commands = [
-    { label: 'Daily refresh', command: 'npm run data:fifa:daily', sub: 'Nearby matches + Golden Boot' },
+    { label: 'Daily refresh', command: 'npm run data:fifa:daily', sub: 'Fixtures, nearby XI/stats, finished goals/cards, and Golden Boot' },
+    { label: 'Teams + media', command: 'npm run data:fifa-teams', sub: 'All 48 squads, team stats, flags, crests, and FIFA player images' },
     { label: 'Fixtures only', command: 'npm run data:fifa:fixtures', sub: 'All FIFA IDs, times, status, and venue data' },
-    { label: 'Full backfill', command: 'npm run data:fifa:backfill', sub: 'All published team sheets and stat packs' },
+    { label: 'Full backfill', command: 'npm run data:fifa:backfill', sub: 'Historical XI, substitutions, stats, goals, and cards' },
+    { label: 'Database audit', command: 'npm run data:audit', sub: 'Read-only coverage and sync-health report; no FIFA call or writes' },
   ]
 
   return <Card className="p-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <SectionHeader title="FIFA sync cockpit" sub="Database health for the local FIFA importer. No provider call is made here." />
+      <SectionHeader title="FIFA sync cockpit" sub="Database health and copyable local commands. Opening this panel never calls FIFA." />
       <Button size="sm" variant="outline" onClick={() => void load()} disabled={loading}>{loading ? 'Checking…' : 'Refresh status'}</Button>
     </div>
     {loading || !summary ? <Skeleton className="mt-3 h-24 rounded-xl" /> : <>
@@ -927,15 +929,15 @@ function FifaSyncDashboard() {
       </div>
       <div className="mt-3 rounded-xl border border-border bg-surface px-3 py-2.5">
         <p className="text-[10px] font-bold uppercase tracking-wider text-texts">Latest import runs</p>
-        <div className="mt-2 grid gap-1.5 sm:grid-cols-3">
-          {(['fifa_matches', 'fifa_teams', 'golden_boot'] as const).map((kind) => {
+        <div className="mt-2 grid gap-1.5 sm:grid-cols-2 xl:grid-cols-4">
+          {(['fifa_matches', 'events', 'fifa_teams', 'golden_boot'] as const).map((kind) => {
             const run = summary.latest[kind]
             const tone = run?.status === 'success' ? 'text-primary' : run?.status === 'failed' ? 'text-error' : run?.status === 'partial' ? 'text-gold' : 'text-texts'
             return <div key={kind} className="min-w-0"><p className="text-[10px] font-bold uppercase text-texts">{kind.replace('_', ' ')}</p><p className={`mt-0.5 truncate text-[11px] font-bold ${tone}`}>{run ? `${run.status} · ${run.records_written ?? 0} writes` : 'Not run'}</p>{run?.error_summary && <p className="mt-0.5 truncate text-[10px] text-error" title={run.error_summary}>{run.error_summary}</p>}</div>
           })}
         </div>
       </div>
-      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
         {commands.map((item) => <button key={item.command} onClick={() => void copy(item.command)} className="rounded-xl border border-border bg-surface p-3 text-left transition hover:border-primary/45 hover:bg-primary/[0.04]">
           <p className="text-xs font-bold text-textp">{item.label}</p><p className="mt-0.5 text-[10px] text-texts">{item.sub}</p><code className="mt-2 block truncate text-[10px] font-bold text-primary">{item.command}</code>
         </button>)}
@@ -985,9 +987,8 @@ function AdminActions() {
   }
 
   const actions = [
-    { key: 'sync', label: 'Sync results + scorers', sub: 'Pull finished scores AND first goalscorer from Kickoffapi, then auto-score', url: '/api/sync-results' },
-    { key: 'events', label: 'Sync live substitutions', sub: 'Refresh verified player changes for live match centres', url: '/api/sync-events' },
-    { key: 'injuries', label: 'Sync injuries', sub: 'Flag injured / suspended players from the Kickoffapi feed', url: '/api/sync-injuries' },
+    { key: 'sync', label: 'Sync final results', sub: 'Pull finished FIFA scores, then auto-score all predictions', url: '/api/sync-results' },
+    { key: 'events', label: 'Sync recent goals + cards', sub: 'Pull FIFA goal and card events for matches finished in the last six hours', url: '/api/sync-events' },
     { key: 'snapshot', label: 'Snapshot leaderboard', sub: 'Records current rank positions for movement arrows', url: '/api/snapshot-ranks' },
     { key: 'groups', label: 'Score group predictions', sub: 'Awards points for correct group order picks (all complete groups)', url: '/api/score-groups' },
     { key: 'tournament', label: 'Score tournament picks', sub: 'Awards points for champion / finalist / semi / quarter picks', url: '/api/score-tournament' },
@@ -997,8 +998,8 @@ function AdminActions() {
   return (
     <Card className="p-4">
       <SectionHeader title="Tournament actions" sub="Run these after results are in." />
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 mb-4">
-        {(['results', 'lineups', 'events', 'injuries'] as const).map((kind) => {
+      <div className="grid grid-cols-2 gap-2 mt-3 mb-4">
+        {(['results', 'events'] as const).map((kind) => {
           const run = health[kind]
           const tone = run?.status === 'success' ? 'text-primary' : run?.status === 'partial' ? 'text-gold' : run?.status === 'failed' ? 'text-error' : 'text-texts'
           return (

@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto'
 import { scoreMatchPredictions } from '@/lib/score-sync'
 import { snapshotLeagueRanks } from '@/lib/snapshot'
 import { getTeam } from '@/lib/teams'
-import { finishSyncRun, startSyncRun } from '@/lib/sync-runs'
+import { describeSyncError, finishSyncRun, startSyncRun } from '@/lib/sync-runs'
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
@@ -465,7 +465,7 @@ async function main() {
         sourceUpdatedAt: latestSourceUpdatedAt,
         recordsRead,
         recordsWritten,
-        errorSummary: error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000),
+        errorSummary: describeSyncError(error).slice(0, 1000),
       }).catch(() => undefined)
     }
     throw error

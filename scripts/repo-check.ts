@@ -21,16 +21,45 @@ if (new Set(migrations.map((file) => file.slice(0, 14))).size !== migrations.len
 const legacyResultsRoute = join(root, 'app/api/fetch-results/route.ts')
 if (existsSync(legacyResultsRoute)) failures.push('Legacy app/api/fetch-results route still exists; use sync-results only.')
 
+for (const path of [
+  'lib/kickoff.ts',
+  'app/api/sync-injuries/route.ts',
+  'scripts/sync-injuries.ts',
+  'scripts/sync-lineups.ts',
+  'scripts/sync-results.ts',
+  'scripts/cache-player-photos.ts',
+  'scripts/fill-missing-photos.ts',
+]) {
+  if (existsSync(join(root, path))) failures.push(`Retired provider file still exists: ${path}`)
+}
+
+const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { scripts?: Record<string, string> }
+const scripts = packageJson.scripts ?? {}
+if (!scripts['data:fifa:daily']?.includes('data:fifa:events')) {
+  failures.push('data:fifa:daily must include the official FIFA event sync.')
+}
+if (!scripts['data:fifa:backfill']?.includes('sync-events.ts')) {
+  failures.push('data:fifa:backfill must include the historical FIFA event sync.')
+}
+
 const sourceFiles = [
   ...walk(join(root, 'app')),
   ...walk(join(root, 'lib')),
   ...walk(join(root, 'scripts')),
   join(root, 'next.config.mjs'),
-].filter((file) => /\.(?:ts|tsx|mjs)$/.test(file))
+].filter((file) => /\.(?:ts|tsx|mjs)$/.test(file) && file !== join(root, 'scripts/repo-check.ts'))
 const envRefs = new Set<string>()
 for (const file of sourceFiles) {
   const content = readFileSync(file, 'utf8')
+  if (/kickoffapi/i.test(content)) failures.push(`Retired Kickoffapi reference in ${file.replace(`${root}/`, '')}`)
   for (const match of content.matchAll(/process\.env\.([A-Z0-9_]+)/g)) envRefs.add(match[1])
+}
+
+const readme = readFileSync(join(root, 'README.md'), 'utf8')
+if (/kickoffapi/i.test(readme)) failures.push('README still describes the retired Kickoffapi integration.')
+for (const command of new Set(Array.from(readme.matchAll(/npm run ([\w:-]+)/g), (match) => match[1] ?? ''))) {
+  if (command.endsWith(':')) continue // `data:fifa:*` is intentional shorthand.
+  if (!scripts[command]) failures.push(`README documents an unknown npm command: ${command}`)
 }
 
 const documentedEnv = new Set(
@@ -47,6 +76,10 @@ for (const key of envRefs) {
 const gitignore = readFileSync(join(root, '.gitignore'), 'utf8')
 for (const requiredPattern of ['/public/sw.js', '/public/workbox-*.js', '/public/worker-*.js']) {
   if (!gitignore.includes(requiredPattern)) failures.push(`Generated PWA asset is not ignored: ${requiredPattern}`)
+}
+
+if (/KICKOFF_API_KEY/.test(readFileSync(join(root, '.env.example'), 'utf8'))) {
+  failures.push('.env.example still documents the retired KICKOFF_API_KEY.')
 }
 
 if (failures.length) {

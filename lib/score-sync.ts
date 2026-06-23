@@ -1,5 +1,5 @@
 // Shared scoring helper: re-score every prediction for one match against its
-// final result + first scorer. Used by the Kickoffapi sync route.
+// final result + first scorer. Shared by the FIFA result sync flows.
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { scorePrediction, type PredictionInput } from '@/lib/scoring'
 

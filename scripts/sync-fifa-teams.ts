@@ -1,6 +1,7 @@
 /**
  * One command to refresh FIFA's team centre cache. It is deliberately the
- * only place the app contacts FIFA; page views read Supabase only.
+ * only place the app refreshes FIFA's team-centre cache; page views read
+ * Supabase only.
  *
  * Use DRY_RUN=1 to inspect roster changes without writing.
  * Use SKIP_IMAGES=1 for a faster metadata/stats-only refresh.
@@ -9,7 +10,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getTeam } from '@/lib/teams'
 import { nameKey } from '@/lib/normalize'
 import { teamNameToCode } from '@/lib/team-match'
-import { finishSyncRun, startSyncRun } from '@/lib/sync-runs'
+import { describeSyncError, finishSyncRun, startSyncRun } from '@/lib/sync-runs'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
@@ -251,15 +252,17 @@ async function main() {
   const uniqueRows = Array.from(new Map(playerRows.map((row) => [Number(row.fifa_player_id), row])).values())
   const uniqueImageJobs = Array.from(new Map(imageJobs.map((job) => [job.fifaId, job])).values())
   const imageFailures: number[] = []
-  const images = await mapLimit(uniqueImageJobs, 4, async (job) => {
-    try {
-      return [job.fifaId, await cacheImage(job.fifaId, job.source, job.sourceUpdatedAt, job.existing)] as const
-    } catch (error) {
-      imageFailures.push(job.fifaId)
-      console.warn(`  image ${job.fifaId} skipped: ${error instanceof Error ? error.message : String(error)}`)
-      return [job.fifaId, job.existing?.photo_url ?? null] as const
-    }
-  })
+  const images = DRY_RUN
+    ? uniqueImageJobs.map((job) => [job.fifaId, job.existing?.photo_url ?? null] as const)
+    : await mapLimit(uniqueImageJobs, 4, async (job) => {
+      try {
+        return [job.fifaId, await cacheImage(job.fifaId, job.source, job.sourceUpdatedAt, job.existing)] as const
+      } catch (error) {
+        imageFailures.push(job.fifaId)
+        console.warn(`  image ${job.fifaId} skipped: ${describeSyncError(error)}`)
+        return [job.fifaId, job.existing?.photo_url ?? null] as const
+      }
+    })
   const imageById = new Map(images)
   for (const row of uniqueRows) row.photo_url = imageById.get(Number(row.fifa_player_id)) ?? row.photo_url
 
@@ -268,10 +271,12 @@ async function main() {
     const cachedTeam = byTeamCode.get(code)
     let flagUrl: string | null = cachedTeam?.flag_url ?? null
     let crestUrl: string | null = cachedTeam?.crest_url ?? null
-    try { flagUrl = await cacheTeamImage(code, 'flag', image(team.images, 'urn:gd:image:class:logo:fdcp'), team.updatedAt, cachedTeam) }
-    catch (error) { console.warn(`  ${code} flag skipped: ${error instanceof Error ? error.message : String(error)}`) }
-    try { crestUrl = await cacheTeamImage(code, 'crest', image(team.images, 'urn:gd:image:class:logo:fdh'), team.updatedAt, cachedTeam) }
-    catch (error) { console.warn(`  ${code} crest skipped: ${error instanceof Error ? error.message : String(error)}`) }
+    if (!DRY_RUN) {
+      try { flagUrl = await cacheTeamImage(code, 'flag', image(team.images, 'urn:gd:image:class:logo:fdcp'), team.updatedAt, cachedTeam) }
+      catch (error) { console.warn(`  ${code} flag skipped: ${describeSyncError(error)}`) }
+      try { crestUrl = await cacheTeamImage(code, 'crest', image(team.images, 'urn:gd:image:class:logo:fdh'), team.updatedAt, cachedTeam) }
+      catch (error) { console.warn(`  ${code} crest skipped: ${describeSyncError(error)}`) }
+    }
     return {
       code,
       fifa_team_id: team._externalId,
@@ -300,7 +305,7 @@ async function main() {
   if (runId) await finishSyncRun(supabase, runId, 'success', { teams: teamRows.length, players: uniqueRows.length, unmatchedPlayers: unmatched, imageCandidates: uniqueImageJobs.length, imageFailures: imageFailures.length, skipImages: SKIP_IMAGES }, { sourceUpdatedAt: latestSourceUpdatedAt, recordsRead, recordsWritten })
   console.log('Done — FIFA team, roster, stats, and optimized player-image cache updated in Supabase.')
   } catch (error) {
-    if (runId) await finishSyncRun(supabase, runId, 'failed', { skipImages: SKIP_IMAGES }, { sourceUpdatedAt: latestSourceUpdatedAt, recordsRead, recordsWritten, errorSummary: error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000) }).catch(() => undefined)
+    if (runId) await finishSyncRun(supabase, runId, 'failed', { skipImages: SKIP_IMAGES }, { sourceUpdatedAt: latestSourceUpdatedAt, recordsRead, recordsWritten, errorSummary: describeSyncError(error).slice(0, 1000) }).catch(() => undefined)
     throw error
   }
 }

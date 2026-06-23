@@ -1,6 +1,0 @@
-[
-  { "time": 8, "teamId": 1, "type": "Goal", "detail": "Own Goal", "playerName": "Own Goal" },
-  { "time": 29, "teamId": 1, "type": "Card", "detail": "Yellow Card", "playerName": "Example Player" },
-  { "time": 37, "teamId": 2, "type": "Goal", "detail": "Normal Goal", "playerName": "First Credited Scorer" },
-  { "time": 73, "teamId": 1, "type": "Goal", "detail": "Penalty", "playerName": "Later Scorer" }
-]

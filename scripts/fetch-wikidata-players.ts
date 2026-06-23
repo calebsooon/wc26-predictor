@@ -151,7 +151,9 @@ async function main() {
     }
     const update: Record<string, unknown> = {}
     if (dob) update.dob = dob
-    if (photo_url) update.photo_url = photo_url
+    // Never overwrite an existing photo — FIFA card images take priority
+    const existingPhoto = roster.find((p) => p.id === r.id)?.photo_url ?? null
+    if (photo_url && !existingPhoto) update.photo_url = photo_url
     if (club) update.club = club
     if (Object.keys(update).length === 0) continue
     const { error: e } = await supabase.from('players').update(update).eq('id', r.id)

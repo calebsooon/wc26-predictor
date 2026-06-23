@@ -30,7 +30,7 @@ async function main() {
     }
   }
 
-  const optional = ['KICKOFF_API_KEY', 'CRON_SECRET', 'NEXT_PUBLIC_SITE_URL', 'NEXT_PUBLIC_VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY']
+  const optional = ['CRON_SECRET', 'NEXT_PUBLIC_SITE_URL', 'NEXT_PUBLIC_VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY']
   const missingOptional = optional.filter((key) => !process.env[key])
   if (missingOptional.length) console.log(`Optional launch features disabled until configured: ${missingOptional.join(', ')}`)
 

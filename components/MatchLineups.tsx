@@ -489,18 +489,18 @@ export function MatchLineups({
   return (
     <div className="space-y-4">
       {/* Formation header */}
-      <div className="flex items-center justify-between gap-3 text-[11px] font-bold">
-        <span className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 text-[11px] font-bold">
+        <span className="flex min-w-0 flex-1 items-center gap-1.5">
           <FlagChip code={homeCode} w={16} h={11} r={2} />
-          <span className="text-textp">{getTeam(homeCode).name}</span>
-          {currentHomeFormation && <span className="text-faint ml-1">{currentHomeFormation}</span>}
+          <span className="truncate text-textp">{getTeam(homeCode).name}</span>
+          {currentHomeFormation && <span className="ml-1 hidden shrink-0 text-faint min-[390px]:inline">{currentHomeFormation}</span>}
         </span>
-        <span className="flex items-center gap-1.5">
-          {currentAwayFormation && <span className="text-faint mr-1">{currentAwayFormation}</span>}
-          <span className="text-textp">{getTeam(awayCode).name}</span>
+        <span className="flex min-w-0 flex-1 items-center justify-end gap-1.5 text-right">
+          {currentAwayFormation && <span className="mr-1 hidden shrink-0 text-faint min-[390px]:inline">{currentAwayFormation}</span>}
+          <span className="truncate text-textp">{getTeam(awayCode).name}</span>
           <FlagChip code={awayCode} w={16} h={11} r={2} />
         </span>
-        <button onClick={() => setFocusPitch(true)} className="shrink-0 rounded-lg border border-border bg-surface px-2 py-1 text-[10px] font-bold text-texts hover:text-textp" title="Open a larger pitch view">Focus pitch ↗</button>
+        <button onClick={() => setFocusPitch(true)} className="w-full shrink-0 rounded-lg border border-border bg-surface px-2 py-1.5 text-[10px] font-bold text-texts hover:text-textp sm:w-auto sm:py-1" title="Open a larger pitch view">Focus pitch ↗</button>
       </div>
 
       {/* ── Desktop: pitch centred + subs 2-col below ── */}
@@ -530,13 +530,13 @@ export function MatchLineups({
 
       {/* ── Mobile: full-width pitch + compact subs below ── */}
       <div className="sm:hidden space-y-3">
-        <Pitch {...pitchProps} style={{ minHeight: 570 }} />
+        <Pitch {...pitchProps} style={{ minHeight: 'clamp(600px, 172vw, 690px)' }} />
 
         {hasEvents && (
           <Timeline events={events} subs={[...home.applied, ...away.applied]} formationChanges={formationChanges} rows={rows} homeCode={homeCode} />
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-3 min-[420px]:grid-cols-2">
           {[
             { code: homeCode, formation: currentHomeFormation, applied: home.applied, bench: home.bench },
             { code: awayCode, formation: currentAwayFormation, applied: away.applied, bench: away.bench },

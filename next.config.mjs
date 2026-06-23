@@ -50,12 +50,6 @@ const nextConfig = {
         pathname: '/**',
       },
       {
-        // Older Golden Boot cache entries may still use the Kickoffapi CDN.
-        protocol: 'https',
-        hostname: 'cdn.kickoffapi.com',
-        pathname: '/**',
-      },
-      {
         // FIFA's published Golden Boot table supplies its player headshots here.
         protocol: 'https',
         hostname: 'digitalhub.fifa.com',

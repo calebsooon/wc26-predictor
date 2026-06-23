@@ -24,7 +24,7 @@ describe('buildGameweekRecap', () => {
       { user_id: 'a', match_id: 'now', pred_home: 2, pred_away: 1, ...hit },
       { user_id: 'b', match_id: 'now', pred_home: 0, pred_away: 0, points_awarded: 0 },
     ] })
-    expect(recap.shareText).toContain('PRIVATE LEAGUE RECAP')
+    expect(recap.shareText).toContain('MATCHDAY · GW2 RECAP')
     expect(recap.shareText).toContain('PODIUM')
     expect(recap.shareText).toContain('My week:')
     expect(recap.headline.length).toBeGreaterThan(10)
