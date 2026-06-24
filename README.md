@@ -565,7 +565,7 @@ flowchart LR
 
 **Data flow**
 
-1. User submits a prediction → client writes to `predictions` via supabase-js (RLS enforces own-row-only writes; predictions are hidden from other members until kickoff)
+1. User submits a prediction → client writes to `predictions` via supabase-js (RLS enforces own-row-only writes, and `BEFORE INSERT/UPDATE` triggers reject writes once the match/group/phase has kicked off; predictions are hidden from other members until kickoff)
 2. Admin enters a result → POST to `/api/score-match` → reads point values from `lib/scoring.ts`, computes per-category breakdown, writes back to each `predictions` row
 3. `lib/leaderboard.ts` aggregates scored predictions — shared between the dashboard mini-table and `/leaderboard`
 4. `lib/prizes.ts` derives the prize snapshot from aggregated standings

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam, TEAMS } from '@/lib/teams'
-import { Skeleton, EmptyState, TrophyIcon } from '@/components/ui'
+import { Skeleton, EmptyState, TrophyIcon, Countdown, LockIcon } from '@/components/ui'
 // Suspense removed — wrapping a useEffect-based component has no effect
 import FlagChip from '@/components/FlagChip'
 import { getActiveLeague } from '@/lib/league'
@@ -284,6 +284,9 @@ function BracketPageInner() {
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
   const saveMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [bracketResults, setBracketResults] = useState<BracketResults>({ champion: null, runner_up: null, semi: [], quarter: [], settled: false })
+  // Phase deadlines: 'pre' locks at the tournament's first kickoff, 'r32' at the
+  // first knockout kickoff. Mirrors the DB-level write guard.
+  const [deadlines, setDeadlines] = useState<{ pre: string | null; r32: string | null }>({ pre: null, r32: null })
 
   useEffect(() => {
     setPhase(searchParams.get('phase') === 'r32' ? 'r32' : 'pre')
@@ -296,6 +299,18 @@ function BracketPageInner() {
 
       // Load active league context
       await getActiveLeague(supabase, user.id)
+
+      // Compute phase lock deadlines from the fixture list.
+      const { data: mData } = await supabase
+        .from('matches')
+        .select('match_date, group_name')
+        .order('match_date')
+      const allMatches = (mData as { match_date: string; group_name: string | null }[] | null) ?? []
+      const firstKnockout = allMatches.find((m) => m.group_name === null)
+      setDeadlines({
+        pre: allMatches.length ? allMatches[0].match_date : null,
+        r32: firstKnockout ? firstKnockout.match_date : null,
+      })
 
       // Load tournament predictions for both phases (include scored pts columns)
       const { data: predData } = await supabase
@@ -367,6 +382,8 @@ function BracketPageInner() {
   }, [phase, predsByPhase])
 
   const pred = draft
+  const phaseDeadline = deadlines[phase]
+  const locked = phaseDeadline != null && new Date(phaseDeadline) <= new Date()
   const { secured, possible } = computePoints(pred, bracketResults)
   const { qf, sf, fin } = buildBracketMatchups(pred)
   const hasAnyPhaseData = Object.values(predsByPhase).some((p) => p.champion || p.runner_up || p.semi.length > 0 || p.quarter.length > 0)
@@ -377,6 +394,7 @@ function BracketPageInner() {
   const runnerUpTeam = pred.runner_up ? getTeam(pred.runner_up) : null
 
   function toggleCode(key: 'quarter' | 'semi', code: string, max: number) {
+    if (locked) return
     setDraft((prev) => {
       const cur = prev[key]
       const next = cur.includes(code)
@@ -399,6 +417,7 @@ function BracketPageInner() {
   }
 
   async function saveBracket() {
+    if (locked) return
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     setSaving(true)
@@ -483,6 +502,23 @@ function BracketPageInner() {
               )
             })}
           </div>
+          {locked ? (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 999,
+              fontSize: '11px', fontWeight: 700, color: 'rgb(var(--coral))',
+              background: 'rgba(var(--coral),0.12)', border: '1px solid rgba(var(--coral),0.25)', whiteSpace: 'nowrap',
+            }}>
+              <LockIcon size={11} /> Locked
+            </span>
+          ) : phaseDeadline ? (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 999,
+              fontSize: '11px', fontWeight: 700, color: 'rgb(var(--texts))',
+              background: 'rgb(var(--surface2))', border: '1px solid rgb(var(--border))', whiteSpace: 'nowrap',
+            }}>
+              Locks in <Countdown kickoff={phaseDeadline} />
+            </span>
+          ) : null}
           <span style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -527,6 +563,25 @@ function BracketPageInner() {
           </div>
         </div>
 
+        {locked ? (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            borderRadius: 14,
+            padding: '14px 16px',
+            background: 'rgba(var(--coral),0.08)',
+            border: '1px solid rgba(var(--coral),0.25)',
+            color: 'rgb(var(--coral))',
+            fontSize: 13,
+            fontWeight: 600,
+          }}>
+            <LockIcon size={16} />
+            <span>
+              The {phase === 'pre' ? 'pre-tournament' : 'post-group stage'} bracket is locked — {phase === 'pre' ? 'the tournament has kicked off' : 'the knockout stage has begun'}. Your picks below are final.
+            </span>
+          </div>
+        ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <PickerSection
@@ -613,6 +668,7 @@ function BracketPageInner() {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* ── Champion hero card ── */}

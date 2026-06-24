@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { getTeam } from '@/lib/teams'
-import { Skeleton, EmptyState } from '@/components/ui'
+import { Skeleton, EmptyState, Countdown, LockIcon } from '@/components/ui'
 import ThemeToggle from '@/components/ThemeToggle'
 import FlagChip from '@/components/FlagChip'
 import { getActiveLeague } from '@/lib/league'
@@ -60,6 +60,20 @@ function buildRanking(matches: Match[], group: string): string[] {
 function isGroupComplete(matches: Match[], group: string): boolean {
   const gMatches = matches.filter((m) => m.group_name === group)
   return gMatches.length > 0 && gMatches.every((m) => m.real_home_score !== null)
+}
+
+// Earliest kickoff in a group — the moment that group's prediction locks.
+function groupLockTime(matches: Match[], group: string): string | null {
+  const dates = matches.filter((m) => m.group_name === group).map((m) => m.match_date)
+  return dates.length ? dates.reduce((a, b) => (a < b ? a : b)) : null
+}
+
+// A group is locked once its first match has kicked off (or any match is
+// flagged locked / already has a result). Mirrors the DB-level guard.
+function isGroupLocked(matches: Match[], group: string): boolean {
+  const lockTime = groupLockTime(matches, group)
+  if (lockTime && new Date(lockTime) <= new Date()) return true
+  return matches.some((m) => m.group_name === group && (m.real_home_score !== null))
 }
 
 // Sort/reorder icon
@@ -133,6 +147,8 @@ interface GroupCardProps {
 
 function GroupCard({ groupName, matches, pred, userId, weights, activeTab, onSave }: GroupCardProps) {
   const settled = isGroupComplete(matches, groupName)
+  const locked = !settled && isGroupLocked(matches, groupName)
+  const lockTime = useMemo(() => groupLockTime(matches, groupName), [matches, groupName])
   const resultRanking = useMemo(() => buildRanking(matches, groupName), [matches, groupName])
   const defaultOrder = useMemo(() => {
     if (pred?.ranked_codes?.length) return pred.ranked_codes
@@ -198,18 +214,39 @@ function GroupCard({ groupName, matches, pred, userId, weights, activeTab, onSav
     }}>
       ✓ +{displayPts} pts
     </span>
+  ) : activeTab === 'pred' && locked ? (
+    <span style={{
+      fontSize: 11,
+      fontWeight: 700,
+      padding: '3px 9px',
+      borderRadius: 20,
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 4,
+      background: 'rgba(var(--coral),0.12)',
+      color: 'rgb(var(--coral))',
+      border: '1px solid rgba(var(--coral),0.28)',
+      fontFamily: 'var(--font-display, inherit)',
+    }}>
+      <LockIcon size={11} /> Locked
+    </span>
   ) : activeTab === 'pred' ? (
     <span style={{
       fontSize: 11,
       fontWeight: 600,
       padding: '3px 9px',
       borderRadius: 20,
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 5,
       background: 'rgb(var(--surface2))',
       color: 'rgb(var(--texts))',
       border: '1px solid rgb(var(--border))',
       fontFamily: 'var(--font-display, inherit)',
     }}>
-      Editable
+      {lockTime
+        ? <>Locks in <Countdown kickoff={lockTime} /></>
+        : 'Editable'}
     </span>
   ) : null
 
@@ -408,16 +445,23 @@ function GroupCard({ groupName, matches, pred, userId, weights, activeTab, onSav
 
                   {settled ? resultLabel : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
-                      <ArrowBtn dir="up" disabled={i === 0} onClick={() => move(i, -1)} />
-                      <ArrowBtn dir="down" disabled={i === displayTeams.length - 1} onClick={() => move(i, 1)} />
+                      <ArrowBtn dir="up" disabled={locked || i === 0} onClick={() => move(i, -1)} />
+                      <ArrowBtn dir="down" disabled={locked || i === displayTeams.length - 1} onClick={() => move(i, 1)} />
                     </div>
                   )}
                 </div>
               )
             })}
 
+            {/* Locked note — group has kicked off, picks are frozen */}
+            {!settled && locked && (
+              <div style={{ padding: '8px 10px 2px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: 'rgb(var(--coral))' }}>
+                <LockIcon size={12} /> Picks locked — Group {groupName} has kicked off
+              </div>
+            )}
+
             {/* Save button row for editable groups */}
-            {!settled && userId && (
+            {!settled && !locked && userId && (
               <div style={{ padding: '6px 10px 2px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
                 {savedMsg && (
                   <span style={{ fontSize: 11, fontWeight: 600, color: savedMsg === 'Saved' ? 'rgb(var(--primary))' : 'rgb(var(--coral))' }}>

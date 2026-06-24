@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createHash } from 'node:crypto'
 import { normaliseFifaGoldenBootActors, type FifaGoldenBootActor, type FifaGoldenBootRow } from '@/lib/golden-boot'
 import { groupPlayersByCode, type RosterPlayer } from '@/lib/team-match'
-import { finishSyncRun, startSyncRun } from '@/lib/sync-runs'
+import { describeSyncError, finishSyncRun, startSyncRun } from '@/lib/sync-runs'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
@@ -134,6 +134,7 @@ async function main() {
   const runId = await startSyncRun(supabase, 'golden_boot', 'cli', { provider: 'fifa', scope: 'published_rankings' })
   let recordsRead = 0
   let recordsWritten = 0
+  let snapshotWarning: string | null = null
   try {
     console.log('Fetching FIFA’s published Golden Boot tables…')
     const [players, token] = await Promise.all([allRosterPlayers(), fifaToken()])
@@ -154,15 +155,40 @@ async function main() {
     }
     const rows = Array.from(stats.values()).filter((row) => row.goals > 0 || row.assists > 0)
     if (rows.length < 10) throw new Error(`FIFA returned only ${rows.length} players with a goal or assist; refusing to replace cached standings`)
+    console.log(`Resolved ${rows.length} published standings rows. Caching headshots…`)
     const media = await cacheGoldenBootPhotos(rows)
+    console.log('Writing cached standings to Supabase…')
     const { error } = await supabase.rpc('replace_golden_boot_stats', { p_rows: rows })
     if (error) throw error
     recordsWritten = rows.length + media.downloaded
-    await saveSnapshot(runId, goalActors, assistActors)
-    await finishSyncRun(supabase, runId, 'success', { rows: rows.length, scorerActors: goalActors.length, assistActors: assistActors.length, cachedImages: media.downloaded }, { recordsRead, recordsWritten })
+    try {
+      await saveSnapshot(runId, goalActors, assistActors)
+    } catch (error) {
+      snapshotWarning = describeSyncError(error).slice(0, 1000)
+      console.warn(`Golden Boot raw snapshot skipped: ${snapshotWarning}`)
+    }
+    await finishSyncRun(
+      supabase,
+      runId,
+      'success',
+      {
+        rows: rows.length,
+        scorerActors: goalActors.length,
+        assistActors: assistActors.length,
+        cachedImages: media.downloaded,
+        snapshotWarning,
+      },
+      { recordsRead, recordsWritten },
+    )
     console.log(`Done — ${rows.length} FIFA-ranked player rows cached from ${goalActors.length} scorer and ${assistActors.length} assist records (${media.downloaded} new Golden Boot images; ${media.candidates} total cached candidates).`)
   } catch (error) {
-    await finishSyncRun(supabase, runId, 'failed', { source: 'published_rankings' }, { recordsRead, recordsWritten, errorSummary: error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000) }).catch(() => undefined)
+    await finishSyncRun(
+      supabase,
+      runId,
+      'failed',
+      { source: 'published_rankings', snapshotWarning },
+      { recordsRead, recordsWritten, errorSummary: describeSyncError(error).slice(0, 1000) },
+    ).catch(() => undefined)
     throw error
   }
 }
