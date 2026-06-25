@@ -25,10 +25,10 @@
 <br/>
 
 <p align="center">
-  <a href="https://youtu.be/IPu3W5JPbZQ">
+  <a href="https://youtu.be/Lr90xLBT0lY">
     <img src="docs/MatchDay-Video-Thumbnail-1280x720.png" alt="Watch the MatchDay demo" width="720" />
   </a><br/>
-  <sub>&#9654; &nbsp;Click to watch the 150-second demo</sub>
+  <sub>&#9654; &nbsp;Click to watch the demo</sub>
 </p>
 
 <br/>
@@ -99,7 +99,7 @@ Points accumulate through the group stage and all knockout rounds. Supabase Real
 
 ![](https://img.shields.io/badge/04-16a34a?style=flat-square) **Predict the structure**
 
-Beyond individual matches, predict group finishing orders (+2 per correct placement) and the full knockout bracket — champion, runner-up, semi-finalists, and quarter-finalists (up to +47 pts total).
+Beyond individual matches, predict group finishing orders (+2 per correct placement) and the full knockout bracket — champion, runner-up, semi-finalists, and quarter-finalists (up to +55 pts total).
 
 ![](https://img.shields.io/badge/05-16a34a?style=flat-square) **The prize pool settles itself**
 
@@ -109,7 +109,7 @@ Each gameweek and the overall standings pay out and claw back based on finishing
 
 ## Scoring
 
-### Match predictions &nbsp;&nbsp; ![](https://img.shields.io/badge/max_14_pts-16a34a?style=flat-square)
+### Match predictions &nbsp;&nbsp; ![](https://img.shields.io/badge/max_16_pts-16a34a?style=flat-square)
 
 | Category | Pts | Notes |
 | :--- | :---: | :--- |
@@ -127,14 +127,14 @@ Each gameweek and the overall standings pay out and claw back based on finishing
 
 **+2** for each team placed in the correct group finishing position across 12 groups.
 
-### Tournament bracket &nbsp;&nbsp; ![](https://img.shields.io/badge/max_47_pts-16a34a?style=flat-square)
+### Tournament bracket &nbsp;&nbsp; ![](https://img.shields.io/badge/max_55_pts-16a34a?style=flat-square)
 
 | Pick | Pts |
 | :--- | :---: |
 | Champion | **+15** |
 | Runner-up | **+8** |
-| Each correct semi-finalist (×2) | **+4** |
-| Each correct quarter-finalist (×4) | **+2** |
+| Each correct semi-finalist (×4) | **+4** |
+| Each correct quarter-finalist (×8) | **+2** |
 
 ---
 
@@ -364,9 +364,9 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 ### Landing & Dashboard
 
-![Landing page](docs/screenshots/VisitPage.png)
+![Landing page](docs/screenshots/HomePage.png)
 
-![Dashboard](docs/screenshots/DashBoard.png)
+![Dashboard](docs/screenshots/Dashboard.png)
 
 <details>
 <summary><strong>Core gameplay</strong></summary>
@@ -375,13 +375,17 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 | Fixtures (dark) | Fixtures — group filter (light) |
 |---|---|
-| ![Fixtures](docs/screenshots/FixturesPage.png) | ![Fixtures light mode](docs/screenshots/FixturesLightModeGroupFilter.png) |
+| ![Fixtures](docs/screenshots/FixturePage.png) | ![Fixtures light mode](docs/screenshots/FixtureGroupsLight.png) |
 
 | Predict a match | Scored match — league predictions revealed |
 |---|---|
-| ![Match prediction](docs/screenshots/MatchCard.png) | ![Completed match card](docs/screenshots/CompletedMatchCard.png) |
+| ![Match prediction](docs/screenshots/MatchPredictions.png) | ![Completed match card](docs/screenshots/CompletedMatchCard.png) |
 
-![Full match page — lineups, prediction form, league picks](docs/screenshots/FullMatchDetails.png)
+![Full match page — lineups, prediction form, league picks](docs/screenshots/CompletedMatchCardFull.png)
+
+| Group predictor | Tournament bracket |
+|---|---|
+| ![Groups](docs/screenshots/GroupPage.png) | ![Bracket](docs/screenshots/Tournament.png) |
 
 </details>
 
@@ -390,13 +394,32 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 <br/>
 
-![Leaderboard](docs/screenshots/Leaderboard.png)
+![Leaderboard](docs/screenshots/LeaderBoard.png)
 
-![Points race chart](docs/screenshots/Leaderboard1.png)
+![Gameweek leaderboard](docs/screenshots/LeaderboardGW.png)
 
-| Tournament bracket | Group predictor |
+| Rank over time | Points race | Points vs. average | Points vs. leader |
+|---|---|---|---|
+| ![Rank over time](docs/screenshots/PointsRank.png) | ![Points race](docs/screenshots/PointsGraph.png) | ![Points vs average](docs/screenshots/PointsVSAvg.png) | ![Points vs leader](docs/screenshots/PointsVSLeader.png) |
+
+| Matchday recap | Head-to-head comparison |
 |---|---|
-| ![Bracket](docs/screenshots/TournamentBracket.png) | ![Groups](docs/screenshots/Groups.png) |
+| ![Recap](docs/screenshots/RecapPage.png) | ![Comparison](docs/screenshots/Compare.png) |
+
+</details>
+
+<details>
+<summary><strong>Squads &amp; teams</strong></summary>
+
+<br/>
+
+![Team browser](docs/screenshots/Teams.png)
+
+![Squad roster](docs/screenshots/TeamSquad.png)
+
+| Team stats | Golden Boot |
+|---|---|
+| ![Team stats](docs/screenshots/TeamStats.png) | ![Golden Boot](docs/screenshots/GoldenBoot.png) |
 
 </details>
 
@@ -405,9 +428,26 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 <br/>
 
-| Fixtures | Home &amp; navigation |
+| Dashboard | Fixtures | Navigation |
+|---|---|---|
+| ![Mobile dashboard](docs/screenshots/PhoneDashboard.png) | ![Mobile fixtures](docs/screenshots/PhoneFixture.png) | ![Mobile navigation](docs/screenshots/PhoneNavBar.png) |
+
+![PWA install guide](docs/screenshots/PWAInstallGuide.png)
+
+</details>
+
+<details>
+<summary><strong>Admin</strong></summary>
+
+<br/>
+
+| Admin — console | Admin — scoring |
 |---|---|
-| ![Mobile fixtures](docs/screenshots/PhoneFixture.png) | ![Mobile home](docs/screenshots/PhoneHome.png) |
+| ![Admin console](docs/screenshots/AdminPage.png) | ![Admin scoring](docs/screenshots/AdminPageScoring.png) |
+
+| Admin — result entry | Admin — scoring weights |
+|---|---|
+| ![Result entry](docs/screenshots/AdminPageEdit.png) | ![Scoring weights](docs/screenshots/AdminPageWeightage.png) |
 
 </details>
 
@@ -416,25 +456,17 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 <br/>
 
-| Profile | Head-to-head comparison |
-|---|---|
-| ![Profile](docs/screenshots/Profile.png) | ![Comparison](docs/screenshots/Comparison.png) |
+![Profile](docs/screenshots/Profile.png)
 
-| Squad browser | Golden Boot |
-|---|---|
-| ![Squads](docs/screenshots/Squads.png) | ![Golden Boot](docs/screenshots/GoldenBoot.png) |
+![Settings &amp; colour-blind mode](docs/screenshots/Settings.png)
 
-| Calendar export | Profile settings &amp; colour-blind mode |
+| Calendar export | Customise sidebar |
 |---|---|
-| ![Calendar](docs/screenshots/Calendar.png) | ![Settings](docs/screenshots/Settings.png) |
+| ![Calendar](docs/screenshots/Calendar.png) | ![Customise sidebar](docs/screenshots/CustomiseSideBar.png) |
 
-| Admin — result entry | Admin — console |
+| Rules &amp; FAQ | |
 |---|---|
-| ![Score entry](docs/screenshots/ScoreEntry.png) | ![Admin console](docs/screenshots/Admin.png) |
-
-| PWA install guide | |
-|---|---|
-| ![PWA install](docs/screenshots/PWAInstall.png) | |
+| ![FAQ](docs/screenshots/FAQ.png) | |
 
 </details>
 
