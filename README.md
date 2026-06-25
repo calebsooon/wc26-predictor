@@ -496,114 +496,18 @@ Zero-sum pool settled per gameweek (GW1–GW8) and overall at tournament end.
 
 ## Architecture
 
-```mermaid
-%%{init: {
-  "theme": "base",
-  "themeVariables": {
-    "fontSize": "18px",
-    "fontFamily": "ui-sans-serif, system-ui, sans-serif"
-  },
-  "flowchart": {
-    "nodeSpacing": 55,
-    "rankSpacing": 110,
-    "padding": 24
-  }
-}}%%
-flowchart LR
-  subgraph Client["Client Layer"]
-    direction TB
-    subgraph PWA["PWA Boundary"]
-      direction TB
-      Browser["Browser\nNext.js App Router"]
-      Pages["app/* pages"]
-      Components["components/*"]
-      ClientLib["lib/* client helpers"]
-      SW["Service Worker — Workbox"]
-      Browser --> Pages --> Components --> ClientLib
-      SW -. offline shell .-> Browser
-    end
-  end
-
-  subgraph Server["Server Layer"]
-    direction TB
-    API["app/api/* route handlers"]
-    ScoreMatch["score-match"]
-    ScoreGroups["score-groups"]
-    ScoreTournament["score-tournament"]
-    SnapshotRanks["snapshot-ranks"]
-    RescoreAll["rescore-all"]
-    MatchCentre["recap · teams\ngolden-boot · calendar"]
-    AdminSync["admin sync\nresults · events · lineup"]
-    API --> ScoreMatch & ScoreGroups & ScoreTournament & SnapshotRanks & RescoreAll & MatchCentre & AdminSync
-  end
-
-  subgraph External["External APIs"]
-    direction TB
-    FIFA["FIFA GameDay + media\nfixtures · team sheets · stats · events · Golden Boot"]
-  end
-
-  subgraph Scripts["Local sync scripts"]
-    direction TB
-    DataFIFA["FIFA commands\nbootstrap · daily · backfill · targeted repair"]
-    DataAudit["npm run data:audit\nread-only cache health"]
-  end
-
-  subgraph Data["Supabase"]
-    direction TB
-    Postgres["Postgres + RLS"]
-    Auth["Auth"]
-    Realtime["Realtime"]
-    Storage["Storage\navatars · fifa-media"]
-    FIFAStore["FIFA cache\nteams · players · lineups · stats · events · Golden Boot"]
-  end
-
-  subgraph Domain["Shared Domain Logic"]
-    direction TB
-    Scoring["lib/scoring.ts\npoint values"]
-    Prizes["lib/prizes.ts\nprize pool"]
-    Leaderboard["lib/leaderboard.ts\naggregate + sort"]
-    LineupLayout["lib/lineup-layout.ts\nformation positioning"]
-  end
-
-  Client -->|"supabase-js — RLS-guarded reads/writes"| Data
-  Client -->|"admin POST"| Server
-  Server -->|"validated writes"| Data
-  AdminSync -->|"explicit admin request"| FIFA
-  DataFIFA -->|"fetch via local machine"| FIFA
-  DataFIFA -->|"service role upsert"| FIFAStore
-  DataFIFA -->|"cache media"| Storage
-  DataAudit -. "read only" .-> Postgres
-  FIFAStore --- Postgres
-  Realtime -. "live push — no page reload" .-> Client
-  Domain -. "imported by" .-> Client & Server
-
-  classDef layer fill:#ffffff,stroke:#d0d7de,color:#24292f,stroke-width:2px
-  classDef client fill:#eff6ff,stroke:#2563eb,color:#1e3a8a,stroke-width:2px
-  classDef pwa fill:#fff7ed,stroke:#f97316,color:#9a3412,stroke-width:2px
-  classDef server fill:#f5f3ff,stroke:#7c3aed,color:#4c1d95,stroke-width:2px
-  classDef data fill:#ecfdf5,stroke:#059669,color:#064e3b,stroke-width:2px
-  classDef domain fill:#eef2ff,stroke:#4f46e5,color:#312e81,stroke-width:2px
-  classDef worker fill:#fffbeb,stroke:#d97706,color:#92400e,stroke-width:2px
-
-  class Client,Server,Data,Domain,External,Scripts layer
-  class Browser,Pages,Components,ClientLib client
-  class PWA pwa
-  class SW worker
-  class API,ScoreMatch,ScoreGroups,ScoreTournament,SnapshotRanks,RescoreAll,MatchCentre,AdminSync server
-  class FIFA,DataFIFA,DataAudit worker
-  class Postgres,Auth,Realtime,Storage,FIFAStore data
-  class Scoring,Prizes,Leaderboard,LineupLayout domain
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/architecture-dark.png">
+  <img src="docs/architecture-light.png" alt="MatchDay architecture diagram" width="100%">
+</picture>
 
 **Data flow**
 
-1. User submits a prediction → client writes to `predictions` via supabase-js (RLS enforces own-row-only writes, and `BEFORE INSERT/UPDATE` triggers reject writes once the match/group/phase has kicked off; predictions are hidden from other members until kickoff)
-2. Admin enters a result → POST to `/api/score-match` → reads point values from `lib/scoring.ts`, computes per-category breakdown, writes back to each `predictions` row
-3. `lib/leaderboard.ts` aggregates scored predictions — shared between the dashboard mini-table and `/leaderboard`
-4. `lib/prizes.ts` derives the prize snapshot from aggregated standings
-5. Supabase Realtime pushes `predictions` UPDATE events to all connected clients — standings update instantly with no page reload
-6. FIFA GameDay is the official data source — local `npm run data:fifa:*` scripts write fixtures, results, team sheets, substitutions, goals/cards, media, match stats, Golden Boot rows, and sync-run health to Supabase. Replays are idempotent: provider rows are upserted or safely replaced, while manual lineup corrections are preserved.
-7. Player-facing pages read the Supabase cache only. The admin&apos;s explicit sync buttons are the narrow exception: they request the same FIFA data on demand for a single admin action. `npm run data:audit` reads Supabase only and never writes or calls FIFA.
+1. Users open the Next.js PWA and read or write through Supabase Auth, Postgres RLS, Realtime, and Storage.
+2. Prediction writes go directly through `supabase-js`; database policies and lock triggers protect kickoff visibility and write timing.
+3. Admin scoring calls `/api/score-match`, which uses `lib/scoring.ts`, writes per-category points, snapshots ranks, and can trigger push notifications.
+4. `lib/leaderboard.ts`, `lib/prizes.ts`, `lib/gameweek-recap.ts`, and `lib/lineup-layout.ts` provide the shared domain logic used by pages and API routes.
+5. Local FIFA sync scripts import official fixtures, results, lineups, stats, events, Golden Boot rows, and media into the Supabase cache. Player-facing pages read cached Supabase data only.
 
 <details>
 <summary>Project structure</summary>

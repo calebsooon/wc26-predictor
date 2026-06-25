@@ -3,6 +3,7 @@
 import { useMemo, useState, useRef } from 'react'
 import { getTeam, normalisePosition, POSITION_ABBR } from '@/lib/teams'
 import { DialogShell, SearchIcon } from '@/components/ui'
+import FlagChip from '@/components/FlagChip'
 
 export interface PlayerForPicker {
   id: number
@@ -71,7 +72,9 @@ function PlayerCard({
         <p className="text-[9px] font-extrabold text-textp leading-tight truncate px-0.5">
           {lastName(player.name)}
         </p>
-        <p className="text-sm leading-none mt-0.5">{team.flag}</p>
+        <div className="mt-1 flex justify-center">
+          <FlagChip code={team.code} w={18} h={12} r={3} />
+        </div>
       </div>
     </button>
   )
@@ -171,7 +174,7 @@ export function PlayerCardPicker({
           </span>
         ) : selected ? (
           <>
-            <span className="text-lg leading-none">{getTeam(selected.team_code).flag}</span>
+            <FlagChip code={selected.team_code} w={24} h={16} r={4} />
             <span className="flex-1 text-left text-textp truncate">{selected.name}</span>
             {selected.position && (
               <span className="text-[10px] text-texts font-bold uppercase tracking-wide shrink-0">{normalisePosition(selected.position)}</span>
@@ -279,7 +282,7 @@ export function PlayerCardPicker({
                 return (
                   <div key={teamCode} className="mb-4">
                     <div className="flex items-center gap-1.5 mb-2">
-                      <span className="text-base leading-none">{team.flag}</span>
+                      <FlagChip code={team.code} w={20} h={14} r={3} />
                       <span className="text-[10px] font-extrabold text-texts uppercase tracking-widest">{team.name}</span>
                     </div>
                     <div className="grid grid-cols-5 sm:grid-cols-6 gap-1.5">

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase-browser'
-import { getTeam } from '@/lib/teams'
+import { getTeam, normalisePosition } from '@/lib/teams'
 import {
   Card, Pill, Button, ScoreStepper, Avatar, Skeleton,
   LockIcon, Countdown, EmptyState, ChevDown,
@@ -881,25 +881,19 @@ function PicksWall({
         const firstGoalTeam = o.pred_first_goal_team
           ? (o.pred_first_goal_team === 'NONE' ? 'No goal' : getTeam(o.pred_first_goal_team)?.name ?? o.pred_first_goal_team)
           : null
-        const firstScorerName = o.pred_no_scorer
-          ? 'No scorer'
-          : o.pred_first_scorer_id === -1
-            ? 'Own goal'
-            : o.pred_first_scorer_id
-              ? (players.find((p) => p.id === o.pred_first_scorer_id)?.name ?? `#${o.pred_first_scorer_id}`)
-              : null
+        const firstScorer = o.pred_first_scorer_id ? players.find((p) => p.id === o.pred_first_scorer_id) ?? null : null
 
         return (
           <div
             key={o.user_id}
-            className={`p-4 rounded-2xl border transition-colors ${
+            className={`overflow-hidden rounded-2xl border transition-colors ${
               isMe
-                ? 'border-primary/40 bg-primary/[0.05] ring-1 ring-primary/20'
-                : 'border-border bg-surface'
+                ? 'border-primary/40 bg-primary/[0.045] ring-1 ring-primary/20'
+                : 'border-border bg-card'
             }`}
           >
             {/* Top row: avatar + name + points */}
-            <div className="flex items-center gap-2.5 mb-3">
+            <div className="flex items-center gap-2.5 px-4 pt-4 pb-3">
               <Avatar name={o.profiles?.username ?? '?'} src={o.profiles?.avatar_url} size={32} you={isMe} />
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-[13px] text-textp truncate">
@@ -921,57 +915,62 @@ function PicksWall({
               )}
             </div>
 
-            {/* Score row with flags */}
             {o.pred_home != null && o.pred_away != null ? (
-              <>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <FlagChip code={match.home_team} w={20} h={14} r={3} />
-                  <span className="text-[17px] font-extrabold tabular-nums text-textp" style={{ fontFamily: 'Schibsted Grotesk, sans-serif' }}>
+              <div className="px-4 pb-4">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl border border-border/70 bg-surface px-3 py-2.5">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <FlagChip code={match.home_team} w={23} h={16} r={4} />
+                    <span className="truncate text-[11px] font-bold text-texts">{getTeam(match.home_team).code}</span>
+                  </div>
+                  <span className="text-[20px] font-black tabular-nums text-textp" style={{ fontFamily: 'Schibsted Grotesk, sans-serif' }}>
                     {o.pred_home}–{o.pred_away}
                   </span>
-                  <FlagChip code={match.away_team} w={20} h={14} r={3} />
+                  <div className="flex min-w-0 items-center justify-end gap-2">
+                    <span className="truncate text-[11px] font-bold text-texts">{getTeam(match.away_team).code}</span>
+                    <FlagChip code={match.away_team} w={23} h={16} r={4} />
+                  </div>
                 </div>
 
-                {/* Secondary details — all on one flex-wrap row */}
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                <div className="mt-2 grid gap-2">
+                  <ScorerPickPill
+                    noScorer={o.pred_no_scorer === true}
+                    ownGoal={o.pred_first_scorer_id === -1}
+                    player={firstScorer}
+                    fallback={o.pred_first_scorer_id ? `#${o.pred_first_scorer_id}` : null}
+                  />
+                  <div className="flex flex-wrap gap-1.5">
                   {firstGoalTeam && (
-                    <span className="text-[11px] text-texts font-medium">
-                      1st: <span className="text-textp font-bold">{firstGoalTeam}</span>
-                    </span>
-                  )}
-                  {o.pred_no_scorer ? (
-                    <span className="text-[11px] text-faint font-medium italic">No scorer</span>
-                  ) : firstScorerName && (
-                    <span className="text-[11px] text-texts font-medium">
-                      Scorer: <span className="text-textp font-semibold">{firstScorerName}</span>
+                    <span className="inline-flex h-6 items-center rounded-full border border-border bg-card px-2 text-[10.5px] font-bold text-texts">
+                      1st team <span className="ml-1 text-textp">{firstGoalTeam}</span>
                     </span>
                   )}
                   {o.pred_total_goals != null && (
-                    <span className="text-[11px] text-texts font-medium">
-                      Total: <span className="text-textp font-semibold">{o.pred_total_goals}</span>
+                    <span className="inline-flex h-6 items-center rounded-full border border-border bg-card px-2 text-[10.5px] font-bold text-texts">
+                      Total <span className="ml-1 text-textp">{o.pred_total_goals}</span>
                     </span>
                   )}
                   {o.pred_goal_diff != null && (
-                    <span className="text-[11px] text-texts font-medium">
-                      GD: <span className="text-textp font-semibold">{o.pred_goal_diff > 0 ? '+' : ''}{o.pred_goal_diff}</span>
+                    <span className="inline-flex h-6 items-center rounded-full border border-border bg-card px-2 text-[10.5px] font-bold text-texts">
+                      GD <span className="ml-1 text-textp">{o.pred_goal_diff > 0 ? '+' : ''}{o.pred_goal_diff}</span>
                     </span>
                   )}
                   {o.pred_home != null && o.pred_away != null && (
-                    <span className="text-[11px] text-texts font-medium">
-                      BTTS: <span className="text-textp font-semibold">
+                    <span className="inline-flex h-6 items-center rounded-full border border-border bg-card px-2 text-[10.5px] font-bold text-texts">
+                      BTTS <span className="ml-1 text-textp">
                         {(o.pred_btts ?? (o.pred_home > 0 && o.pred_away > 0)) ? 'Yes' : 'No'}
                       </span>
                     </span>
                   )}
+                  </div>
                 </div>
-              </>
+              </div>
             ) : (
-              <span className="text-[11px] text-texts italic">No prediction submitted</span>
+              <span className="block px-4 pb-4 text-[11px] text-texts italic">No prediction submitted</span>
             )}
 
             {/* Points breakdown */}
             {scoredPred && (
-              <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-border/60">
+              <div className="flex flex-wrap gap-1.5 border-t border-border/60 bg-surface/60 px-4 py-3">
                 {[
                   { label: 'Outcome', val: o.pts_outcome, w: weights.outcome },
                   { label: 'Exact', val: o.pts_exact, w: weights.exact },
@@ -994,6 +993,68 @@ function PicksWall({
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function ScorerPickPill({
+  noScorer, ownGoal, player, fallback,
+}: {
+  noScorer: boolean
+  ownGoal: boolean
+  player: PlayerForPicker | null
+  fallback: string | null
+}) {
+  if (noScorer) {
+    return (
+      <div className="flex h-11 items-center gap-2.5 rounded-xl border border-border bg-card px-3">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-faint/50">
+          <svg width="10" height="2" viewBox="0 0 10 2"><rect width="10" height="2" rx="1" fill="currentColor" className="text-faint" /></svg>
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[12px] font-extrabold text-textp">No scorer</div>
+          <div className="text-[10px] font-semibold text-faint">First scorer pick</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (ownGoal) {
+    return (
+      <div className="flex h-11 items-center gap-2.5 rounded-xl border border-border bg-card px-3">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-faint/30 bg-faint/10">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" className="text-faint" />
+            <path d="M12 6l3.2 2.3-1.2 3.7H10L8.8 8.3z" fill="currentColor" className="text-faint" />
+            <circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-faint" />
+          </svg>
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[12px] font-extrabold text-textp">Own goal</div>
+          <div className="text-[10px] font-semibold text-faint">First scorer pick</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!player && !fallback) return null
+  const position = player?.position ? normalisePosition(player.position) : null
+
+  return (
+    <div className="flex h-11 items-center gap-2.5 rounded-xl border border-border bg-card px-3">
+      {player?.team_code ? <FlagChip code={player.team_code} w={24} h={16} r={4} /> : <span className="h-4 w-6 rounded bg-surface3" />}
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[12px] font-extrabold text-textp">{player?.name ?? fallback}</div>
+        <div className="text-[10px] font-semibold text-faint">First scorer pick</div>
+      </div>
+      {position && (
+        <span className="shrink-0 rounded-md bg-surface3 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-texts">
+          {position}
+        </span>
+      )}
+      {player?.jersey_number != null && (
+        <span className="shrink-0 text-[11px] font-extrabold tabular-nums text-texts">#{player.jersey_number}</span>
+      )}
     </div>
   )
 }

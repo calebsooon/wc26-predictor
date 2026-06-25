@@ -27,7 +27,7 @@ function ptColor(pts: number, w: ScoringWeights): string {
 import { fmtDateKey, fmtDateOnlyKey, fmtTime, getUserTimeZone } from '@/lib/date-format'
 import FlagChip from '@/components/FlagChip'
 import PredictionModal from '@/components/PredictionModal'
-import { getTeam } from '@/lib/teams'
+import { getTeam, normalisePosition } from '@/lib/teams'
 import { useUrlState } from '@/lib/url-state'
 import Link from 'next/link'
 
@@ -35,6 +35,9 @@ interface RoundRow { id: string; name: string; order: number; matches: DBMatch[]
 
 type MainFilter = 'open' | 'today' | 'missing' | 'closed' | 'full'
 type StageFilter = 'all' | 'group' | 'knockout'
+type PlayerSummary = { id: number; name: string; position: string | null; team_code: string | null; jersey_number: number | null }
+
+const PREDICTION_SELECT = 'match_id, pred_home, pred_away, pred_first_scorer_id, pred_no_scorer, pred_total_goals, pred_goal_diff, pred_btts, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer'
 
 function mainFilterFromUrl(value: string | null): MainFilter {
   return value === 'today' || value === 'missing' || value === 'closed' || value === 'full' ? value : 'open'
@@ -50,6 +53,7 @@ export default function FixturesPage() {
   const { searchParams, replaceUrl } = useUrlState()
   const [matches, setMatches] = useState<DBMatch[]>([])
   const [preds, setPreds] = useState<Record<string, MyPred>>({})
+  const [playerSummaries, setPlayerSummaries] = useState<Record<number, PlayerSummary>>({})
   const [weights, setWeights] = useState<ScoringWeights>(DEFAULT_WEIGHTS)
   const [mainFilter, setMainFilter] = useState<MainFilter>(() => mainFilterFromUrl(searchParams.get('status')))
   const [stageFilter, setStageFilter] = useState<StageFilter>(() => stageFilterFromUrl(searchParams.get('stage')))
@@ -85,7 +89,7 @@ export default function FixturesPage() {
             .order('"order"')
             .order('match_date', { referencedTable: 'matches' }),
           supabase.from('predictions')
-            .select('match_id, pred_home, pred_away, pred_total_goals, pred_goal_diff, pred_btts, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
+            .select(PREDICTION_SELECT)
             .eq('user_id', user.id),
           getActiveLeague(supabase, user.id),
         ])
@@ -102,6 +106,23 @@ export default function FixturesPage() {
         const map: Record<string, MyPred> = {}
         for (const p of myData ?? []) map[(p as { match_id: string }).match_id] = p as unknown as MyPred
         setPreds(map)
+
+        const scorerIds = Array.from(new Set((myData ?? [])
+          .map((p) => (p as { pred_first_scorer_id?: number | null }).pred_first_scorer_id)
+          .filter((id): id is number => typeof id === 'number' && id > 0)))
+        if (scorerIds.length) {
+          const { data: scorerRows } = await supabase.from('players')
+            .select('id, name, position, team_code, jersey_number')
+            .in('id', scorerIds)
+          const playerMap: Record<number, PlayerSummary> = {}
+          for (const row of scorerRows ?? []) {
+            const p = row as PlayerSummary
+            playerMap[p.id] = p
+          }
+          setPlayerSummaries(playerMap)
+        } else {
+          setPlayerSummaries({})
+        }
         setWeights(w)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load fixtures')
@@ -124,14 +145,27 @@ export default function FixturesPage() {
         .eq('id', matchId).single(),
       user
         ? supabase.from('predictions')
-            .select('match_id, pred_home, pred_away, pred_total_goals, pred_goal_diff, pred_btts, points_awarded, pts_outcome, pts_exact, pts_goal_diff, pts_total_goals, pts_team_goals, pts_btts, pts_first_team, pts_first_scorer')
+            .select(PREDICTION_SELECT)
             .eq('user_id', user.id).eq('match_id', matchId).maybeSingle()
         : Promise.resolve({ data: null }),
     ])
     if (m) setMatches((prev) => prev.map((x) => x.id === matchId ? { ...x, ...(m as Partial<DBMatch>) } : x))
-    if (predRes?.data) setPreds((prev) => ({ ...prev, [matchId]: predRes.data as unknown as MyPred }))
+    if (predRes?.data) {
+      const pred = predRes.data as unknown as MyPred
+      setPreds((prev) => ({ ...prev, [matchId]: pred }))
+      if (pred.pred_first_scorer_id && pred.pred_first_scorer_id > 0 && !playerSummaries[pred.pred_first_scorer_id]) {
+        const { data: scorer } = await supabase.from('players')
+          .select('id, name, position, team_code, jersey_number')
+          .eq('id', pred.pred_first_scorer_id)
+          .maybeSingle()
+        if (scorer) {
+          const p = scorer as PlayerSummary
+          setPlayerSummaries((prev) => ({ ...prev, [p.id]: p }))
+        }
+      }
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [playerSummaries])
 
   // Realtime: update match scores without requiring a page refresh
   useEffect(() => {
@@ -407,6 +441,7 @@ export default function FixturesPage() {
             isTomorrow={d === tomorrowLocal}
             matches={byDate[d]}
             preds={preds}
+            playerSummaries={playerSummaries}
             weights={weights}
             onOpen={setModalMatchId}
             timeZone={timeZone}
@@ -427,13 +462,14 @@ export default function FixturesPage() {
 /* ─── DateGroup ─────────────────────────────────────────────────────────── */
 function DateGroup({
   dateKey, isToday, isTomorrow, matches, preds, weights, onOpen,
-  timeZone,
+  timeZone, playerSummaries,
 }: {
   dateKey: string
   isToday: boolean
   isTomorrow: boolean
   matches: DBMatch[]
   preds: Record<string, MyPred>
+  playerSummaries: Record<number, PlayerSummary>
   weights: ScoringWeights
   onOpen: (id: string) => void
   timeZone: string
@@ -475,17 +511,22 @@ function DateGroup({
         overflow: 'hidden',
         marginTop: 10,
       }}>
-        {matches.map((m, i) => (
-          <MatchRow
-            key={m.id}
-            m={m}
-            pred={preds[m.id] ?? null}
-            weights={weights}
-            divider={i > 0}
-            onOpen={() => onOpen(m.id)}
-            timeZone={timeZone}
-          />
-        ))}
+        {matches.map((m, i) => {
+          const pred = preds[m.id] ?? null
+          const scorerId = pred?.pred_first_scorer_id
+          return (
+            <MatchRow
+              key={m.id}
+              m={m}
+              pred={pred}
+              playerSummary={scorerId ? playerSummaries[scorerId] : null}
+              weights={weights}
+              divider={i > 0}
+              onOpen={() => onOpen(m.id)}
+              timeZone={timeZone}
+            />
+          )
+        })}
       </div>
     </div>
   )
@@ -494,10 +535,11 @@ function DateGroup({
 /* ─── MatchRow ──────────────────────────────────────────────────────────── */
 function MatchRow({
   m, pred, weights, divider, onOpen,
-  timeZone,
+  timeZone, playerSummary,
 }: {
   m: DBMatch
   pred: MyPred | null
+  playerSummary: PlayerSummary | null
   weights: ScoringWeights
   divider: boolean
   onOpen: () => void
@@ -509,6 +551,12 @@ function MatchRow({
   const timeStr = fmtTime(m.match_date, timeZone)
   const hasScore = m.real_home_score !== null && m.real_away_score !== null
   const isKO = ui.knockout
+  const scorerLabel = pred?.pred_no_scorer
+    ? 'No scorer'
+    : pred?.pred_first_scorer_id === -1
+      ? 'Own goal'
+      : playerSummary?.name ?? null
+  const scorerPosition = playerSummary?.position ? normalisePosition(playerSummary.position) : null
 
   // Determine status pill props
   type PillCfg = { label: string; color: string; bg: string; border: string }
@@ -680,12 +728,10 @@ function MatchRow({
 
       {/* Status pill / countdown */}
       <div style={{ minWidth: 0, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', maxWidth: 120 }}>
-        {!hasScore && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, minWidth: 0 }}>
+          {!hasScore && (
             <MiniCountdown kickoff={m.match_date} />
-          </div>
-        )}
-        {hasScore ? (
+          )}
           <span style={{
             padding: '6px 11px',
             borderRadius: 999,
@@ -699,28 +745,21 @@ function MatchRow({
             color: pill.color,
             background: pill.bg,
             whiteSpace: 'nowrap',
+            marginTop: hasScore ? 0 : 4,
           }}>
             {pill.label}
           </span>
-        ) : (
-          <span style={{
-            padding: '6px 11px',
-            borderRadius: 999,
-            border: `1px solid ${pill.border}`,
-            fontSize: 11.5,
-            fontWeight: 700,
-            textAlign: 'center',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            color: pill.color,
-            background: pill.bg,
-            whiteSpace: 'nowrap',
-            marginTop: 4,
-          }}>
-            {pill.label}
-          </span>
-        )}
+          {scorerLabel && (
+            <span className="flex max-w-[140px] items-center justify-end gap-1.5 text-[10.5px] font-semibold text-texts">
+              <span className="truncate">{scorerLabel}</span>
+              {scorerPosition && (
+                <span className="shrink-0 rounded-md bg-surface3 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-faint">
+                  {scorerPosition}
+                </span>
+              )}
+            </span>
+          )}
+        </div>
       </div>
       <Link
         href={`/match/${m.id}`}

@@ -36,6 +36,7 @@ export interface MyPred {
   pts_first_scorer?: number | null
   pred_first_goal_team?: string | null
   pred_first_scorer_id?: number | null
+  pred_no_scorer?: boolean | null
 }
 
 export function isKnockout(m: DBMatch): boolean {
