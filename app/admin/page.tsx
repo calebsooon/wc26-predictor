@@ -84,24 +84,33 @@ function LineupPreview({ teamCode, entries, formation, layoutMode }: {
   )
   const byId = new Map(entries.map((entry) => [entry.playerId, entry]))
 
+  // The shared layout places a single team inside its own half (for the
+  // two-team match pitch). A single-team preview should fill the whole box, so
+  // rescale the resolved y-range to span almost the full height — keeper near
+  // the goal line at the bottom, front line near the top.
+  const ys = positioned.map((slot) => slot.y)
+  const minY = ys.length ? Math.min(...ys) : 0
+  const maxY = ys.length ? Math.max(...ys) : 100
+  const span = maxY - minY || 1
+  const fillY = (y: number) => 7 + ((y - minY) / span) * 86
+
   return (
     <div className="rounded-xl border border-border bg-surface p-2.5">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-texts"><FlagChip code={teamCode} w={15} h={10} r={2} />Live pitch preview</span>
         <span className="text-[10px] font-bold text-primary">{formation ?? 'Auto shape'}</span>
       </div>
-      <div className="relative h-[235px] overflow-hidden rounded-lg border border-white/10" style={{ background: 'linear-gradient(180deg, #0b653b, #07512f)' }}>
+      <div className="relative h-[360px] overflow-hidden rounded-lg border border-white/10" style={{ background: 'repeating-linear-gradient(180deg, #0b653b 0 12.5%, #07512f 12.5% 25%)' }}>
         <div className="absolute inset-[8px] border border-white/25 rounded-[3px]" />
-        <div className="absolute left-[8px] right-[8px] top-1/2 h-px bg-white/25" />
-        <div className="absolute left-1/2 top-1/2 h-[46px] w-[46px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20" />
-        <div className="absolute bottom-[8px] left-1/2 h-[39px] w-[47%] -translate-x-1/2 border border-b-0 border-white/25" />
+        <div className="absolute bottom-[8px] left-1/2 h-[52px] w-[47%] -translate-x-1/2 border border-b-0 border-white/25" />
+        <div className="absolute bottom-[8px] left-1/2 h-[22px] w-[24%] -translate-x-1/2 border border-b-0 border-white/20" />
         {positioned.map((slot) => {
           const entry = byId.get(slot.player.player_id)
           if (!entry) return null
           return (
-            <div key={entry.playerId} className="absolute z-10 -translate-x-1/2 -translate-y-1/2 text-center" style={{ left: `${slot.x}%`, top: `${slot.y}%`, width: 52 }}>
-              <span className="mx-auto grid h-5 w-5 place-items-center rounded-full border border-white/50 bg-primary text-[9px] font-black text-[#042614] shadow-lg">{entry.jersey ?? '–'}</span>
-              <span className="mt-0.5 block truncate rounded bg-black/65 px-1 py-px text-[8px] font-bold text-white">{shortName(entry.name)}</span>
+            <div key={entry.playerId} className="absolute z-10 -translate-x-1/2 -translate-y-1/2 text-center" style={{ left: `${slot.x}%`, top: `${fillY(slot.y)}%`, width: 56 }}>
+              <span className="mx-auto grid h-6 w-6 place-items-center rounded-full border border-white/50 bg-primary text-[10px] font-black text-[#042614] shadow-lg">{entry.jersey ?? '–'}</span>
+              <span className="mt-0.5 block truncate rounded bg-black/65 px-1 py-px text-[9px] font-bold text-white">{shortName(entry.name)}</span>
             </div>
           )
         })}

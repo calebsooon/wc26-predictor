@@ -101,7 +101,7 @@ function PlayerToken({
     >
       {/* Figure — 76% of token width, 4:5 aspect ratio */}
       <div className="relative w-full flex justify-center">
-        <div className="relative" style={{ width: compact ? '72%' : '76%', aspectRatio: '3 / 4' }}>
+        <div className="relative" style={{ width: compact ? '63%' : '68%', aspectRatio: '3 / 4' }}>
           {/* Goal ball */}
           {hasGoal && (
             <span className="absolute -top-2 -right-1.5 z-20">
@@ -530,7 +530,7 @@ export function MatchLineups({
 
       {/* ── Mobile: full-width pitch + compact subs below ── */}
       <div className="sm:hidden space-y-3">
-        <Pitch {...pitchProps} style={{ minHeight: 'clamp(600px, 172vw, 690px)' }} />
+        <Pitch {...pitchProps} style={{ width: '100%', height: 'auto', aspectRatio: '10 / 15.5' }} />
 
         {hasEvents && (
           <Timeline events={events} subs={[...home.applied, ...away.applied]} formationChanges={formationChanges} rows={rows} homeCode={homeCode} />

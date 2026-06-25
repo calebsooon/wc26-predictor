@@ -389,8 +389,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Main column */}
       <div className={`transition-[padding] duration-200 ${collapsed ? 'lg:pl-[76px]' : 'lg:pl-60'}`}>
-        <header className="sticky top-0 z-20 h-16 border-b border-border bg-bg/90 backdrop-blur-md">
-          <div className="h-full max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between">
+        <header className="sticky top-0 z-20 border-b border-border bg-bg/90 backdrop-blur-md" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+          <div className="h-16 max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between">
             <Link href="/dashboard" className="flex items-center gap-2 lg:hidden">
               <Logo size={26} />
               <span className="font-extrabold tracking-tight text-sm">MATCHDAY</span>

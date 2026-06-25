@@ -951,6 +951,11 @@ function PicksWall({
                       Total: <span className="text-textp font-semibold">{o.pred_total_goals}</span>
                     </span>
                   )}
+                  {o.pred_goal_diff != null && (
+                    <span className="text-[11px] text-texts font-medium">
+                      GD: <span className="text-textp font-semibold">{o.pred_goal_diff > 0 ? '+' : ''}{o.pred_goal_diff}</span>
+                    </span>
+                  )}
                   {o.pred_home != null && o.pred_away != null && (
                     <span className="text-[11px] text-texts font-medium">
                       BTTS: <span className="text-textp font-semibold">

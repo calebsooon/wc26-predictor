@@ -413,7 +413,7 @@ export default function LeaderboardPage() {
         </div>
       )}
 
-      <div id={revealPicks ? `leaderboard-panel-${view}` : undefined} role={revealPicks ? 'tabpanel' : undefined} aria-labelledby={revealPicks ? `leaderboard-tab-${view}` : undefined}>
+      <div className="space-y-5" id={revealPicks ? `leaderboard-panel-${view}` : undefined} role={revealPicks ? 'tabpanel' : undefined} aria-labelledby={revealPicks ? `leaderboard-tab-${view}` : undefined}>
       {view === 'picks' ? (
         <PicksView
           matches={pickMatches}
@@ -495,7 +495,7 @@ export default function LeaderboardPage() {
                     pointerEvents: 'none',
                   }} />
 
-                  <div className="mx-auto grid max-w-[620px] grid-cols-3 items-end">
+                  <div className="mx-auto grid max-w-[620px] grid-cols-3 items-end gap-x-3 sm:gap-x-5">
                     {/* 2nd place */}
                     <PodiumSlot
                       player={podium[1]}
@@ -809,7 +809,7 @@ function PodiumSlot({ player, place, isMoney, tab }: { player: LBRow; place: 1 |
     place === 1 ? '0 0 0 4px rgb(var(--gold) / 0.16)' : undefined
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 4px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 6px' }}>
       {/* Crown for 1st */}
       {place === 1 && (
         <svg viewBox="0 0 24 24" fill="currentColor" style={{ color: 'rgb(var(--gold))', width: 24, height: 24, marginBottom: 4 }}>

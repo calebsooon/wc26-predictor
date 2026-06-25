@@ -117,7 +117,7 @@ function inferredLane(position: string) {
   return 3
 }
 
-const laneX = (lane: number) => 15 + (lane - 1) * 17.5
+const laneX = (lane: number) => 20 + (lane - 1) * 15
 const collisionOffsets: Record<number, number[]> = {
   1: [0],
   2: [-8, 8],
@@ -202,16 +202,15 @@ export function resolvePitchLayout<T extends PitchLayoutPlayer>(rows: T[], home:
   const yForRow = (row: number) => {
     if (formationFirst && lines) {
       const progress = Math.max(0, Math.min(lines.length, row)) / lines.length
-      // Keep each XI inside its half with a deliberate centre-circle buffer.
-      // The slightly wider 30-point span gives photo tokens enough breathing
-      // room without letting a player appear over the halfway line.
-      return home ? 88 - progress * 30 : 12 + progress * 30
+      // Keeper stays inside its box (nameplate must not clip the goal line) and
+      // the front line stops well short of halfway so its nameplate never spills
+      // across the centre line into the other team's half.
+      return home ? 87 - progress * 30 : 13 + progress * 30
     }
     const index = rowKeys.indexOf(row)
     const progress = lastRow > 0 ? index / lastRow : 0.5
-    // Keep a generous centre-circle buffer. Player photos and nameplates have
-    // visual height, so a nominal 50% line still looks like it crosses halves.
-    return home ? 85 - progress * 25 : 15 + progress * 25
+    // Same half-fill for partial provider sheets without a parseable formation.
+    return home ? 86 - progress * 28 : 14 + progress * 28
   }
   const groups = new Map<string, Slot<T>[]>()
   for (const slot of slots) {
@@ -244,7 +243,9 @@ export function resolvePitchLayout<T extends PitchLayoutPlayer>(rows: T[], home:
   for (const line of byRow.values()) {
     if (!line.every((position) => position.inferred)) continue
     const ordered = [...line].sort((a, b) => a.lane - b.lane || a.player.sort_order - b.player.sort_order || a.player.player_id - b.player.player_id)
-    const edge = ordered.length <= 1 ? 50 : ordered.length === 2 ? 33 : ordered.length === 3 ? 21 : ordered.length === 4 ? 16 : 12
+    // Larger edge inset keeps the wide players off the touchline so the whole
+    // line reads as centred rather than stretched corner-to-corner.
+    const edge = ordered.length <= 1 ? 50 : ordered.length === 2 ? 36 : ordered.length === 3 ? 26 : ordered.length === 4 ? 20 : 16
     ordered.forEach((position, index) => {
       position.x = ordered.length <= 1 ? 50 : edge + (index / (ordered.length - 1)) * (100 - edge * 2)
     })
