@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/require-admin'
 import { scorePrediction, type PredictionInput, type MatchResult } from '@/lib/scoring'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { snapshotLeagueRanks } from '@/lib/snapshot'
+import { equivalentPlayerIdsForScoring } from '@/lib/player-equivalence'
 
 export async function POST() {
   const supabase = await createServerSupabaseClient()
@@ -32,9 +33,17 @@ export async function POST() {
   if (predsErr) return NextResponse.json({ error: predsErr.message }, { status: 500 })
   if (!predictions || predictions.length === 0) return NextResponse.json({ rescored: 0 })
 
+  const equivalentIds = await equivalentPlayerIdsForScoring(serviceSupabase, [
+    ...(matches as { first_goal_player_id?: number | null }[]).map((m) => m.first_goal_player_id),
+    ...(predictions as { pred_first_scorer_id?: number | null }[]).map((p) => p.pred_first_scorer_id),
+  ])
+
   const matchMap = new Map<string, MatchResult>()
   for (const m of matches as unknown as (MatchResult & { id: string })[]) {
-    matchMap.set(m.id, m)
+    matchMap.set(m.id, {
+      ...m,
+      equivalent_first_scorer_ids: m.first_goal_player_id ? equivalentIds.get(m.first_goal_player_id) : null,
+    })
   }
 
   type PredRow = PredictionInput & { user_id: string; match_id: string }

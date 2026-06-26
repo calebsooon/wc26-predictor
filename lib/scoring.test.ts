@@ -36,6 +36,14 @@ describe('scorePrediction', () => {
     expect(scorePrediction({ pred_home: 0, pred_away: 0, pred_no_scorer: true }, M(2, 1, { first_goal_team: 'A', first_goal_player_id: 9 })).firstScorer).toBe(0)
   })
 
+  it('scores first scorer against equivalent duplicate player ids', () => {
+    const z = scorePrediction(
+      { pred_home: 2, pred_away: 1, pred_first_scorer_id: 4385510 },
+      M(2, 1, { first_goal_team: 'A', first_goal_player_id: 189529648, equivalent_first_scorer_ids: [4385510, 189529648] }),
+    )
+    expect(z.firstScorer).toBe(POINTS.firstScorer)
+  })
+
   it('goal-diff and total-goals overrides hedge independently of scoreline', () => {
     // wrong scoreline (2-1 vs 3-2) but right GD (1) and right TG (5)
     const z = scorePrediction({ pred_home: 2, pred_away: 1, pred_goal_diff: 1, pred_total_goals: 5 }, M(3, 2))

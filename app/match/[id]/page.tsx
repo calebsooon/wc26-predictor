@@ -157,16 +157,16 @@ export default function MatchDetailPage() {
         const home = getTeam(dbm.home_team), away = getTeam(dbm.away_team)
         const [{ data: pl }, { data: matchTeamStats }, { data: matchPlayerStats }] = await Promise.all([
           supabase.from('players')
-            .select('id, name, team_name, jersey_number, position')
+            .select('id, fifa_player_id, name, team_name, jersey_number, position, photo_url')
             .in('team_name', [home.playerKey, away.playerKey])
             .order('jersey_number', { ascending: true, nullsFirst: false }),
           supabase.from('match_team_stats').select('team_code, stats').eq('match_id', id),
           supabase.from('match_player_stats').select('player_id, team_code, stats').eq('match_id', id),
         ])
-        type PlRow = { id: number; name: string; team_name: string; jersey_number: number | null; position: string | null }
+        type PlRow = { id: number; fifa_player_id: number | null; name: string; team_name: string; jersey_number: number | null; position: string | null; photo_url: string | null }
         setPlayers((pl ?? []).map((p) => {
-          const { id, name, team_name, jersey_number, position } = p as PlRow
-          return { id, name, jersey_number, position: position ?? null, team_code: team_name === home.playerKey ? dbm.home_team : dbm.away_team }
+          const { id, fifa_player_id, name, team_name, jersey_number, position, photo_url } = p as PlRow
+          return { id, fifa_player_id, name, jersey_number, position: position ?? null, photo_url, team_code: team_name === home.playerKey ? dbm.home_team : dbm.away_team }
         }))
         setTeamStats((matchTeamStats ?? []) as unknown as StoredTeamStats[])
         setPlayerStats((matchPlayerStats ?? []) as unknown as StoredPlayerStats[])

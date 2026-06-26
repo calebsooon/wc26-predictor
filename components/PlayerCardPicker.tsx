@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useRef } from 'react'
 import { getTeam, normalisePosition, POSITION_ABBR } from '@/lib/teams'
+import { nameKey } from '@/lib/normalize'
 import { DialogShell, SearchIcon } from '@/components/ui'
 import FlagChip from '@/components/FlagChip'
 
@@ -11,6 +12,8 @@ export interface PlayerForPicker {
   team_code: string
   jersey_number: number | null
   position?: string | null
+  fifa_player_id?: number | null
+  photo_url?: string | null
 }
 
 /** Short group abbrev (GK/DEF/MID/FWD) for either coarse sections or detailed positions. */
@@ -41,6 +44,7 @@ function PlayerCard({
   player: PlayerForPicker; selected: boolean; onClick: () => void
 }) {
   const team = getTeam(player.team_code)
+  const position = posAbbr(player.position)
   return (
     <button
       onClick={onClick}
@@ -58,9 +62,6 @@ function PlayerCard({
           {player.jersey_number != null && (
             <span className="text-[11px] font-extrabold tabular-nums text-texts/50">{player.jersey_number}</span>
           )}
-          {posAbbr(player.position) && (
-            <span className="text-[8px] font-extrabold tracking-wide text-texts/40">{posAbbr(player.position)}</span>
-          )}
         </div>
         {selected && (
           <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-gold grid place-items-center">
@@ -72,8 +73,13 @@ function PlayerCard({
         <p className="text-[9px] font-extrabold text-textp leading-tight truncate px-0.5">
           {lastName(player.name)}
         </p>
-        <div className="mt-1 flex justify-center">
+        <div className="mt-1 flex items-center justify-center gap-1">
           <FlagChip code={team.code} w={18} h={12} r={3} />
+          {position && (
+            <span className="rounded bg-surface3 px-1 py-px text-[7.5px] font-extrabold leading-none tracking-wide text-texts">
+              {position}
+            </span>
+          )}
         </div>
       </div>
     </button>
@@ -83,6 +89,40 @@ function PlayerCard({
 function lastName(name: string) {
   const parts = name.trim().split(' ')
   return parts[parts.length - 1]
+}
+
+function dedupePlayers(players: PlayerForPicker[], selectedId: number | null): PlayerForPicker[] {
+  const byPlayer = new Map<string, PlayerForPicker>()
+  for (const player of players) {
+    const key = `${player.team_code}:${nameKey(player.name)}`
+    const current = byPlayer.get(key)
+    if (!current) {
+      byPlayer.set(key, player)
+      continue
+    }
+
+    if (current.id === selectedId) continue
+    if (player.id === selectedId) {
+      byPlayer.set(key, player)
+      continue
+    }
+
+    const currentScore =
+      (current.fifa_player_id ? 8 : 0) +
+      (current.photo_url ? 4 : 0) +
+      (current.jersey_number != null ? 2 : 0) +
+      (current.position ? 1 : 0)
+    const nextScore =
+      (player.fifa_player_id ? 8 : 0) +
+      (player.photo_url ? 4 : 0) +
+      (player.jersey_number != null ? 2 : 0) +
+      (player.position ? 1 : 0)
+
+    if (nextScore > currentScore || (nextScore === currentScore && player.id > current.id)) {
+      byPlayer.set(key, player)
+    }
+  }
+  return [...byPlayer.values()]
 }
 
 export function PlayerCardPicker({
@@ -104,12 +144,15 @@ export function PlayerCardPicker({
 
   const noScorer = value === 'none'
   const ownGoal = value === -1
-  const selected = typeof value === 'number' && value !== -1 ? (players.find((p) => p.id === value) ?? null) : null
+  const selectedId = typeof value === 'number' && value !== -1 ? value : null
+  const visiblePlayers = useMemo(() => dedupePlayers(players, selectedId), [players, selectedId])
+  const selected = selectedId != null ? (visiblePlayers.find((p) => p.id === selectedId) ?? players.find((p) => p.id === selectedId) ?? null) : null
+  const selectedPosition = posAbbr(selected?.position)
   const hasChoice = noScorer || ownGoal || !!selected
 
   const grouped = useMemo(() => {
     const q = search.toLowerCase()
-    const filtered = q ? players.filter((p) => p.name.toLowerCase().includes(q)) : players
+    const filtered = q ? visiblePlayers.filter((p) => p.name.toLowerCase().includes(q)) : visiblePlayers
     const map = new Map<string, PlayerForPicker[]>()
     for (const p of filtered) {
       const arr = map.get(p.team_code) ?? []
@@ -117,7 +160,7 @@ export function PlayerCardPicker({
       map.set(p.team_code, arr)
     }
     return map
-  }, [players, search])
+  }, [visiblePlayers, search])
 
   function pick(id: number) {
     onChange(id)
@@ -176,8 +219,8 @@ export function PlayerCardPicker({
           <>
             <FlagChip code={selected.team_code} w={24} h={16} r={4} />
             <span className="flex-1 text-left text-textp truncate">{selected.name}</span>
-            {selected.position && (
-              <span className="text-[10px] text-texts font-bold uppercase tracking-wide shrink-0">{normalisePosition(selected.position)}</span>
+            {selectedPosition && (
+              <span className="rounded-md bg-surface3 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-texts shrink-0">{selectedPosition}</span>
             )}
             {selected.jersey_number != null && (
               <span className="text-[11px] text-texts font-extrabold tabular-nums shrink-0">#{selected.jersey_number}</span>

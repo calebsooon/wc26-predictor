@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/require-admin'
 import { scorePrediction, type PredictionInput } from '@/lib/scoring'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { snapshotLeagueRanks } from '@/lib/snapshot'
+import { equivalentPlayerIdsForScoring } from '@/lib/player-equivalence'
 
 function ordinal(n: number) {
   const s = ['th', 'st', 'nd', 'rd'], v = n % 100
@@ -42,18 +43,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Match has no real scores yet' }, { status: 422 })
   }
 
-  const result = {
-    home_team: m.home_team, away_team: m.away_team,
-    real_home_score: m.real_home_score, real_away_score: m.real_away_score,
-    first_goal_team: m.first_goal_team, first_goal_player_id: m.first_goal_player_id,
-  }
-
   const { data: predictions, error: predsErr } = await serviceSupabase
     .from('predictions')
     .select('user_id, pred_home, pred_away, pred_first_goal_team, pred_first_scorer_id, pred_total_goals, pred_goal_diff, pred_btts, pred_no_scorer')
     .eq('match_id', match_id)
   if (predsErr) return NextResponse.json({ error: predsErr.message }, { status: 500 })
   if (!predictions || predictions.length === 0) return NextResponse.json({ match_id, scored: 0 })
+
+  const scorerIds = (predictions as { pred_first_scorer_id?: number | null }[])
+    .map((p) => p.pred_first_scorer_id)
+  const equivalents = await equivalentPlayerIdsForScoring(serviceSupabase, [m.first_goal_player_id, ...scorerIds])
+  const result = {
+    home_team: m.home_team, away_team: m.away_team,
+    real_home_score: m.real_home_score, real_away_score: m.real_away_score,
+    first_goal_team: m.first_goal_team, first_goal_player_id: m.first_goal_player_id,
+    equivalent_first_scorer_ids: m.first_goal_player_id ? equivalents.get(m.first_goal_player_id) : null,
+  }
 
   type PredRow = PredictionInput & { user_id: string }
   const updates = (predictions as unknown as PredRow[]).map((p) => {

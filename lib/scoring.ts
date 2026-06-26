@@ -202,6 +202,7 @@ export interface MatchResult {
   real_away_score: number
   first_goal_team?: string | null
   first_goal_player_id?: number | null
+  equivalent_first_scorer_ids?: number[] | null
 }
 
 const sign = (n: number) => (n > 0 ? 1 : n < 0 ? -1 : 0)
@@ -235,8 +236,11 @@ export function scorePrediction(pred: PredictionInput, m: MatchResult): ScoreBre
   if (pred.pred_no_scorer) {
     // "No first scorer" is correct only when the match had no first goal
     if (m.first_goal_team === 'NONE') z.firstScorer = POINTS.firstScorer
-  } else if (pred.pred_first_scorer_id != null && m.first_goal_player_id != null && pred.pred_first_scorer_id === m.first_goal_player_id) {
-    z.firstScorer = POINTS.firstScorer
+  } else if (pred.pred_first_scorer_id != null && m.first_goal_player_id != null) {
+    const scorerIds = m.equivalent_first_scorer_ids ?? [m.first_goal_player_id]
+    if (pred.pred_first_scorer_id === m.first_goal_player_id || scorerIds.includes(pred.pred_first_scorer_id)) {
+      z.firstScorer = POINTS.firstScorer
+    }
   }
 
   z.total = z.outcome + z.exact + z.goalDiff + z.totalGoals + z.teamGoals + z.btts + z.firstTeam + z.firstScorer

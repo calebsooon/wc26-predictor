@@ -27,7 +27,7 @@ function ptColor(pts: number, w: ScoringWeights): string {
 import { fmtDateKey, fmtDateOnlyKey, fmtTime, getUserTimeZone } from '@/lib/date-format'
 import FlagChip from '@/components/FlagChip'
 import PredictionModal from '@/components/PredictionModal'
-import { getTeam, normalisePosition } from '@/lib/teams'
+import { getTeam } from '@/lib/teams'
 import { useUrlState } from '@/lib/url-state'
 import Link from 'next/link'
 
@@ -556,7 +556,6 @@ function MatchRow({
     : pred?.pred_first_scorer_id === -1
       ? 'Own goal'
       : playerSummary?.name ?? null
-  const scorerPosition = playerSummary?.position ? normalisePosition(playerSummary.position) : null
 
   // Determine status pill props
   type PillCfg = { label: string; color: string; bg: string; border: string }
@@ -752,11 +751,6 @@ function MatchRow({
           {scorerLabel && (
             <span className="flex max-w-[140px] items-center justify-end gap-1.5 text-[10.5px] font-semibold text-texts">
               <span className="truncate">{scorerLabel}</span>
-              {scorerPosition && (
-                <span className="shrink-0 rounded-md bg-surface3 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-faint">
-                  {scorerPosition}
-                </span>
-              )}
             </span>
           )}
         </div>

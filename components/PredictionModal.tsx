@@ -134,7 +134,7 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
       const away = getTeam((dbm as { away_team: string }).away_team)
 
       const [{ data: pl }, { data: mine }, leagueResult] = await Promise.all([
-        supabase.from('players').select('id, name, team_name, jersey_number, position')
+        supabase.from('players').select('id, fifa_player_id, name, team_name, jersey_number, position, photo_url')
           .in('team_name', [home.playerKey, away.playerKey])
           .order('jersey_number', { ascending: true, nullsFirst: false }),
         supabase.from('predictions')
@@ -143,10 +143,10 @@ export default function PredictionModal({ matchId, onClose }: PredictionModalPro
         getActiveLeague(supabase, user.id),
       ])
 
-      type PlRow = { id: number; name: string; team_name: string; jersey_number: number | null; position: string | null }
+      type PlRow = { id: number; fifa_player_id: number | null; name: string; team_name: string; jersey_number: number | null; position: string | null; photo_url: string | null }
       setPlayers((pl ?? []).map((p) => {
         const r = p as PlRow
-        return { id: r.id, name: r.name, jersey_number: r.jersey_number, position: r.position ?? null, team_code: r.team_name === home.playerKey ? (dbm as { home_team: string }).home_team : (dbm as { away_team: string }).away_team }
+        return { id: r.id, fifa_player_id: r.fifa_player_id, name: r.name, jersey_number: r.jersey_number, position: r.position ?? null, photo_url: r.photo_url, team_code: r.team_name === home.playerKey ? (dbm as { home_team: string }).home_team : (dbm as { away_team: string }).away_team }
       }))
 
       if (mine) {

@@ -2,6 +2,7 @@
 // final result + first scorer. Shared by the FIFA result sync flows.
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { scorePrediction, type PredictionInput } from '@/lib/scoring'
+import { equivalentPlayerIdsForScoring } from '@/lib/player-equivalence'
 
 interface MatchResult {
   id: string; home_team: string; away_team: string
@@ -24,10 +25,14 @@ export async function scoreMatchPredictions(service: SupabaseClient, matchId: st
     .eq('match_id', matchId)
   if (!preds?.length) return 0
 
+  const scorerIds = (preds as { pred_first_scorer_id?: number | null }[])
+    .map((p) => p.pred_first_scorer_id)
+  const equivalents = await equivalentPlayerIdsForScoring(service, [m.first_goal_player_id, ...scorerIds])
   const result = {
     home_team: m.home_team, away_team: m.away_team,
     real_home_score: m.real_home_score as number, real_away_score: m.real_away_score as number,
     first_goal_team: m.first_goal_team, first_goal_player_id: m.first_goal_player_id,
+    equivalent_first_scorer_ids: m.first_goal_player_id ? equivalents.get(m.first_goal_player_id) : null,
   }
   type Row = PredictionInput & { user_id: string }
   const updates = (preds as unknown as Row[]).map((p) => {
