@@ -274,7 +274,7 @@ function BracketPageInner() {
   const supabase = useMemo(() => createClient(), [])
   const { searchParams, replaceUrl } = useUrlState()
   const [loading, setLoading] = useState(true)
-  const [phase, setPhase] = useState<BracketPhase>(searchParams.get('phase') === 'r32' ? 'r32' : 'pre')
+  const [phase, setPhase] = useState<BracketPhase>(searchParams.get('phase') === 'pre' ? 'pre' : 'r32')
   const [predsByPhase, setPredsByPhase] = useState<Record<BracketPhase, TournamentPred>>({
     pre: EMPTY_PRED,
     r32: EMPTY_PRED,
@@ -289,7 +289,7 @@ function BracketPageInner() {
   const [deadlines, setDeadlines] = useState<{ pre: string | null; r32: string | null }>({ pre: null, r32: null })
 
   useEffect(() => {
-    setPhase(searchParams.get('phase') === 'r32' ? 'r32' : 'pre')
+    setPhase(searchParams.get('phase') === 'pre' ? 'pre' : 'r32')
   }, [searchParams])
 
   useEffect(() => {
@@ -334,16 +334,7 @@ function BracketPageInner() {
           }
         }
         setPredsByPhase(next)
-        setDraft(next.pre)
-        if (
-          next.pre.champion === null &&
-          next.pre.runner_up === null &&
-          next.pre.semi.length === 0 &&
-          next.pre.quarter.length === 0 &&
-          (next.r32.champion || next.r32.runner_up || next.r32.semi.length > 0 || next.r32.quarter.length > 0)
-        ) {
-          setPhase('r32')
-        }
+        setDraft(next.r32)
       }
 
       // Load real bracket results (set by admin in bracket_results table).
