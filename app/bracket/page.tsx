@@ -306,16 +306,17 @@ function BracketPageInner() {
       // Load active league context
       await getActiveLeague(supabase, user.id)
 
-      // Compute phase lock deadlines from the fixture list.
+      // Pre-tournament phase locks at the first match; r32 has no auto-deadline
+      // (admin controls it via bracket_enabled on the league).
       const { data: mData } = await supabase
         .from('matches')
-        .select('match_date, group_name')
+        .select('match_date')
         .order('match_date')
-      const allMatches = (mData as { match_date: string; group_name: string | null }[] | null) ?? []
-      const firstKnockout = allMatches.find((m) => m.group_name === null)
+        .limit(1)
+      const allMatches = (mData as { match_date: string }[] | null) ?? []
       setDeadlines({
         pre: allMatches.length ? allMatches[0].match_date : null,
-        r32: firstKnockout ? firstKnockout.match_date : null,
+        r32: null,
       })
 
       // Load tournament predictions for both phases (include scored pts columns)
