@@ -18,10 +18,11 @@ interface TournamentPred {
   runner_up: string | null
   semi: string[]
   quarter: string[]
+  r32: string[]
 }
 
 type BracketPhase = 'pre' | 'r32'
-const EMPTY_PRED: TournamentPred = { champion: null, runner_up: null, semi: [], quarter: [] }
+const EMPTY_PRED: TournamentPred = { champion: null, runner_up: null, semi: [], quarter: [], r32: [] }
 const ALL_TEAMS = Object.values(TEAMS).sort((a, b) => a.name.localeCompare(b.name))
 
 interface BracketResults {
@@ -29,6 +30,7 @@ interface BracketResults {
   runner_up: string | null
   semi: string[]
   quarter: string[]
+  r32: string[]  // 16 teams that advanced from R32 (stored as top16 in bracket_results table)
   settled: boolean
 }
 
@@ -85,24 +87,27 @@ function InfoSVG({ size = 18 }: { size?: number }) {
 /* ---------- compute points secured from user picks + results ---------- */
 function computePoints(pred: TournamentPred, results: BracketResults): { secured: number; possible: number } {
   let secured = 0
-  const possible = TOURNAMENT_POINTS.champion + TOURNAMENT_POINTS.runner_up +
-    TOURNAMENT_POINTS.semi * 4 + TOURNAMENT_POINTS.quarter * 8
+  const possible =
+    TOURNAMENT_POINTS.r32 * 16 +
+    TOURNAMENT_POINTS.quarter * 8 +
+    TOURNAMENT_POINTS.semi * 4 +
+    TOURNAMENT_POINTS.runner_up +
+    TOURNAMENT_POINTS.champion
 
   if (results.settled) {
-    // Champion
-    if (pred.champion && results.champion && pred.champion === results.champion)
-      secured += TOURNAMENT_POINTS.champion
-    // Runner-up
-    if (pred.runner_up && results.runner_up && pred.runner_up === results.runner_up)
-      secured += TOURNAMENT_POINTS.runner_up
-    // Semis
-    for (const code of pred.semi) {
-      if (results.semi.includes(code)) secured += TOURNAMENT_POINTS.semi
+    for (const code of pred.r32) {
+      if (results.r32.includes(code)) secured += TOURNAMENT_POINTS.r32
     }
-    // Quarters
     for (const code of pred.quarter) {
       if (results.quarter.includes(code)) secured += TOURNAMENT_POINTS.quarter
     }
+    for (const code of pred.semi) {
+      if (results.semi.includes(code)) secured += TOURNAMENT_POINTS.semi
+    }
+    if (pred.runner_up && results.runner_up && pred.runner_up === results.runner_up)
+      secured += TOURNAMENT_POINTS.runner_up
+    if (pred.champion && results.champion && pred.champion === results.champion)
+      secured += TOURNAMENT_POINTS.champion
   }
 
   return { secured, possible }
@@ -279,11 +284,12 @@ function BracketPageInner() {
     pre: EMPTY_PRED,
     r32: EMPTY_PRED,
   })
+  const [realResults, setRealResults] = useState<{ r32: string[]; quarter: string[]; semi: string[]; runner_up: string | null; champion: string | null }>({ r32: [], quarter: [], semi: [], runner_up: null, champion: null })
   const [draft, setDraft] = useState<TournamentPred>(EMPTY_PRED)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
   const saveMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [bracketResults, setBracketResults] = useState<BracketResults>({ champion: null, runner_up: null, semi: [], quarter: [], settled: false })
+  const [bracketResults, setBracketResults] = useState<BracketResults>({ champion: null, runner_up: null, semi: [], quarter: [], r32: [], settled: false })
   // Phase deadlines: 'pre' locks at the tournament's first kickoff, 'r32' at the
   // first knockout kickoff. Mirrors the DB-level write guard.
   const [deadlines, setDeadlines] = useState<{ pre: string | null; r32: string | null }>({ pre: null, r32: null })
@@ -315,14 +321,14 @@ function BracketPageInner() {
       // Load tournament predictions for both phases (include scored pts columns)
       const { data: predData } = await supabase
         .from('tournament_predictions')
-        .select('phase, champion, runner_up, semi, quarter, pts_champion, pts_runner_up, pts_semi, pts_quarter')
+        .select('phase, champion, runner_up, semi, quarter, r32, pts_champion, pts_runner_up, pts_semi, pts_quarter, pts_r32')
         .eq('user_id', user.id)
         .in('phase', ['pre', 'r32'])
 
       if (predData) {
         const next: Record<BracketPhase, TournamentPred> = {
-          pre: { champion: null, runner_up: null, semi: [], quarter: [] },
-          r32: { champion: null, runner_up: null, semi: [], quarter: [] },
+          pre: EMPTY_PRED,
+          r32: EMPTY_PRED,
         }
         for (const row of predData as Record<string, unknown>[]) {
           const rowPhase = row.phase === 'r32' ? 'r32' : 'pre'
@@ -331,6 +337,7 @@ function BracketPageInner() {
             runner_up: (row.runner_up as string) ?? null,
             semi: (row.semi as string[]) ?? [],
             quarter: (row.quarter as string[]) ?? [],
+            r32: (row.r32 as string[]) ?? [],
           }
         }
         setPredsByPhase(next)
@@ -339,27 +346,26 @@ function BracketPageInner() {
 
       // Load real bracket results (set by admin in bracket_results table).
       // Also check if this user's pts columns have been populated by score-tournament.
-      const preRow = predData?.find((r: Record<string, unknown>) => r.phase === 'pre') as Record<string, unknown> | undefined
-      const hasScoring = preRow && (preRow.pts_champion != null || preRow.pts_runner_up != null || preRow.pts_semi != null || preRow.pts_quarter != null)
+      const r32Row = predData?.find((r: Record<string, unknown>) => r.phase === 'r32') as Record<string, unknown> | undefined
+      const hasScoring = r32Row && (r32Row.pts_champion != null || r32Row.pts_r32 != null || r32Row.pts_quarter != null)
 
       const { data: brData } = await supabase
         .from('bracket_results')
-        .select('champion, runner_up, semi, quarter')
+        .select('champion, runner_up, semi, quarter, top16')
         .eq('id', 'wc2026')
         .maybeSingle()
 
-      const brChampion = (brData as Record<string, unknown> | null)?.champion as string | null ?? null
-      const brRunnerUp = (brData as Record<string, unknown> | null)?.runner_up as string | null ?? null
-      const brSemi = ((brData as Record<string, unknown> | null)?.semi as string[]) ?? []
-      const brQuarter = ((brData as Record<string, unknown> | null)?.quarter as string[]) ?? []
+      const br = brData as Record<string, unknown> | null
+      const brChampion = br?.champion as string | null ?? null
+      const brRunnerUp = br?.runner_up as string | null ?? null
+      const brSemi = (br?.semi as string[]) ?? []
+      const brQuarter = (br?.quarter as string[]) ?? []
+      const brR32 = (br?.top16 as string[]) ?? []
 
-      setBracketResults({
-        champion: brChampion,
-        runner_up: brRunnerUp,
-        semi: brSemi,
-        quarter: brQuarter,
-        settled: !!hasScoring || !!(brChampion || brRunnerUp || brSemi.length > 0),
-      })
+      const settled = !!hasScoring || !!(brChampion || brRunnerUp || brSemi.length > 0 || brR32.length > 0)
+
+      setBracketResults({ champion: brChampion, runner_up: brRunnerUp, semi: brSemi, quarter: brQuarter, r32: brR32, settled })
+      setRealResults({ r32: brR32, quarter: brQuarter, semi: brSemi, runner_up: brRunnerUp, champion: brChampion })
 
       setLoading(false)
     }
@@ -377,14 +383,14 @@ function BracketPageInner() {
   const locked = phaseDeadline != null && new Date(phaseDeadline) <= new Date()
   const { secured, possible } = computePoints(pred, bracketResults)
   const { qf, sf, fin } = buildBracketMatchups(pred)
-  const hasAnyPhaseData = Object.values(predsByPhase).some((p) => p.champion || p.runner_up || p.semi.length > 0 || p.quarter.length > 0)
+  const hasAnyPhaseData = Object.values(predsByPhase).some((p) => p.champion || p.runner_up || p.semi.length > 0 || p.quarter.length > 0 || p.r32.length > 0)
   const phaseSaved = predsByPhase[phase]
   const isDirty = JSON.stringify(draft) !== JSON.stringify(phaseSaved)
 
   const championTeam = pred.champion ? getTeam(pred.champion) : null
   const runnerUpTeam = pred.runner_up ? getTeam(pred.runner_up) : null
 
-  function toggleCode(key: 'quarter' | 'semi', code: string, max: number) {
+  function toggleCode(key: 'r32' | 'quarter' | 'semi', code: string, max: number) {
     if (locked) return
     setDraft((prev) => {
       const cur = prev[key]
@@ -394,6 +400,13 @@ function BracketPageInner() {
         ? [...cur, code]
         : cur
       const nextDraft = { ...prev, [key]: next }
+      if (key === 'r32') {
+        // R32 picks constrain everything downstream
+        nextDraft.quarter = nextDraft.quarter.filter((c) => next.includes(c))
+        nextDraft.semi = nextDraft.semi.filter((c) => nextDraft.quarter.includes(c))
+        if (nextDraft.runner_up && !nextDraft.semi.includes(nextDraft.runner_up)) nextDraft.runner_up = null
+        if (nextDraft.champion && !nextDraft.semi.includes(nextDraft.champion)) nextDraft.champion = null
+      }
       if (key === 'quarter') {
         nextDraft.semi = nextDraft.semi.filter((c) => next.includes(c))
         if (nextDraft.runner_up && !nextDraft.semi.includes(nextDraft.runner_up)) nextDraft.runner_up = null
@@ -414,6 +427,7 @@ function BracketPageInner() {
     setSaving(true)
     setSaveMsg(null)
     const payload: TournamentPred = {
+      r32: draft.r32.slice(0, 16),
       quarter: draft.quarter.slice(0, 8),
       semi: draft.semi.slice(0, 4),
       runner_up: draft.runner_up,
@@ -422,6 +436,7 @@ function BracketPageInner() {
     const { error } = await supabase.from('tournament_predictions').upsert({
       user_id: user.id,
       phase,
+      r32: payload.r32,
       quarter: payload.quarter,
       semi: payload.semi,
       runner_up: payload.runner_up,
@@ -465,7 +480,7 @@ function BracketPageInner() {
               { key: 'r32' as BracketPhase, label: 'Post-group stage' },
             ]).map((option) => {
               const active = phase === option.key
-              const phaseHasData = predsByPhase[option.key].champion || predsByPhase[option.key].runner_up || predsByPhase[option.key].semi.length > 0 || predsByPhase[option.key].quarter.length > 0
+              const phaseHasData = predsByPhase[option.key].champion || predsByPhase[option.key].runner_up || predsByPhase[option.key].semi.length > 0 || predsByPhase[option.key].quarter.length > 0 || predsByPhase[option.key].r32.length > 0
               return (
                 <button
                   key={option.key}
@@ -541,15 +556,18 @@ function BracketPageInner() {
               {phase === 'pre' ? 'Pre-tournament bracket' : 'Post-group stage bracket'}
             </div>
             <div style={{ fontSize: 12, color: 'rgb(var(--texts))', marginTop: 3 }}>
-              Pick 8 quarter-finalists, 4 semi-finalists, then your finalist and champion.
+              Pick who advances at each stage: R32 → R16 → QF → SF → Champion.
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: draft.r32.length === 16 ? 'rgb(var(--primary))' : 'rgb(var(--texts))' }}>
+              R32 {draft.r32.length}/16
+            </span>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: draft.quarter.length === 8 ? 'rgb(var(--primary))' : 'rgb(var(--texts))' }}>
-              QF {draft.quarter.length}/8
+              R16 {draft.quarter.length}/8
             </span>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: draft.semi.length === 4 ? 'rgb(var(--primary))' : 'rgb(var(--texts))' }}>
-              SF {draft.semi.length}/4
+              QF {draft.semi.length}/4
             </span>
           </div>
         </div>
@@ -576,34 +594,43 @@ function BracketPageInner() {
         <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <PickerSection
-              title="Quarter-finalists"
-              sub="Select 8 teams"
-              selected={draft.quarter}
-              max={8}
+              title="Round of 32 — who advances?"
+              sub="Select 16 teams from the 32 qualified (+1 pt each)"
+              selected={draft.r32}
+              max={16}
               options={ALL_TEAMS.map((t) => t.code)}
-              onToggle={(code) => toggleCode('quarter', code, 8)}
+              onToggle={(code) => toggleCode('r32', code, 16)}
             />
             <PickerSection
-              title="Semi-finalists"
-              sub="Select 4 from your quarter-finalists"
+              title="Round of 16 — who reaches QF?"
+              sub="Select 8 from your R32 picks (+2 pts each)"
+              selected={draft.quarter}
+              max={8}
+              options={draft.r32}
+              onToggle={(code) => toggleCode('quarter', code, 8)}
+              emptyLabel="Pick R32 advancers first"
+            />
+            <PickerSection
+              title="Quarter-finals — who reaches SF?"
+              sub="Select 4 from your R16 picks (+3 pts each)"
               selected={draft.semi}
               max={4}
               options={draft.quarter}
               onToggle={(code) => toggleCode('semi', code, 4)}
-              emptyLabel="Pick quarter-finalists first"
+              emptyLabel="Pick R16 advancers first"
             />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <SinglePickSection
-              title="Runner-up"
+              title="Finalist (+5 pts)"
               value={draft.runner_up}
               options={draft.semi}
               onSelect={(code) => setDraft((prev) => ({ ...prev, runner_up: code || null, champion: prev.champion === code ? null : prev.champion }))}
               emptyLabel="Pick semi-finalists first"
             />
             <SinglePickSection
-              title="Champion"
+              title="Champion (+10 pts)"
               value={draft.champion}
               options={draft.semi.filter((code) => code !== draft.runner_up)}
               onSelect={(code) => setDraft((prev) => ({ ...prev, champion: code || null }))}
@@ -612,12 +639,12 @@ function BracketPageInner() {
             <div style={{ background: 'rgb(var(--surface2))', border: '1px solid rgb(var(--border))', borderRadius: 14, padding: '14px 15px' }}>
               <div style={{ ...EB, color: 'rgb(var(--texts))', marginBottom: 10 }}>Save bracket</div>
               <div style={{ fontSize: 12, color: 'rgb(var(--texts))', lineHeight: 1.5, marginBottom: 12 }}>
-                Your bracket can only score cleanly once all slots are filled: 8 quarter-finalists, 4 semi-finalists, runner-up and champion.
+                Fill all stages to score: 16 R32 advancers, 8 R16 advancers, 4 QF advancers, finalist and champion.
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <button
                   onClick={saveBracket}
-                  disabled={saving || draft.quarter.length !== 8 || draft.semi.length !== 4 || !draft.runner_up || !draft.champion}
+                  disabled={saving || draft.r32.length !== 16 || draft.quarter.length !== 8 || draft.semi.length !== 4 || !draft.runner_up || !draft.champion}
                   style={{
                     height: 40,
                     padding: '0 16px',
@@ -628,7 +655,7 @@ function BracketPageInner() {
                     color: 'rgb(4,38,20)',
                     fontSize: 13,
                     fontWeight: 800,
-                    opacity: saving || draft.quarter.length !== 8 || draft.semi.length !== 4 || !draft.runner_up || !draft.champion ? 0.55 : 1,
+                    opacity: saving || draft.r32.length !== 16 || draft.quarter.length !== 8 || draft.semi.length !== 4 || !draft.runner_up || !draft.champion ? 0.55 : 1,
                   }}
                 >
                   {saving ? 'Saving…' : isDirty ? 'Save bracket' : 'Saved'}
@@ -980,22 +1007,141 @@ function BracketPageInner() {
         </div>
       )}
 
-      {/* ── Info banner ── */}
-      <div style={{
-        background: 'rgba(var(--primary),0.07)',
-        border: '1px solid rgba(var(--primary),0.2)',
-        borderRadius: 14,
-        padding: '14px 18px',
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 10,
-      }}>
-        <InfoSVG size={18} />
-        <p style={{ fontSize: 13, color: 'rgb(var(--textp))', margin: 0, lineHeight: 1.5 }}>
-          {hasAnyPhaseData
-            ? <>Bracket picks are locked for this phase. <strong>{secured} of a possible {possible} points</strong> secured so far.</>
-            : <>Bracket picks are not available yet for this phase.</>}
-        </p>
+      {/* ── Real bracket results ── */}
+      {(realResults.r32.length > 0 || realResults.quarter.length > 0 || realResults.champion) && (
+        <div style={{
+          background: 'rgb(var(--card))',
+          border: '1px solid rgb(var(--border))',
+          borderRadius: 18,
+          padding: '18px 20px',
+        }}>
+          <div style={{ fontWeight: 700, fontSize: 15, fontFamily: 'Schibsted Grotesk, sans-serif', marginBottom: 14 }}>
+            Real results
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {realResults.champion && (
+              <div>
+                <div style={{ ...EB, color: 'rgb(var(--gold))', marginBottom: 6 }}>Champion</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <FlagChip code={realResults.champion} w={28} h={19} r={4} />
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>{getTeam(realResults.champion)?.name ?? realResults.champion}</span>
+                  {pred.champion === realResults.champion && <span style={{ fontSize: 11, fontWeight: 700, color: 'rgb(var(--primary))' }}>✓ +{TOURNAMENT_POINTS.champion} pts</span>}
+                </div>
+              </div>
+            )}
+            {realResults.runner_up && (
+              <div>
+                <div style={{ ...EB, color: 'rgb(var(--texts))', marginBottom: 6 }}>Runner-up</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <FlagChip code={realResults.runner_up} w={24} h={16} r={3} />
+                  <span style={{ fontWeight: 600, fontSize: 13 }}>{getTeam(realResults.runner_up)?.name ?? realResults.runner_up}</span>
+                  {pred.runner_up === realResults.runner_up && <span style={{ fontSize: 11, fontWeight: 700, color: 'rgb(var(--primary))' }}>✓ +{TOURNAMENT_POINTS.runner_up} pts</span>}
+                </div>
+              </div>
+            )}
+            {realResults.semi.length > 0 && (
+              <div>
+                <div style={{ ...EB, color: 'rgb(var(--texts))', marginBottom: 6 }}>Semi-finalists</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {realResults.semi.map((code) => {
+                    const hit = pred.semi.includes(code)
+                    return (
+                      <span key={code} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '4px 9px', borderRadius: 999,
+                        border: `1px solid ${hit ? 'rgba(var(--primary),0.3)' : 'rgb(var(--border))'}`,
+                        background: hit ? 'rgba(var(--primary),0.08)' : 'rgb(var(--surface2))',
+                        fontSize: 12, fontWeight: 700,
+                      }}>
+                        <FlagChip code={code} w={18} h={12} r={2} />
+                        {getTeam(code)?.name ?? code}
+                        {hit && <span style={{ color: 'rgb(var(--primary))' }}>✓</span>}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+            {realResults.quarter.length > 0 && (
+              <div>
+                <div style={{ ...EB, color: 'rgb(var(--texts))', marginBottom: 6 }}>Quarter-finalists (R16 advancers)</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {realResults.quarter.map((code) => {
+                    const hit = pred.quarter.includes(code)
+                    return (
+                      <span key={code} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '4px 9px', borderRadius: 999,
+                        border: `1px solid ${hit ? 'rgba(var(--primary),0.3)' : 'rgb(var(--border))'}`,
+                        background: hit ? 'rgba(var(--primary),0.08)' : 'rgb(var(--surface2))',
+                        fontSize: 12, fontWeight: 700,
+                      }}>
+                        <FlagChip code={code} w={18} h={12} r={2} />
+                        {getTeam(code)?.name ?? code}
+                        {hit && <span style={{ color: 'rgb(var(--primary))' }}>✓</span>}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+            {realResults.r32.length > 0 && (
+              <div>
+                <div style={{ ...EB, color: 'rgb(var(--texts))', marginBottom: 6 }}>R32 advancers (to R16)</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {realResults.r32.map((code) => {
+                    const hit = pred.r32.includes(code)
+                    return (
+                      <span key={code} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '4px 9px', borderRadius: 999,
+                        border: `1px solid ${hit ? 'rgba(var(--primary),0.3)' : 'rgb(var(--border))'}`,
+                        background: hit ? 'rgba(var(--primary),0.08)' : 'rgb(var(--surface2))',
+                        fontSize: 12, fontWeight: 600,
+                      }}>
+                        <FlagChip code={code} w={18} h={12} r={2} />
+                        {getTeam(code)?.name ?? code}
+                        {hit && <span style={{ color: 'rgb(var(--primary))' }}>✓</span>}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Info banner + leaderboard link ── */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{
+          flex: 1,
+          background: 'rgba(var(--primary),0.07)',
+          border: '1px solid rgba(var(--primary),0.2)',
+          borderRadius: 14,
+          padding: '14px 18px',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 10,
+        }}>
+          <InfoSVG size={18} />
+          <p style={{ fontSize: 13, color: 'rgb(var(--textp))', margin: 0, lineHeight: 1.5 }}>
+            {hasAnyPhaseData
+              ? <>Bracket picks locked. <strong>{secured} of {possible} pts</strong> secured so far.</>
+              : <>Bracket picks are not available yet for this phase.</>}
+          </p>
+        </div>
+        <a href="/bracket-leaderboard" style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '10px 16px', borderRadius: 12,
+          border: '1px solid rgb(var(--border))',
+          background: 'rgb(var(--card))',
+          color: 'rgb(var(--textp))',
+          fontSize: 13, fontWeight: 700,
+          textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0,
+        }}>
+          Standings →
+        </a>
       </div>
     </div>
   )

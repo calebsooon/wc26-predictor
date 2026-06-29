@@ -13,10 +13,11 @@
 export const GROUP_POINTS = { position: 2 } as const
 
 export const TOURNAMENT_POINTS = {
-  champion: 15,
-  runner_up: 8,
-  semi: 4,
-  quarter: 2,
+  r32: 1,
+  quarter: 2,  // per R16 advancer reaching QF (8 picks)
+  semi: 3,     // per QF advancer reaching SF (4 picks)
+  runner_up: 5,
+  champion: 10,
 } as const
 
 export function scoreGroupPrediction(predicted: string[], actual: string[]): number {

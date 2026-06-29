@@ -6,6 +6,8 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import { snapshotLeagueRanks } from '@/lib/snapshot'
 
 const ROUND_IDS = {
+  R32: '00000000-0000-0000-0000-000000000002',
+  R16: '00000000-0000-0000-0000-000000000003',
   QF: '00000000-0000-0000-0000-000000000004',
   SF: '00000000-0000-0000-0000-000000000005',
   FIN: '00000000-0000-0000-0000-000000000007',
@@ -32,8 +34,9 @@ export async function POST() {
 
   let champion: string | null = null
   let runner_up: string | null = null
-  const actualSemis = new Set<string>()
-  const actualQuarters = new Set<string>()
+  const actualR32 = new Set<string>()   // 16 teams advancing from R32 to R16
+  const actualQuarters = new Set<string>() // 8 teams in QF (advancing from R16)
+  const actualSemis = new Set<string>()    // 4 teams in SF (advancing from QF)
 
   for (const m of (matches ?? []) as {
     home_team: string; away_team: string
@@ -41,23 +44,29 @@ export async function POST() {
     match_winner: string | null; round_id: string
   }[]) {
     const home = m.home_team, away = m.away_team
-
-    // Skip fixtures that still have placeholder teams (not yet confirmed)
     const hasRealTeams = home !== PLACEHOLDER && away !== PLACEHOLDER && !!home && !!away
+    const hasScore = m.real_home_score != null && m.real_away_score != null
 
+    // Teams appearing in R16 fixtures = teams that advanced from R32
+    if (m.round_id === ROUND_IDS.R16 && hasRealTeams) {
+      actualR32.add(home)
+      actualR32.add(away)
+    }
+
+    // Teams appearing in QF fixtures = teams that advanced from R16
     if (m.round_id === ROUND_IDS.QF && hasRealTeams) {
       actualQuarters.add(home)
       actualQuarters.add(away)
     }
 
+    // Teams appearing in SF fixtures = teams that advanced from QF
     if (m.round_id === ROUND_IDS.SF && hasRealTeams) {
       actualSemis.add(home)
       actualSemis.add(away)
     }
 
-    if (m.round_id === ROUND_IDS.FIN && hasRealTeams && m.real_home_score != null && m.real_away_score != null) {
-      const rh = m.real_home_score, ra = m.real_away_score
-      // Use match_winner if admin set it (penalty shootout winner), otherwise derive from score
+    if (m.round_id === ROUND_IDS.FIN && hasRealTeams && hasScore) {
+      const rh = m.real_home_score!, ra = m.real_away_score!
       const winner = m.match_winner ?? (rh > ra ? home : ra > rh ? away : null)
       if (winner) {
         champion = winner
@@ -71,24 +80,27 @@ export async function POST() {
   if (!preds || preds.length === 0) return NextResponse.json({ updated: 0 })
 
   const updates = (preds as Record<string, unknown>[]).map((pred) => {
-    const u: Record<string, unknown> = { user_id: pred.user_id, phase: pred.phase ?? 'pre' }
-    if (champion !== null) u.pts_champion = pred.champion === champion ? TOURNAMENT_POINTS.champion : 0
-    if (runner_up !== null) u.pts_runner_up = pred.runner_up === runner_up ? TOURNAMENT_POINTS.runner_up : 0
-    if (actualSemis.size > 0) {
-      const hits = ((pred.semi as string[]) ?? []).filter((t) => actualSemis.has(t)).length
-      u.pts_semi = hits * TOURNAMENT_POINTS.semi
+    const u: Record<string, unknown> = { user_id: pred.user_id, phase: pred.phase ?? 'r32' }
+    if (actualR32.size > 0) {
+      const hits = ((pred.r32 as string[]) ?? []).filter((t) => actualR32.has(t)).length
+      u.pts_r32 = hits * TOURNAMENT_POINTS.r32
     }
     if (actualQuarters.size > 0) {
       const hits = ((pred.quarter as string[]) ?? []).filter((t) => actualQuarters.has(t)).length
       u.pts_quarter = hits * TOURNAMENT_POINTS.quarter
     }
+    if (actualSemis.size > 0) {
+      const hits = ((pred.semi as string[]) ?? []).filter((t) => actualSemis.has(t)).length
+      u.pts_semi = hits * TOURNAMENT_POINTS.semi
+    }
+    if (runner_up !== null) u.pts_runner_up = pred.runner_up === runner_up ? TOURNAMENT_POINTS.runner_up : 0
+    if (champion !== null) u.pts_champion = pred.champion === champion ? TOURNAMENT_POINTS.champion : 0
     return u
   })
 
   const { error: uErr } = await serviceSupabase.from('tournament_predictions').upsert(updates, { onConflict: 'user_id,phase' })
   if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 })
 
-  // Audit log — fire and forget
   serviceSupabase.from('scoring_events').insert({
     triggered_by: user!.id,
     event_type: 'tournament',
@@ -97,11 +109,11 @@ export async function POST() {
     scored_count: updates.length,
   }).then(() => {})
 
-  // Snapshot ranks so movement arrows reflect new tournament points
   try { await snapshotLeagueRanks(serviceSupabase) } catch {}
 
   return NextResponse.json({
     updated: updates.length, champion, runner_up,
-    semi_count: actualSemis.size, quarter_count: actualQuarters.size,
+    r32_count: actualR32.size, quarter_count: actualQuarters.size,
+    semi_count: actualSemis.size,
   })
 }
