@@ -25,6 +25,27 @@ type BracketPhase = 'pre' | 'r32'
 const EMPTY_PRED: TournamentPred = { champion: null, runner_up: null, semi: [], quarter: [], r32: [] }
 const ALL_TEAMS = Object.values(TEAMS).sort((a, b) => a.name.localeCompare(b.name))
 
+// Fixed R32 bracket matchups — position determines who meets who in R16, QF, SF, Final
+// slots 0&1 → R16[0], slots 2&3 → R16[1], R16[0]&R16[1] → QF[0], etc.
+const R32_FIXTURES: readonly [string, string][] = [
+  ['GER', 'PAR'], // 0   Left half
+  ['FRA', 'SWE'], // 1
+  ['RSA', 'CAN'], // 2
+  ['NED', 'MAR'], // 3
+  ['POR', 'CRO'], // 4
+  ['ESP', 'AUT'], // 5
+  ['USA', 'BIH'], // 6
+  ['BEL', 'SEN'], // 7
+  ['BRA', 'JPN'], // 8   Right half
+  ['CIV', 'NOR'], // 9
+  ['MEX', 'ECU'], // 10
+  ['ENG', 'COD'], // 11
+  ['ARG', 'CPV'], // 12
+  ['AUS', 'EGY'], // 13
+  ['SUI', 'ALG'], // 14
+  ['COL', 'GHA'], // 15
+] as const
+
 interface BracketResults {
   champion: string | null
   runner_up: string | null
@@ -545,6 +566,35 @@ function BracketPageInner() {
         </div>
       </div>
 
+      {/* ── R32 phase: visual bracket picker ── */}
+      {phase === 'r32' && (
+        <BracketPickerR32
+          saved={predsByPhase.r32}
+          locked={locked}
+          realResults={realResults}
+          onSave={async (payload) => {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return { error: { message: 'Not signed in' } }
+            const { error } = await supabase.from('tournament_predictions').upsert({
+              user_id: user.id,
+              phase: 'r32',
+              r32: payload.r32,
+              quarter: payload.quarter,
+              semi: payload.semi,
+              runner_up: payload.runner_up,
+              champion: payload.champion,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'user_id,phase' })
+            return { error: error ? { message: error.message } : null }
+          }}
+          onSaved={(payload) => {
+            setPredsByPhase((prev) => ({ ...prev, r32: payload }))
+          }}
+        />
+      )}
+
+      {/* ── Pre phase: old tile-based picker ── */}
+      {phase === 'pre' && (
       <div style={{
         background: 'rgb(var(--card))',
         border: '1px solid rgb(var(--border))',
@@ -554,7 +604,7 @@ function BracketPageInner() {
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, marginBottom: 16 }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: 15, fontFamily: 'Schibsted Grotesk, sans-serif' }}>
-              {phase === 'pre' ? 'Pre-tournament bracket' : 'Post-group stage bracket'}
+              Pre-tournament bracket
             </div>
             <div style={{ fontSize: 12, color: 'rgb(var(--texts))', marginTop: 3 }}>
               Pick who advances at each stage: R32 → R16 → QF → SF → Champion.
@@ -587,9 +637,7 @@ function BracketPageInner() {
             fontWeight: 600,
           }}>
             <LockIcon size={16} />
-            <span>
-              The {phase === 'pre' ? 'pre-tournament' : 'post-group stage'} bracket is locked — {phase === 'pre' ? 'the tournament has kicked off' : 'the knockout stage has begun'}. Your picks below are final.
-            </span>
+            <span>The pre-tournament bracket is locked — the tournament has kicked off. Your picks below are final.</span>
           </div>
         ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
@@ -689,6 +737,7 @@ function BracketPageInner() {
         </div>
         )}
       </div>
+      )}
 
       {/* ── Champion hero card ── */}
       {pred.champion ? (
@@ -1144,6 +1193,361 @@ function BracketPageInner() {
           Standings →
         </a>
       </div>
+    </div>
+  )
+}
+
+/* ---------- bracket cascade helper ---------- */
+function cascade(
+  r32: (string | null)[],
+  r16: (string | null)[],
+  qf: (string | null)[],
+  sf: (string | null)[],
+  champ: string | null,
+): { r16: (string | null)[]; qf: (string | null)[]; sf: (string | null)[]; champ: string | null } {
+  const nr16 = r16.map((p, i) => (p && [r32[2 * i], r32[2 * i + 1]].includes(p) ? p : null))
+  const nqf = qf.map((p, i) => (p && [nr16[2 * i], nr16[2 * i + 1]].includes(p) ? p : null))
+  const nsf = sf.map((p, i) => (p && [nqf[2 * i], nqf[2 * i + 1]].includes(p) ? p : null))
+  const nchamp = nsf.includes(champ) ? champ : null
+  return { r16: nr16, qf: nqf, sf: nsf, champ: nchamp }
+}
+
+/* ---------- bracket match card ---------- */
+function BracketMatchCard({
+  team1, team2, winner, realWinner, onPick, locked,
+}: {
+  team1: string | null; team2: string | null
+  winner: string | null; realWinner?: string | null
+  onPick: (code: string) => void; locked?: boolean
+}) {
+  return (
+    <div style={{ border: '1px solid rgb(var(--border))', borderRadius: 11, overflow: 'hidden', background: 'rgb(var(--card))' }}>
+      {([team1, team2] as (string | null)[]).map((code, i) => {
+        const team = code ? getTeam(code) : null
+        const isWinner = !!code && winner === code
+        const isLoser = !!winner && !!code && !isWinner
+        const isActual = !!realWinner && realWinner === code
+        return (
+          <div
+            key={i}
+            onClick={() => !locked && code && team1 && team2 && onPick(code)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 10px',
+              background: isWinner ? 'rgba(var(--primary),0.10)' : 'transparent',
+              borderBottom: i === 0 ? '1px solid rgba(var(--border),0.7)' : 'none',
+              cursor: !locked && code && team1 && team2 ? 'pointer' : 'default',
+              opacity: isLoser ? 0.38 : 1,
+              transition: 'background 0.1s, opacity 0.1s',
+              userSelect: 'none',
+            }}
+          >
+            {code
+              ? <FlagChip code={code} w={20} h={14} r={3} />
+              : <span style={{ width: 20, height: 14, borderRadius: 3, background: 'rgb(var(--surface3))', display: 'inline-block', flexShrink: 0 }} />
+            }
+            <span style={{
+              fontSize: 12, fontWeight: isWinner ? 800 : 600, flex: 1,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              color: isWinner ? 'rgb(var(--primary))' : isLoser ? 'rgb(var(--faint))' : 'rgb(var(--textp))',
+            }}>
+              {team?.name ?? (code ?? 'TBD')}
+            </span>
+            {isWinner && <CheckSVG />}
+            {isActual && !isWinner && (
+              <span style={{ fontSize: 9, fontWeight: 700, color: 'rgb(var(--gold))', background: 'rgba(var(--gold),0.15)', padding: '2px 5px', borderRadius: 4, flexShrink: 0 }}>✓</span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ---------- bracket round header ---------- */
+function RoundHeader({ label, done, total, pts }: { label: string; done: number; total: number; pts: number }) {
+  const complete = done === total
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontWeight: 700, fontSize: 13, fontFamily: 'Schibsted Grotesk, sans-serif' }}>{label}</span>
+        <span style={{
+          fontSize: 10, fontWeight: 700,
+          color: 'rgb(var(--primary))', background: 'rgba(var(--primary),0.12)',
+          padding: '2px 7px', borderRadius: 999,
+        }}>+{pts} each</span>
+      </div>
+      <span style={{ fontSize: 11, fontWeight: 700, color: complete ? 'rgb(var(--primary))' : 'rgb(var(--texts))' }}>
+        {done}/{total}
+      </span>
+    </div>
+  )
+}
+
+/* ---------- bracket picker for r32 phase ---------- */
+function BracketPickerR32({
+  saved, locked, realResults,
+  onSave, onSaved,
+}: {
+  saved: TournamentPred
+  locked: boolean
+  realResults: { r32: string[]; quarter: string[]; semi: string[]; runner_up: string | null; champion: string | null }
+  onSave: (payload: TournamentPred) => Promise<{ error: { message: string } | null }>
+  onSaved: (payload: TournamentPred) => void
+}) {
+  const [r32w, setR32w] = useState<(string | null)[]>(Array(16).fill(null))
+  const [r16w, setR16w] = useState<(string | null)[]>(Array(8).fill(null))
+  const [qfw, setQfw] = useState<(string | null)[]>(Array(4).fill(null))
+  const [sfw, setSfw] = useState<(string | null)[]>(Array(2).fill(null))
+  const [champ, setChamp] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState<string | null>(null)
+  const saveMsgRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Load saved picks into positional state whenever saved changes
+  useEffect(() => {
+    const newR32 = R32_FIXTURES.map(([t1, t2]) =>
+      saved.r32.find((t) => t === t1 || t === t2) ?? null,
+    )
+    const newR16 = Array(8).fill(null).map((_: null, i: number) => {
+      const possible = [newR32[2 * i], newR32[2 * i + 1]]
+      return saved.quarter.find((t) => possible.includes(t)) ?? null
+    })
+    const newQf = Array(4).fill(null).map((_: null, i: number) => {
+      const possible = [newR16[2 * i], newR16[2 * i + 1]]
+      return saved.semi.find((t) => possible.includes(t)) ?? null
+    })
+    const newSf: (string | null)[] = [
+      [newQf[0], newQf[1]].find((t) => t && (t === saved.champion || t === saved.runner_up)) ?? null,
+      [newQf[2], newQf[3]].find((t) => t && (t === saved.champion || t === saved.runner_up)) ?? null,
+    ]
+    setR32w(newR32)
+    setR16w(newR16)
+    setQfw(newQf)
+    setSfw(newSf)
+    setChamp(saved.champion)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved])
+
+  function pickR32(slot: number, code: string) {
+    if (locked) return
+    const newR32 = [...r32w]
+    newR32[slot] = newR32[slot] === code ? null : code
+    const { r16, qf, sf, champ: nc } = cascade(newR32, r16w, qfw, sfw, champ)
+    setR32w(newR32); setR16w(r16); setQfw(qf); setSfw(sf); setChamp(nc)
+  }
+
+  function pickR16(slot: number, code: string) {
+    if (locked) return
+    const newR16 = [...r16w]
+    newR16[slot] = newR16[slot] === code ? null : code
+    const { qf, sf, champ: nc } = cascade(r32w, newR16, qfw, sfw, champ)
+    setR16w(newR16); setQfw(qf); setSfw(sf); setChamp(nc)
+  }
+
+  function pickQF(slot: number, code: string) {
+    if (locked) return
+    const newQf = [...qfw]
+    newQf[slot] = newQf[slot] === code ? null : code
+    const { sf, champ: nc } = cascade(r32w, r16w, newQf, sfw, champ)
+    setQfw(newQf); setSfw(sf); setChamp(nc)
+  }
+
+  function pickSF(slot: number, code: string) {
+    if (locked) return
+    const newSf = [...sfw]
+    newSf[slot] = newSf[slot] === code ? null : code
+    const nc = newSf.includes(champ) ? champ : null
+    setSfw(newSf); setChamp(nc)
+  }
+
+  function pickChamp(code: string) {
+    if (locked) return
+    setChamp((prev) => (prev === code ? null : code))
+  }
+
+  async function save() {
+    setSaving(true)
+    setSaveMsg(null)
+    const runner_up = sfw.find((w) => w && w !== champ) ?? null
+    const payload: TournamentPred = {
+      r32: r32w.filter((x): x is string => x !== null),
+      quarter: r16w.filter((x): x is string => x !== null),
+      semi: qfw.filter((x): x is string => x !== null),
+      runner_up,
+      champion: champ,
+    }
+    const { error } = await onSave(payload)
+    setSaving(false)
+    if (error) { setSaveMsg(error.message); return }
+    onSaved(payload)
+    setSaveMsg('Saved')
+    if (saveMsgRef.current) clearTimeout(saveMsgRef.current)
+    saveMsgRef.current = setTimeout(() => setSaveMsg(null), 3000)
+  }
+
+  const r32done = r32w.filter(Boolean).length
+  const r16done = r16w.filter(Boolean).length
+  const qfdone = qfw.filter(Boolean).length
+  const sfdone = sfw.filter(Boolean).length
+  const finalDone = !!champ
+
+  // Find real winner of each R32 match (for display)
+  const realR32Winners = R32_FIXTURES.map(([t1, t2]) =>
+    realResults.r32.includes(t1) ? t1 : realResults.r32.includes(t2) ? t2 : null,
+  )
+  const realR16Winners = Array(8).fill(null).map((_: null, i: number) => {
+    const t1 = realR32Winners[2 * i], t2 = realR32Winners[2 * i + 1]
+    return realResults.quarter.includes(t1 ?? '') ? t1 : realResults.quarter.includes(t2 ?? '') ? t2 : null
+  })
+  const realQFWinners = Array(4).fill(null).map((_: null, i: number) => {
+    const t1 = realR16Winners[2 * i], t2 = realR16Winners[2 * i + 1]
+    return realResults.semi.includes(t1 ?? '') ? t1 : realResults.semi.includes(t2 ?? '') ? t2 : null
+  })
+  const realSFWinners: (string | null)[] = [
+    [realQFWinners[0], realQFWinners[1]].find((t) => t && (t === realResults.champion || t === realResults.runner_up)) ?? null,
+    [realQFWinners[2], realQFWinners[3]].find((t) => t && (t === realResults.champion || t === realResults.runner_up)) ?? null,
+  ]
+
+  const canSave = !locked && !saving && r32done === 16 && r16done === 8 && qfdone === 4 && sfdone === 2 && finalDone
+
+  const gridStyle: React.CSSProperties = { display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))' }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {locked && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          borderRadius: 14, padding: '13px 16px',
+          background: 'rgba(var(--coral),0.08)', border: '1px solid rgba(var(--coral),0.25)',
+          color: 'rgb(var(--coral))', fontSize: 13, fontWeight: 600,
+        }}>
+          <LockIcon size={16} />
+          <span>Bracket is locked — the knockout stage has begun. Your picks are final.</span>
+        </div>
+      )}
+
+      {/* R32 */}
+      <div style={{ background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))', borderRadius: 16, padding: '16px 18px' }}>
+        <RoundHeader label="Round of 32" done={r32done} total={16} pts={TOURNAMENT_POINTS.r32} />
+        <div style={gridStyle}>
+          {R32_FIXTURES.map(([t1, t2], i) => (
+            <BracketMatchCard
+              key={i}
+              team1={t1} team2={t2}
+              winner={r32w[i]}
+              realWinner={realR32Winners[i]}
+              onPick={(code) => pickR32(i, code)}
+              locked={locked}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* R16 */}
+      <div style={{ background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))', borderRadius: 16, padding: '16px 18px', opacity: r32done === 0 ? 0.5 : 1 }}>
+        <RoundHeader label="Round of 16" done={r16done} total={8} pts={TOURNAMENT_POINTS.quarter} />
+        <div style={gridStyle}>
+          {Array(8).fill(null).map((_: null, i: number) => (
+            <BracketMatchCard
+              key={i}
+              team1={r32w[2 * i]} team2={r32w[2 * i + 1]}
+              winner={r16w[i]}
+              realWinner={realR16Winners[i]}
+              onPick={(code) => pickR16(i, code)}
+              locked={locked}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* QF */}
+      <div style={{ background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))', borderRadius: 16, padding: '16px 18px', opacity: r16done === 0 ? 0.5 : 1 }}>
+        <RoundHeader label="Quarter-Finals" done={qfdone} total={4} pts={TOURNAMENT_POINTS.semi} />
+        <div style={gridStyle}>
+          {Array(4).fill(null).map((_: null, i: number) => (
+            <BracketMatchCard
+              key={i}
+              team1={r16w[2 * i]} team2={r16w[2 * i + 1]}
+              winner={qfw[i]}
+              realWinner={realQFWinners[i]}
+              onPick={(code) => pickQF(i, code)}
+              locked={locked}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* SF */}
+      <div style={{ background: 'rgb(var(--card))', border: '1px solid rgb(var(--border))', borderRadius: 16, padding: '16px 18px', opacity: qfdone === 0 ? 0.5 : 1 }}>
+        <RoundHeader label="Semi-Finals" done={sfdone} total={2} pts={TOURNAMENT_POINTS.runner_up} />
+        <div style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 1fr' }}>
+          {Array(2).fill(null).map((_: null, i: number) => (
+            <BracketMatchCard
+              key={i}
+              team1={qfw[2 * i]} team2={qfw[2 * i + 1]}
+              winner={sfw[i]}
+              realWinner={realSFWinners[i]}
+              onPick={(code) => pickSF(i, code)}
+              locked={locked}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Final + Champion */}
+      <div style={{
+        borderRadius: 16, padding: '16px 18px',
+        background: 'linear-gradient(135deg,rgba(var(--gold),0.15),rgba(var(--gold),0.04))',
+        border: '1px solid rgba(var(--gold),0.35)',
+        opacity: sfdone === 0 ? 0.5 : 1,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <TrophySVG size={18} />
+            <span style={{ fontWeight: 700, fontSize: 13, fontFamily: 'Schibsted Grotesk, sans-serif' }}>Final — pick the champion</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: 'rgb(var(--gold))', background: 'rgba(var(--gold),0.15)', padding: '2px 7px', borderRadius: 999 }}>+{TOURNAMENT_POINTS.champion}</span>
+          </div>
+          {finalDone && <CheckSVG />}
+        </div>
+        <div style={{ maxWidth: 280 }}>
+          <BracketMatchCard
+            team1={sfw[0]} team2={sfw[1]}
+            winner={champ}
+            realWinner={realResults.champion}
+            onPick={pickChamp}
+            locked={locked}
+          />
+        </div>
+      </div>
+
+      {/* Save */}
+      {!locked && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            onClick={save}
+            disabled={!canSave}
+            style={{
+              height: 42, padding: '0 20px', borderRadius: 11,
+              border: 'none', cursor: canSave ? 'pointer' : 'default',
+              background: 'rgb(var(--primary))', color: 'rgb(4,38,20)',
+              fontSize: 13, fontWeight: 800, opacity: canSave ? 1 : 0.45,
+            }}
+          >
+            {saving ? 'Saving…' : 'Save bracket'}
+          </button>
+          {saveMsg && (
+            <span style={{ fontSize: 12, fontWeight: 700, color: saveMsg === 'Saved' ? 'rgb(var(--primary))' : 'rgb(var(--coral))' }}>
+              {saveMsg}
+            </span>
+          )}
+          {!canSave && !saving && (
+            <span style={{ fontSize: 12, color: 'rgb(var(--texts))' }}>
+              Fill all rounds to save
+            </span>
+          )}
+        </div>
+      )}
     </div>
   )
 }
