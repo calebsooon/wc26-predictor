@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server'
 import { requireAdmin } from '@/lib/require-admin'
-import { fifaToken, fetchFifaSchedule, eventTeams, finished, idTail, number } from '@/lib/fifa-client'
+import {
+  fifaToken, fetchFifaSchedule, eventTeams, finished, idTail, number,
+  wentToExtraTime, regulationTimeGoals,
+} from '@/lib/fifa-client'
 import { scoreMatchPredictions } from '@/lib/score-sync'
 import { snapshotLeagueRanks } from '@/lib/snapshot'
 import { finishSyncRun, startSyncRun, type SyncTrigger } from '@/lib/sync-runs'
@@ -10,14 +13,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 type DBMatch = {
   id: string; home_team: string; away_team: string; match_date: string
   real_home_score: number | null; real_away_score: number | null
-  fifa_event_id: number | null
+  fifa_event_id: number | null; fifa_metadata: Record<string, unknown> | null
 }
 type FifaTeam = { code: string; fifa_team_id: string }
 
 async function sync(service: SupabaseClient) {
   const [token, matchesResult, teamsResult] = await Promise.all([
     fifaToken(),
-    service.from('matches').select('id,home_team,away_team,match_date,real_home_score,real_away_score,fifa_event_id'),
+    service.from('matches').select('id,home_team,away_team,match_date,real_home_score,real_away_score,fifa_event_id,fifa_metadata'),
     service.from('fifa_teams').select('code,fifa_team_id'),
   ])
   if (matchesResult.error) throw matchesResult.error
@@ -43,6 +46,25 @@ async function sync(service: SupabaseClient) {
 
     const match = byPair.get(`${homeCode}|${awayCode}`)
     if (!match) continue
+
+    // FIFA's score includes extra time (never penalties). Knockout matches decided
+    // past 90 minutes must be scored on the 90-minute line, which we can't always
+    // recover automatically (own goals aren't reliably attributable to a period) —
+    // leave those for the admin to enter via the match row instead of auto-writing.
+    if (wentToExtraTime(event)) {
+      await service.from('matches').update({
+        fifa_event_id: number(event._externalId),
+        fifa_updated_at: event.updatedAt ?? null,
+        fifa_metadata: {
+          ...(match.fifa_metadata ?? {}),
+          wentToExtraTime: true,
+          finalScore: { home: homeScore, away: awayScore },
+          regulationScoreSuggested: regulationTimeGoals(event, codeByTeamId, homeCode, awayCode),
+        },
+      }).eq('id', match.id)
+      continue
+    }
+
     if (match.real_home_score === homeScore && match.real_away_score === awayScore) continue
 
     const { error } = await service.from('matches').update({

@@ -67,6 +67,76 @@ export function finished(event: FifaEvent): boolean {
   return /complete|finished|closed/i.test(event.eventCompletionState ?? '')
 }
 
+function asStringArray(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map(String)
+  if (v != null && v !== '') return [String(v)]
+  return []
+}
+
+// Goal entry format: "seq - assist_id - minute' - period_id - period_name - extra"
+function goalPeriodName(entry: string): string | null { return entry.split(' - ')[4]?.trim() || null }
+const EXTRA_TIME_RE = /extra time/i
+
+function playerGoalTag(tags: Tag[] | undefined) {
+  return (tags ?? []).find((tag) => tag.name.endsWith(':goals') && !tag.name.includes(':stats') && !tag.name.includes(':attempt'))
+}
+
+/**
+ * FIFA's participant.score is the goals-scored total including extra time (penalties
+ * are reported separately, via the home/away_team_penalty_score tags). For knockout
+ * matches that go past 90 minutes, that total is not the 90-minute scoreline our
+ * scoring rules require it to be — callers must not write it straight into
+ * real_home_score/real_away_score when this returns true. Detected from the
+ * per-player goal tags (each entry carries a period label) plus the penalty tags.
+ */
+export function wentToExtraTime(event: FifaEvent): boolean {
+  const tags = event.tags ?? []
+  if (tagValue(tags, ':fdcp:home_team_penalty_score') != null) return true
+  if (tagValue(tags, ':fdcp:away_team_penalty_score') != null) return true
+  for (const participant of event.participants ?? []) {
+    if (participant.role !== 'Player' && participant.role !== 'Reserve Player') continue
+    for (const entry of asStringArray(playerGoalTag(participant.tags)?.value)) {
+      if (EXTRA_TIME_RE.test(goalPeriodName(entry) ?? '')) return true
+    }
+  }
+  return false
+}
+
+/**
+ * Best-effort 90-minute scoreline, for the admin hint only — sums claimed player
+ * goals scored in normal time, then reconciles each team's own-goal minutes
+ * (present in the team-level goals tally but not claimed by any of that team's
+ * players — i.e. an opponent's own goal) against the 90-minute cutoff, since
+ * those minutes carry no period label of their own. This is a suggestion for
+ * the admin to confirm, never written to real_home_score/real_away_score
+ * automatically.
+ */
+export function regulationTimeGoals(
+  event: FifaEvent, codeByTeamId: Map<string, string>, homeCode: string, awayCode: string
+): { home: number; away: number } {
+  const tally: Record<string, number> = { [homeCode]: 0, [awayCode]: 0 }
+  const claimedMinutes: Record<string, Set<number>> = { [homeCode]: new Set(), [awayCode]: new Set() }
+  for (const participant of event.participants ?? []) {
+    if (participant.role !== 'Player' && participant.role !== 'Reserve Player') continue
+    const teamCode = codeByTeamId.get(idTail(participant._externalTeamId) ?? '')
+    if (!teamCode || !(teamCode in tally)) continue
+    for (const entry of asStringArray(playerGoalTag(participant.tags)?.value)) {
+      const minuteMatch = /(\d+)/.exec(entry.split(' - ')[2] ?? '')
+      if (minuteMatch) claimedMinutes[teamCode]!.add(parseInt(minuteMatch[1]!, 10))
+      if (EXTRA_TIME_RE.test(goalPeriodName(entry) ?? '')) continue
+      tally[teamCode] += 1
+    }
+  }
+  const { home, away } = eventTeams(event, codeByTeamId)
+  for (const [participant, teamCode] of [[home, homeCode], [away, awayCode]] as const) {
+    const rawGoals = tagValue(participant?.tags, ':goals')
+    const minutes = Array.isArray(rawGoals) ? rawGoals.map((v) => Math.floor(Number(v))) : []
+    const unclaimed = minutes.filter((min) => !claimedMinutes[teamCode]!.has(min))
+    for (const min of unclaimed) if (min <= 90) tally[teamCode] += 1
+  }
+  return { home: tally[homeCode], away: tally[awayCode] }
+}
+
 export function fullName(person: Participant): string {
   return [person.firstName?.eng, person.lastName?.eng].filter(Boolean).join(' ')
 }

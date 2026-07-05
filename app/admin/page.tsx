@@ -576,6 +576,11 @@ interface Match {
   home_formation_override: string | null
   away_formation_override: string | null
   rounds: { name: string } | null
+  fifa_metadata: {
+    wentToExtraTime?: boolean
+    finalScore?: { home: number | null; away: number | null }
+    regulationScoreSuggested?: { home: number; away: number }
+  } | null
 }
 
 interface Player { id: number; name: string; team_code: string }
@@ -661,9 +666,27 @@ function AdminRow({ m, onSaved }, ref) {
 
   const scorerName = scorerId === -1 ? 'Own goal' : (players.find((p) => p.id === scorerId)?.name ?? '')
   const scorerOptions = players.filter((p) => !search || p.name.toLowerCase().includes(search.toLowerCase()))
+  const wentToExtraTime = m.fifa_metadata?.wentToExtraTime ?? false
+  const fifaFinal = m.fifa_metadata?.finalScore
+  const suggestedFt = m.fifa_metadata?.regulationScoreSuggested
 
   return (
     <Card className={`p-3 ${hasScore ? 'border-primary/30' : ''}`}>
+      {wentToExtraTime && !hasScore && (
+        <div className="mb-2.5 rounded-lg border border-gold/40 bg-gold/10 px-2.5 py-2 text-[11px] text-textp">
+          <span className="font-bold text-gold">Went to extra time</span> — FIFA reports{' '}
+          <span className="font-bold">{fifaFinal?.home ?? '?'}–{fifaFinal?.away ?? '?'}</span> (AET/pens). Enter the{' '}
+          <span className="font-bold">90-minute</span> score below for scoring.
+          {suggestedFt && (
+            <button
+              onClick={() => { setH(suggestedFt.home); setA(suggestedFt.away) }}
+              className="ml-2 inline-flex h-6 items-center rounded-md border border-gold/50 px-2 font-bold text-gold hover:bg-gold/10"
+            >
+              Use suggested {suggestedFt.home}–{suggestedFt.away}
+            </button>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="basis-full sm:basis-auto flex-1 min-w-0">
           <div className="flex items-center gap-2 text-sm font-bold">
@@ -1685,7 +1708,7 @@ export default function AdminPage() {
         if (!profile?.is_admin) { router.replace('/dashboard'); return }
         const { data, error } = await supabase
           .from('matches')
-          .select('id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, first_goal_team, first_goal_player_id, match_winner, home_formation, away_formation, home_formation_override, away_formation_override, rounds(name)')
+          .select('id, match_date, home_team, away_team, real_home_score, real_away_score, is_locked, group_name, first_goal_team, first_goal_player_id, match_winner, home_formation, away_formation, home_formation_override, away_formation_override, fifa_metadata, rounds(name)')
           .order('match_date')
         if (error) throw error
         setMatches((data ?? []) as unknown as Match[])

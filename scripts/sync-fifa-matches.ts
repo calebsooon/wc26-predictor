@@ -17,6 +17,7 @@ import { scoreMatchPredictions } from '@/lib/score-sync'
 import { snapshotLeagueRanks } from '@/lib/snapshot'
 import { getTeam } from '@/lib/teams'
 import { describeSyncError, finishSyncRun, startSyncRun } from '@/lib/sync-runs'
+import { wentToExtraTime, regulationTimeGoals } from '@/lib/fifa-client'
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
@@ -340,14 +341,23 @@ async function main() {
     const homeScore = number(home.score)
     const awayScore = number(away.score)
     const final = finished(event)
+    // FIFA's score includes extra time (never penalties). Knockout matches decided
+    // past 90 minutes must be scored on the 90-minute line, which we can't always
+    // recover automatically (own goals aren't reliably attributable to a period) —
+    // so those are left for the admin page to enter; see regulationTimeGoals below.
+    const extraTime = final && wentToExtraTime(event)
     const update: Record<string, unknown> = {
       fifa_event_id: number(event._externalId), fifa_match_id: meta.fifaMatchId,
       fifa_status: event.eventCompletionState ?? null,
-      fifa_metadata: { ...meta, score: { home: homeScore, away: awayScore }, final },
+      fifa_metadata: {
+        ...meta, score: { home: homeScore, away: awayScore }, final,
+        wentToExtraTime: extraTime,
+        ...(extraTime ? { regulationScoreSuggested: regulationTimeGoals(event, codeByTeamId, homeCode, awayCode) } : {}),
+      },
       fifa_updated_at: event.updatedAt ?? null, match_date: event.dateTime,
     }
     if (event.updatedAt && (!latestSourceUpdatedAt || event.updatedAt > latestSourceUpdatedAt)) latestSourceUpdatedAt = event.updatedAt
-    if (final && homeScore != null && awayScore != null) {
+    if (final && !extraTime && homeScore != null && awayScore != null) {
       update.real_home_score = homeScore; update.real_away_score = awayScore; update.is_locked = true
     }
     if (!DRY_RUN) {
@@ -355,7 +365,7 @@ async function main() {
       if (error) throw error
       recordsWritten++
     }
-    if (final && homeScore != null && awayScore != null && (match.real_home_score !== homeScore || match.real_away_score !== awayScore)) {
+    if (final && !extraTime && homeScore != null && awayScore != null && (match.real_home_score !== homeScore || match.real_away_score !== awayScore)) {
       resultsUpdated++
       if (!DRY_RUN) rescored += await scoreMatchPredictions(service, match.id)
     }
