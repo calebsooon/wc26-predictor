@@ -40,6 +40,9 @@ export function prizeTone(amount: number): 'green' | 'red' | 'default' {
   return 'default'
 }
 
+import { aggregateLeaderboard, type ScoredPred, type ProfileLite } from '@/lib/leaderboard'
+import { DEFAULT_WEIGHTS, type ScoringWeights } from '@/lib/scoring'
+
 export interface PrizeSnapshot {
   settledNet: number
   completedGWs: number[]
@@ -56,11 +59,13 @@ export interface PrizeSnapshot {
 
 export function computePrizeSnapshot(params: {
   userId: string
-  allScoredPreds: { user_id: string; points_awarded: number; pts_outcome: number | null; gw_number: number | null }[]
+  scoredPreds: ScoredPred[]
+  profiles: ProfileLite[]
+  weights?: ScoringWeights
   gwMatchStatus: Map<number, { total: number; scored: number }>
   overallRank: number | null
 }): PrizeSnapshot {
-  const { userId, allScoredPreds, gwMatchStatus, overallRank } = params
+  const { userId, scoredPreds, profiles, weights = DEFAULT_WEIGHTS, gwMatchStatus, overallRank } = params
 
   const completedGWs = Array.from(gwMatchStatus.entries())
     .filter(([, s]) => s.total > 0 && s.scored === s.total)
@@ -69,24 +74,18 @@ export function computePrizeSnapshot(params: {
 
   const isOverallSettled = completedGWs.length === TOTAL_GWS
 
-  // Per-GW aggregated points
-  const gwAgg = new Map<number, Map<string, { pts: number; outcomes: number }>>()
-  for (const r of allScoredPreds) {
-    if (!r.gw_number) continue
-    const gwMap = gwAgg.get(r.gw_number) ?? new Map()
-    const cur = gwMap.get(r.user_id) ?? { pts: 0, outcomes: 0 }
-    cur.pts += r.points_awarded
-    if ((r.pts_outcome ?? 0) > 0) cur.outcomes++
-    gwMap.set(r.user_id, cur)
-    gwAgg.set(r.gw_number, gwMap)
-  }
-
+  // Rank a single gameweek through the SAME engine as the standings, so money
+  // ranks always match the leaderboard: every league member is seeded (players
+  // who missed the GW rank last, not dropped) and the full tiebreaker chain
+  // applies. Cached per GW since callers read each one multiple times.
+  const rankCache = new Map<number, number | null>()
   function rankInGW(gw: number): number | null {
-    const gwMap = gwAgg.get(gw)
-    if (!gwMap) return null
-    const sorted = Array.from(gwMap.entries()).sort(([, a], [, b]) => b.pts - a.pts || b.outcomes - a.outcomes)
-    const idx = sorted.findIndex(([uid]) => uid === userId)
-    return idx >= 0 ? idx + 1 : null
+    if (rankCache.has(gw)) return rankCache.get(gw)!
+    const board = aggregateLeaderboard({ scoredPreds, profiles, userId, gwNumber: gw, weights })
+    const idx = board.findIndex((r) => r.id === userId)
+    const rank = idx >= 0 ? idx + 1 : null
+    rankCache.set(gw, rank)
+    return rank
   }
 
   // Settled net

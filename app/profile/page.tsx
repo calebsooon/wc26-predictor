@@ -17,6 +17,7 @@ import { subscribeToPush, unsubscribeFromPush, getPushState } from '@/lib/push'
 import { useColorblind, setColorblind, useColorblindScope, setColorblindScope, type ColorblindScope } from '@/lib/prefs'
 import { getActiveLeague, isMoneyLeague } from '@/lib/league'
 import { computePrizeSnapshot, formatPrize, prizeTone, GW_SHORT } from '@/lib/prizes'
+import type { ScoredPred as LBScoredPred } from '@/lib/leaderboard'
 
 /* ─── Types ────────────────────────────────────────────────────────────────── */
 interface Profile { id: string; username: string; avatar_url: string | null; is_admin: boolean }
@@ -380,13 +381,15 @@ export default function ProfilePage() {
               cur.total++; if (m.real_home_score !== null) cur.scored++
               gwMatchStatus.set(m.gw_number, cur)
             }
-            const predsForCalc = allRows.map((r) => ({
-              user_id: r.user_id,
-              points_awarded: weightedMatchPoints(r, w),
-              pts_outcome: r.pts_outcome,
-              gw_number: (r.matches?.[0]?.gw_number) ?? null,
-            }))
-            const snap = computePrizeSnapshot({ userId: user.id, allScoredPreds: predsForCalc, gwMatchStatus, overallRank: myRank })
+            const profiles = ids.map((id) => ({ id, username: null, avatar_url: null }))
+            const snap = computePrizeSnapshot({
+              userId: user.id,
+              scoredPreds: allRows as unknown as LBScoredPred[],
+              profiles,
+              weights: w,
+              gwMatchStatus,
+              overallRank: myRank,
+            })
             setNetPool(snap.settledNet)
           }
         }

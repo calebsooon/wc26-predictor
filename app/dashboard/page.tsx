@@ -251,11 +251,7 @@ export default function DashboardPage() {
       cur.total++; if (m.real_home_score !== null) cur.scored++
       gwMatchStatus.set(m.gw_number, cur)
     }
-    const predsForCalc = scoredPreds.map((r) => ({
-      user_id: r.user_id, points_awarded: weightedMatchPoints(r, weights),
-      pts_outcome: r.pts_outcome, gw_number: r.matches?.gw_number ?? null,
-    }))
-    return computePrizeSnapshot({ userId, allScoredPreds: predsForCalc, gwMatchStatus, overallRank: myRank })
+    return computePrizeSnapshot({ userId, scoredPreds, profiles: memberProfilesRef.current, weights, gwMatchStatus, overallRank: myRank })
   }, [userId, isMoney, scoredPreds, gwMatchRows, myRank, weights])
 
   // Trajectory data (points per GW + rank per snapshot)
